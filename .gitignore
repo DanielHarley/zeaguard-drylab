@@ -1,2 +1,26 @@
 # Agent context
 .agents
+
+# Local environments
+.venv/
+
+# Generated reproducibility snapshots and analysis outputs
+artifacts/
+results/
+
+# Local input data
+data/external/
+
+# Python
+*.egg-info/
+build/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
