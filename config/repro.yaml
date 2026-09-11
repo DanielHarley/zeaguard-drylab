@@ -1,0 +1,43 @@
+schema_version: 1
+
+platform:
+  allowed_systems: ["Linux"]
+
+python:
+  spec: ">=3.12,<3.13"
+
+python_dependencies:
+  - {distribution: PyYAML, module: yaml}
+  - {distribution: jsonschema, module: jsonschema}
+  - {distribution: packaging, module: packaging}
+
+external_tools:
+  - name: blastn
+    command: ["blastn", "-version"]
+    version_regex: "blastn:\\s+([0-9.]+)"
+    min_version: "2.14.0"
+  - name: makeblastdb
+    command: ["makeblastdb", "-version"]
+    version_regex: "makeblastdb:\\s+([0-9.]+)"
+    min_version: "2.14.0"
+  - name: hmmscan
+    command: ["hmmscan", "-h"]
+    version_regex: "HMMER\\s+([0-9.]+)"
+    min_version: "3.3"
+  - name: hmmpress
+    command: ["hmmpress", "-h"]
+    version_regex: "HMMER\\s+([0-9.]+)"
+    min_version: "3.3"
+
+required_paths:
+  - src/workstreams/bioinformatics/notebooks/00_reproducibility_gate.ipynb
+  - src/workstreams/evidence/evidence_database.xlsx
+  - src/zeaguard
+  - config/project.yaml
+  - environment.yml
+  - pyproject.toml
+
+supporting_configs:
+  - config/project.yaml
+
+snapshot_dir: artifacts/reproducibility
