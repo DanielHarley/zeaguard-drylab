@@ -1,0 +1,22 @@
+name: zeaguard
+
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - python=3.12
+  - pip
+  - pyyaml
+  - jsonschema
+  - packaging
+
+  # Required by the first target-retrieval workflow.
+  - blast>=2.14
+  - hmmer>=3.3
+
+  # Development and notebook execution.
+  - pytest
+  - jupyter
+  - ipykernel
+  - nbconvert

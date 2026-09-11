@@ -1,0 +1,24 @@
+schema_version: 1
+
+project:
+  name: zeaguard
+  objective: "design and evaluate dsRNA sequences for RNAi against Dalbulus maidis"
+
+organism:
+  name: "Dalbulus maidis"
+  common_name: "cigarrinha-do-milho / corn leafhopper"
+  taxid: null
+
+intervention_targets:
+  - id: BicC
+    aliases: ["Bicaudal C", "bicc"]
+    expected_effect: "reduction of oviposition after silencing"
+  - id: dsRNase-2
+    aliases: ["double-strand-specific ribonuclease 2"]
+    expected_effect: "increased efficiency of orally delivered RNAi after silencing"
+
+reference_targets:
+  - id: dsRNase-1
+    role: "paralog for family context and specificity analysis"
+  - id: dsRNase-3
+    role: "paralog for family context and specificity analysis"
