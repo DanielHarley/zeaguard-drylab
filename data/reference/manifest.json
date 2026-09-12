@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "dataset": {
+    "name": "TSA: Dalbulus maidis, transcriptome shotgun assembly",
+    "accession": "GITV00000000",
+    "version": "GITV00000000.1",
+    "bioproject": "PRJNA579843"
+  },
+  "origin": "https://ftp.ncbi.nlm.nih.gov/genbank/tsa/G/tsa.GITV.1.fsa_nt.gz",
+  "acquired_utc": "2026-09-11T16:31:07.900485Z",
+  "files": [
+    {
+      "path": "data/external/tsa.GITV.1.fsa_nt.gz",
+      "sha256": "22d0cff8d0867344a76d615bdca62c31ce0f9133f574058e8daa6b6e41925ae6",
+      "size_bytes": 31435495
+    }
+  ]
+}
