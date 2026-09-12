@@ -31,9 +31,13 @@ external_tools:
 
 required_paths:
   - src/workstreams/bioinformatics/notebooks/00_reproducibility_gate.ipynb
+  - src/workstreams/bioinformatics/notebooks/01_reference_dataset_and_target_identity.ipynb
   - src/workstreams/evidence/evidence_database.xlsx
   - src/zeaguard
   - config/project.yaml
+  - data/reference/manifest.json
+  - data/reference/target_anchors.tsv
+  - data/reference/target_anchor_sequences.fasta
   - environment.yml
   - pyproject.toml
 
