@@ -71,15 +71,21 @@ def pin_sha256(root: Path) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def tsa_sequences(root: Path, accessions: set[str]) -> tuple[dict[str, str], str]:
-    """Stream the manifest-validated TSA and return the requested records and the file sha256."""
+def validated_tsa_path(root: Path) -> tuple[Path, str]:
+    """Path and sha256 of the manifest-validated primary TSA file."""
     root = Path(root).resolve()
     manifest, files, checks, _ = nb01_inputs.inspect_manifest(root, nb01_identity.DEFAULT_MANIFEST_PATH)
     nb01_inputs.PreconditionReport(tuple(checks)).raise_if_failed()
     if manifest is None or len(files) != 1:
         raise NB02ContractError("exactly one validated primary TSA file is required")
+    return root / files[0]["path"], str(files[0]["sha256"])
+
+
+def tsa_sequences(root: Path, accessions: set[str]) -> tuple[dict[str, str], str]:
+    """Stream the manifest-validated TSA and return the requested records and the file sha256."""
+    path, sha256 = validated_tsa_path(root)
     found: dict[str, str] = {}
-    for record in nb01_identity.parse_fasta(root / files[0]["path"]):
+    for record in nb01_identity.parse_fasta(path):
         accession = nb01_identity.canonical_tsa_accession(record.identifier)
         if accession in accessions:
             found[accession] = record.sequence.upper()
@@ -88,7 +94,7 @@ def tsa_sequences(root: Path, accessions: set[str]) -> tuple[dict[str, str], str
     absent = accessions - set(found)
     if absent:
         raise NB02ContractError(f"records absent from the TSA: {sorted(absent)}")
-    return found, str(files[0]["sha256"])
+    return found, sha256
 
 
 def extract_cds(sequence: str, strand: str, start: int, end: int) -> str:
