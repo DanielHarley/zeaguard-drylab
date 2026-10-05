@@ -1,0 +1,388 @@
+# NB02 design-criteria registry (pre-registration).
+#
+# Frozen BEFORE any candidate window is generated. Thresholds, roles and the prioritization
+# policy are read from this file by zeaguard.nb02_criteria; changing a criterion after results
+# are seen requires a dated amendment (see `amendments`), never a silent edit.
+schema_version: 1
+registry: nb02_design_criteria
+version: 1
+date: "2026-10-05"
+status: PRE_REGISTERED
+
+objective: >-
+  Rational selection of candidate regions for a nominal 400 nt dsRNA against Dmai-dsRNase-2,
+  with a published experimental benchmark of 330 nt and a length-sensitivity analysis at 300 and
+  500 nt. The nominal length (400 nt) is a PROJECT_CONVENTION, not a biological optimum; the
+  plausible engineering and biological space remains 300-500 nt.
+
+vocabulary:
+  evidence_categories: [EVIDENCE_BACKED, TOOL_DERIVED, PROJECT_CONVENTION, OPERATIONAL_ASSUMPTION]
+  roles:
+    - HARD_FILTER
+    - SOFT_PREFERENCE
+    - DESCRIPTOR
+    - TIE_BREAKER
+    - MANUAL_REVIEW_TRIGGER
+    - MANDATORY_PRE_RECOMMENDATION_MANUAL_REVIEW
+  # What a criterion is allowed to influence. Position, GC, length strata labels, E-values, k-mer counts
+  # and the OTHER_TRANSCRIPT background influence nothing except what is listed here.
+  affects: [eligibility, comparison_scope, pareto, cell_signature, primary_ordering, shortlist_gate]
+  specificity_groups:
+    decisional: [PARALOG, CO_TARGET]
+    background: [OTHER_TRANSCRIPT]
+
+evidence_sources:
+  - id: bolognesi2012
+    citation: "Bolognesi R et al. 2012. Characterizing the mechanism of action of double-stranded RNA activity against western corn rootworm (Diabrotica virgifera virgifera LeConte). PLoS ONE 7(10):e47534"
+    doi: 10.1371/journal.pone.0047534
+    pmcid: PMC3469495
+    organism_system: "Diabrotica virgifera virgifera (Coleoptera); oral artificial-diet bioassay"
+    verified_scope: "abstract (Europe PMC)"
+    verified_claims: "dsRNAs of >= ~60 bp are required for activity in diet bioassays; a 240 bp dsRNA containing a single 21 bp match to the target was efficacious while a 21 bp siRNA was not"
+    transferability_to_d_maidis: "Low-moderate; Coleoptera, not Hemiptera"
+  - id: bachman2013
+    citation: "Bachman PM et al. 2013. Characterization of the spectrum of insecticidal activity of a double-stranded RNA with targeted activity against Western Corn Rootworm. Transgenic Res 22:1207"
+    doi: 10.1007/s11248-013-9716-5
+    pmcid: PMC3835954
+    organism_system: "Diabrotica virgifera virgifera and other beetles (Coleoptera); diet bioassays with a 240 nt dsRNA"
+    verified_scope: "abstract (Europe PMC)"
+    verified_claims: "a shared sequence length of >= 21 nt was required for efficacy against WCR; activity was limited to a subset of Galerucinae with > 90% identity to WCR Snf7 240 nt"
+    transferability_to_d_maidis: "Low; shows 21 nt can matter in one beetle system, it is not a universal off-target cutoff"
+  - id: whyard2009
+    citation: "Whyard S, Singh AD, Wong S. 2009. Ingested double-stranded RNAs can act as species-specific insecticides. Insect Biochem Mol Biol 39:824"
+    doi: 10.1016/j.ibmb.2009.09.007
+    pmid: "19815067"
+    organism_system: "Drosophila spp., Tribolium, Acyrthosiphon pisum, Manduca sexta; oral"
+    verified_scope: "abstract (Europe PMC)"
+    verified_claims: "species-selective killing by dsRNAs that target variable regions; sequence specificity of RNAi can be used to avoid non-target species"
+    transferability_to_d_maidis: "Low-moderate; includes an aphid (Hemiptera) but not Cicadellidae"
+  - id: miller2012
+    citation: "Miller SC et al. 2012. Dissecting systemic RNA interference in the red flour beetle Tribolium castaneum: parameters affecting the efficiency of RNAi. PLoS ONE 7(10):e47431"
+    doi: 10.1371/journal.pone.0047431
+    pmcid: PMC3484993
+    organism_system: "Tribolium castaneum (Coleoptera); injection"
+    verified_scope: "abstract (Europe PMC)"
+    verified_claims: "dsRNA concentration and length strongly affect efficacy; cellular uptake is the step affected by dsRNA size"
+    transferability_to_d_maidis: "Moderate for the length argument; injection, Coleoptera"
+  - id: dsrip2025
+    citation: "dsRIP: optimizing dsRNA sequences for RNAi in pest control and research (web platform). BMC Biol 2025"
+    doi: 10.1186/s12915-025-02219-6
+    pmcid: PMC12039203
+    organism_system: "Tribolium castaneum (injection) for the model; validation in Coleoptera (oral); no Hemiptera"
+    verified_scope: "abstract (Europe PMC) and article summary (PMC)"
+    verified_claims: "siRNA efficacy features derived in Tribolium (thermodynamic asymmetry, no secondary structure, A at position 10, high GC at 9-14 of the antisense strand, opposite to human data); the tool is a web platform"
+    transferability_to_d_maidis: "Low; no Hemiptera tested; not reproducible as a web service"
+  - id: morgulis2006
+    citation: "Morgulis A et al. 2006. A fast and symmetric DUST implementation to mask low-complexity DNA sequences. J Comput Biol 13:1028"
+    doi: 10.1089/cmb.2006.13.1028
+    pmid: "16796549"
+    organism_system: "algorithm (dustmasker, BLAST+)"
+    verified_scope: "abstract (Europe PMC)"
+    verified_claims: "describes the symmetric DUST masking rule implemented by dustmasker"
+    transferability_to_d_maidis: "Not applicable (tool definition)"
+  - id: camacho2009
+    citation: "Camacho C et al. 2009. BLAST+: architecture and applications. BMC Bioinformatics 10:421"
+    doi: 10.1186/1471-2105-10-421
+    pmcid: PMC2803857
+    organism_system: "software (BLAST+ 2.17.0 in the zeaguard environment)"
+    verified_scope: "abstract (Europe PMC)"
+    verified_claims: "BLAST+ command-line applications"
+    transferability_to_d_maidis: "Not applicable (tool definition)"
+  - id: dalaison2023
+    citation: "Dalaison-Fuentes LI et al. 2023. Knockdown of double-stranded RNases (dsRNases) enhances oral RNA interference (RNAi) in the corn leafhopper, Dalbulus maidis. Pestic Biochem Physiol 196:105618"
+    doi: 10.1016/j.pestbp.2023.105618
+    pmid: "37945254"
+    organism_system: "Dalbulus maidis; injection preconditioning and oral co-feeding"
+    verified_scope: "supplement Table S1 (local S1 PDF text layer; primer span re-mapped on the operational CDS = 330 nt); bibliographic record; NOT the main text"
+    verified_claims: "dsRNase-2 primers and 330 / 360 bp amplicon lengths (without / with T7 tails)"
+    unverified_claims: "Methods 2.4, 2.5.1, 2.5.2 and Results 3.4 as supplied by the project: the full text was not retrievable at CP1 (ScienceDirect captcha not bypassed; CONICET repository handle 11336/221063 unreachable)"
+    transferability_to_d_maidis: "Direct (same species and target)"
+  - id: project_review_A_5prime
+    citation: "Project literature review A (adversarial): 5' versus central versus 3' targeting"
+    status: "CONCLUSIONS_SUPPLIED_BY_PROJECT; CITATIONS_NOT_PROVIDED"
+    supplied_conclusions: "no evidence that the 5' end is universally better; studies exist with 5' better, 3' better and no difference; nothing consistent for Hemiptera or oral delivery; nothing controlled in D. maidis; position must be a DESCRIPTOR"
+  - id: project_review_B_specificity
+    citation: "Project literature review B (adversarial): specificity and siRNA-length windows"
+    status: "CONCLUSIONS_SUPPLIED_BY_PROJECT; CITATIONS_NOT_PROVIDED"
+    supplied_conclusions: "dropping specificity analysis is not defensible; an exhaustive ecological off-target analysis is not needed now; intraspecies specificity belongs in NB02 (dsRNase-1/-3, BicC, ideally the rest of the TSA); ~21 nt sub-windows are risk indicators; 19 or 21 nt is not a universal off-target threshold; absence of a shared 21-mer does not mean safe"
+  - id: project_review_C_length_architecture
+    citation: "Project literature review C (adversarial): dsRNA length and architecture"
+    status: "CONCLUSIONS_SUPPLIED_BY_PROJECT; CITATIONS_NOT_PROVIDED"
+    supplied_conclusions: "hairpin is not universally superior and protected-end architectures may be better in oral Hemiptera RNAi; region, length and architecture are separate variables; 300-500 bp is defensible and ~400 bp a usable nominal value, not a universal optimum; a ~330 bp Dmai-dsRNase-2 fragment is functional in D. maidis"
+
+criteria:
+  - id: C01
+    name: inside_operational_cds
+    definition: "Candidate interval [cds_start, cds_end] lies inside the operational CDS (GITV01008430.1, 1425 nt, coding orientation, 1-based inclusive); no truncated windows; UTRs excluded."
+    origin: "NB01 -> NB02 contract (pin)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [HARD_FILTER]
+    affects: [eligibility]
+    threshold: {cds_min: 1, cds_max: 1425}
+    justification: "Single coordinate system tied to the hash-pinned sequence; the UTRs of the operational record are 26 and 52 nt, shorter than any candidate."
+    limitations: "Regions overlapping UTRs are out of scope."
+    revision_condition: "A different operational CDS is adopted by a new NB01 decision."
+    evidence_refs: []
+  - id: C02
+    name: length_range
+    definition: "Candidate length L = cds_end - cds_start + 1 is between 300 and 500 nt."
+    origin: "Project review C; the published benchmark (330 nt) and the nominal 400 nt lie inside"
+    evidence_category: PROJECT_CONVENTION
+    roles: [HARD_FILTER]
+    affects: [eligibility]
+    threshold: {min_nt: 300, max_nt: 500}
+    justification: "Defines the plausible design space; it is not a biological optimum."
+    limitations: "No length series exists for D. maidis oral delivery; the limits are conventions."
+    revision_condition: "Wet Lab documents a different feasible length range, or primary data support a different one."
+    evidence_refs: [project_review_C_length_architecture, dalaison2023]
+  - id: C03
+    name: min_length_floor
+    definition: "Guard: dsRNA shorter than ~60 bp is not considered active."
+    origin: "Bolognesi 2012"
+    evidence_category: EVIDENCE_BACKED
+    roles: [HARD_FILTER]
+    affects: [eligibility]
+    threshold: {min_nt: 60}
+    justification: "Only widely accepted length statement; non-binding here because C02 is stricter."
+    limitations: "Coleoptera, oral diet."
+    revision_condition: "Evidence in Hemiptera contradicts the floor."
+    evidence_refs: [bolognesi2012]
+  - id: C04
+    name: defined_bases_only
+    definition: "The candidate sequence in the operational reference contains only A, C, G, T."
+    origin: "Synthesis and cloning convention"
+    evidence_category: PROJECT_CONVENTION
+    roles: [HARD_FILTER]
+    affects: [eligibility]
+    threshold: {non_acgt: 0}
+    justification: "A defined sequence is required to order or amplify a region; trivially true in the operational CDS."
+    limitations: "Says nothing about the sibling accession, whose IUPAC symbols are handled by C11."
+    revision_condition: "The operational reference changes."
+    evidence_refs: []
+  - id: C05
+    name: length_strata
+    definition: "Specificity is compared only among candidates of equal length. Strata: 400 nt (ranking), 330 nt (benchmark comparator), 300 and 500 nt (sensitivity at the range limits)."
+    origin: "Project decision (rounds 4-5); 400 nt is the centre of 300-500"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: [comparison_scope]
+    threshold: {ranking_length_nt: 400, benchmark_comparator_length_nt: 330, sensitivity_lengths_nt: [300, 500]}
+    justification: "Comparing equal lengths removes any length term from the clipped specificity metrics without normalising, which is not neutral (a fixed-size homology is diluted in longer windows)."
+    limitations: "400 nt becomes the ranking length by convention, not by biology; the best region at 300 or 500 nt may differ and is reported, not decided."
+    revision_condition: "The Wet Lab nominal length changes."
+    evidence_refs: [project_review_C_length_architecture]
+  - id: C06
+    name: homology_evidence_metrics_clipped
+    definition: "Per target group, from BLASTn HSPs clipped to the candidate interval: longest_exact_match_clipped, aligned_nt_clipped, covered_nt_clipped, local_identity_clipped, n_independent_hsps_clipped, hit target, coordinates. Whole-HSP attributes (length, identity, E-value, subject coordinates) are PROVENANCE/CONTEXT only (hsp_provenance.tsv)."
+    origin: "BLAST+ tabular output with btop"
+    evidence_category: TOOL_DERIVED
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "A region must not be penalised for homology outside the sequence that would actually be produced as dsRNA."
+    limitations: "Exact 19-mer and 21-mer counts and E-values are sensitivity descriptors only; E-values depend on database size, query size and scoring and are never used as a cutoff."
+    revision_condition: "BLAST+ version or search settings change."
+    evidence_refs: [camacho2009, project_review_B_specificity]
+  - id: C07
+    name: specificity_evidence_vector
+    definition: "For each decisional group (PARALOG then CO_TARGET) the vector (longest_exact_match_clipped, covered_nt_clipped, local_identity_clipped), lower is better on every axis. Candidates are compared by Pareto dominance within one length stratum; groups are applied in order; incomparable or equal vectors are a tie."
+    origin: "Project decision (rounds 3-5)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [SOFT_PREFERENCE]
+    affects: [pareto, cell_signature, primary_ordering]
+    threshold: null
+    justification: "No defensible weights exist; dominance is threshold-free and weight-free. Comparison across lengths is refused."
+    limitations: "Ties are expected and are reported as ties."
+    revision_condition: "A validated cross-silencing criterion for D. maidis becomes available."
+    evidence_refs: [project_review_B_specificity]
+  - id: C08
+    name: strong_specificity_concern_paralog_cotarget
+    definition: "A reviewer may record STRONG_SPECIFICITY_CONCERN for clearly extensive homology with dsRNase-1/-3 (PARALOG) or BicC (CO_TARGET). It requires a written justification, is recorded in manual_review_decisions and leads to EXCLUDED_AFTER_REVIEW."
+    origin: "Project decision (rounds 3-5)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [MANUAL_REVIEW_TRIGGER]
+    affects: [shortlist_gate]
+    threshold: null
+    justification: "No numeric cutoff for cross-silencing is defensible before observing data; review replaces an invented threshold."
+    limitations: "Reviewer judgement; mitigated by the versioned decision with the reviewed evidence hash."
+    revision_condition: "Evidence supports a numeric criterion."
+    evidence_refs: [project_review_B_specificity]
+  - id: C09
+    name: known_dsrnase2_compatible_records
+    definition: "GITV01008430.1, GITV01012450.1 and the published dsRNase-2 cDNA TRINITY_DN22752_c0_g2_i1 are classified a priori as KNOWN_DSRNASE2_COMPATIBLE (same locus) from the NB01 contract and are excluded from specificity risk."
+    origin: "NB01 contract (pin)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "NB01 classified these records as compatible with Dmai dsRNase-2."
+    limitations: "Whether they are one locus or two is unresolved in NB01; the classification is operational."
+    revision_condition: "NB01 identity decisions are revised."
+    evidence_refs: []
+  - id: C10
+    name: other_transcript_specificity
+    definition: "Hits of the candidate against the complete D. maidis TSA outside PARALOG, CO_TARGET and KNOWN_DSRNASE2_COMPATIBLE are reported per hit (target accession, clipped metrics, candidate x subject coordinates, record classification and provenance). The group does not enter the vector, Pareto, cell signature or primary ordering, but no candidate may become RECOMMENDED_SHORTLIST without a versioned review decision on these hits."
+    origin: "Project decision (round 5)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR, MANDATORY_PRE_RECOMMENDATION_MANUAL_REVIEW]
+    affects: [shortlist_gate]
+    threshold: null
+    justification: "The TSA has tens of thousands of transcripts and a permissive BLAST yields many incidental HSPs; letting them define cells would give an unspecific background the same structural role as homology with dsRNase-1/-3 or BicC. Intraspecies specificity is not removed: it is a mandatory pre-recommendation review."
+    limitations: "Hit table order aids inspection and is not a decision rule; E-values, 19-mers and 21-mers are never cutoffs. A strong concern is recorded as STRONG_INTRASPECIES_SPECIFICITY_CONCERN with justification and leads to EXCLUDED_AFTER_REVIEW."
+    revision_condition: "Evidence supports an automatic criterion."
+    evidence_refs: [project_review_B_specificity, bachman2013, whyard2009]
+  - id: C11
+    name: known_variants
+    definition: "Number and positions of the NB01 known variable sites intercepted by the candidate (7 sites: CDS 9, 30, 219, 312, 350, 816, 1272), split into defined and IUPAC, with the NB01 read-support status. Primary ordering level after specificity: fewer intercepted sites preferred. A variant never excludes a candidate."
+    origin: "NB01 contract (pin)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [SOFT_PREFERENCE]
+    affects: [cell_signature, primary_ordering]
+    threshold: null
+    justification: "Known nucleotide differences matter for RNA complementarity; protein conservation does not substitute for CDS conservation."
+    limitations: "Only two accessions are known; unobserved variation is invisible. Defined versus IUPAC is recorded, not ranked."
+    revision_condition: "New allele or read evidence."
+    evidence_refs: []
+  - id: C12
+    name: potential_small_RNA_windows_unaffected
+    definition: "For k = 21: n_potential = L - 20 sub-windows; sub-windows intercepting a known variant; fraction_unaffected. Called 'potential small-RNA / Dicer-length windows', never 'active siRNAs'. Second ordering level among variants (higher fraction preferred)."
+    origin: "Arithmetic on the candidate and the NB01 variants; 21 nt unit from Bolognesi 2012 and Bachman 2013"
+    evidence_category: OPERATIONAL_ASSUMPTION
+    roles: [DESCRIPTOR, SOFT_PREFERENCE]
+    affects: [primary_ordering]
+    threshold: {k: 21}
+    justification: "Quantifies how much of the potential small-RNA pool is unaffected by known variation without any efficacy predictor."
+    limitations: "The 21 nt unit is a Coleoptera observation; its role in D. maidis is an assumption."
+    revision_condition: "Evidence on the functional unit in Hemiptera."
+    evidence_refs: [bolognesi2012, bachman2013]
+  - id: C13
+    name: target_region_position
+    definition: "Continuous relative_midpoint and distances to the CDS ends, plus a label 5_PRIME (< 1/3), CENTRAL, 3_PRIME (>= 2/3) or BOUNDARY (contains the start or stop codon). Applied as an annotation after cells are formed."
+    origin: "Project review A"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "No evidence that the 5' region is better in Hemiptera or in D. maidis; used only to check positional bias and to test the 5' hypothesis experimentally."
+    limitations: "Tercile boundaries are conventions; the continuous value is always reported."
+    revision_condition: "Controlled position data in D. maidis."
+    evidence_refs: [project_review_A_5prime]
+  - id: C14
+    name: gc_fraction
+    definition: "GC fraction of the candidate."
+    origin: "Fabricability context for the Wet Lab"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "No evidence-backed optimal GC range for oral dsRNA in Hemiptera."
+    limitations: "No decisional role."
+    revision_condition: "Wet Lab documents a real synthesis or cloning constraint."
+    evidence_refs: [dsrip2025]
+  - id: C15
+    name: longest_homopolymer
+    definition: "Longest homopolymer run of the candidate."
+    origin: "Fabricability context for the Wet Lab"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "No source for a limit; it becomes a HARD_FILTER only if the Wet Lab documents a real constraint."
+    limitations: "No decisional role."
+    revision_condition: "Wet Lab constraint."
+    evidence_refs: []
+  - id: C16
+    name: low_complexity_fraction
+    definition: "Fraction of the candidate masked by dustmasker with default parameters."
+    origin: "BLAST+ dustmasker"
+    evidence_category: TOOL_DERIVED
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "Standardised and reproducible complexity measure without a biological cutoff."
+    limitations: "Tool default is not a biological threshold; dustmasker joins config/repro.yaml external_tools when first used."
+    revision_condition: "Additional evidence on complexity and dsRNA production or efficacy."
+    evidence_refs: [morgulis2006, camacho2009]
+  - id: C17
+    name: search_detection_limit
+    definition: "BLASTn search settings: -task blastn -dust no -word_size 11 -evalue 10 -strand both, BLAST+ version and database size recorded. This is the detection limit of the search, not a risk threshold; every reported HSP enters the descriptors."
+    origin: "BLAST+"
+    evidence_category: TOOL_DERIVED
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: {task: blastn, dust: "no", word_size: 11, evalue_report_limit: 10, strand: both}
+    justification: "A search needs settings; declaring them keeps them from acting as hidden separators of noise and risk."
+    limitations: "Homology below the detection limit is not reported; absence of a hit means 'no homology detected at this limit', never 'safe'."
+    revision_condition: "BLAST+ version or settings change."
+    evidence_refs: [camacho2009]
+  - id: C18
+    name: shuffled_control
+    definition: "Five composition-preserving shuffles of the CDS (fixed seeds 1-5) pass through the same BLAST and clipping as a reproducible sanity check. DESCRIPTOR ONLY."
+    origin: "Project decision (rounds 4-5)"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: {n_shuffles: 5, seeds: [1, 2, 3, 4, 5]}
+    justification: "Shows that the pipeline runs on non-biological input and illustrates the order of magnitude of occasional matches; five is a small reproducible sanity check, not a statistical sample."
+    limitations: "Shuffling does not preserve codon usage. It never creates a cutoff, removes an HSP, changes a cell or the Pareto order, or excludes a candidate."
+    revision_condition: "None; narrative and limitations only."
+    evidence_refs: [project_review_B_specificity]
+  - id: C19
+    name: published_benchmark_reference
+    definition: "The published 330 nt fragment (CDS 814-1143) is the PUBLISHED_EXPERIMENTAL_BENCHMARK of the REFERENCE SET. It appears in every table and comparison, is evaluated with the same criteria (at the 330 nt stratum), does not count as a recommended candidate and carries no efficacy score. INJECTION_PRECONDITIONING and ORAL_COFEEDING are recorded separately."
+    origin: "Dalaison-Fuentes et al. 2023; pin"
+    evidence_category: EVIDENCE_BACKED
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "Direct experimental evidence in D. maidis that this fragment works in the published designs."
+    limitations: "Co-feeding delivers BicC dsRNA as well, so endpoints are not attributable to the fragment alone; main text not retrievable at CP1."
+    revision_condition: "Main text read directly and any statement found to differ."
+    evidence_refs: [dalaison2023]
+
+policy:
+  prioritization:
+    - "1. structural requirements (C01-C04)"
+    - "2. no automatic specificity exclusion; exclusions are structural or EXCLUDED_AFTER_REVIEW"
+    - "3. specificity by Pareto dominance within one length stratum: PARALOG, then CO_TARGET (C07)"
+    - "4. variants: fewer intercepted sites (C11), then higher fraction_unaffected (C12); defined vs IUPAC not ranked"
+    - "5. descriptors never order: position, GC, homopolymer, complexity, length label, exact k-mer counts, E-values, OTHER_TRANSCRIPT hits"
+    - "6. ties are preserved; no composite score and no weights"
+  cell_signature: [variants_intercepted, paralog_vector_clipped, co_target_vector_clipped]
+  cell_signature_excludes: [target_region_position, other_transcript_hits, gc_fraction, low_complexity_fraction, longest_homopolymer]
+  iterative_selection:
+    stratum_nt: 400
+    steps:
+      - "apply structural criteria"
+      - "order by specificity against PARALOG and CO_TARGET"
+      - "apply variant robustness"
+      - "take the provisional candidate"
+      - "gather its evidence against OTHER_TRANSCRIPT (complete TSA)"
+      - "present all its hits for review"
+      - "record the decision in manual_review_decisions"
+    on_approved: "the candidate may enter RECOMMENDED_SHORTLIST"
+    on_strong_concern: "record STRONG_INTRASPECIES_SPECIFICITY_CONCERN with justification, mark EXCLUDED_AFTER_REVIEW, advance to the next eligible candidate and repeat"
+    stop: "2-4 recommended candidates reached, or the adequate regions are exhausted; no pre-defined number of reserve candidates"
+  recommended_candidates: {min: 2, max: 4}
+  benchmark_counts_as_recommended: false
+  report_convergence_with_benchmark: true
+  manual_review_decisions:
+    path: config/nb02_manual_review_decisions.tsv
+    columns: [candidate_id, scope, decision, justification, reviewer, decided_utc, evidence_sha256]
+    scopes: [OTHER_TRANSCRIPT, PARALOG, CO_TARGET]
+    decisions:
+      OTHER_TRANSCRIPT: [APPROVED, STRONG_INTRASPECIES_SPECIFICITY_CONCERN]
+      PARALOG: [APPROVED, STRONG_SPECIFICITY_CONCERN]
+      CO_TARGET: [APPROVED, STRONG_SPECIFICITY_CONCERN]
+    concern_requires_justification: true
+    required_scope_for_recommendation: OTHER_TRANSCRIPT
+  forbidden_in_nb02: [primers, promoters, loop, terminator, restriction_sites, codon_optimization, plasmid_backbone, hairpin_or_linear_or_protected_end_architecture, T7_tails, efficacy_score, ecological_off_target]
+
+not_implemented:
+  - {name: siRNA_efficacy_predictors, reason: "Reynolds, Ui-Tei, si-Fi and dsRIP are not transferable to Hemiptera / D. maidis without validation; a long dsRNA yields a pool of siRNAs of unknown functional dominance", refs: [dsrip2025]}
+  - {name: protein_domain_or_signal_peptide_position, reason: "no evidence that it matters for dsRNA efficacy; paralog specificity is evaluated at nucleotide level"}
+  - {name: rna_secondary_structure, reason: "no documented need; would add ViennaRNA without a decisional question"}
+  - {name: repeat_metrics, reason: "no decisional function or documented constraint"}
+  - {name: ecological_off_target, reason: "out of NB02 scope; later stage for the regions that remain"}
+
+amendments: []

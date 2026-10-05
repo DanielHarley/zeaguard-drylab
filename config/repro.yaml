@@ -38,6 +38,9 @@ required_paths:
   - data/reference/manifest.json
   - data/reference/target_anchors.tsv
   - data/reference/target_anchor_sequences.fasta
+  - data/reference/nb01_dsrnase2_operational_reference.json
+  - config/nb02_design_criteria.yaml
+  - config/nb02_manual_review_decisions.tsv
   - environment.yml
   - pyproject.toml
 
