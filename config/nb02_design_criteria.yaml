@@ -173,7 +173,7 @@ criteria:
     evidence_refs: [project_review_C_length_architecture]
   - id: C06
     name: homology_evidence_metrics_clipped
-    definition: "Per target group, from BLASTn HSPs clipped to the candidate interval: longest_exact_match_clipped, aligned_nt_clipped, covered_nt_clipped, local_identity_clipped, n_independent_hsps_clipped, hit target, coordinates. Whole-HSP attributes (length, identity, E-value, subject coordinates) are PROVENANCE/CONTEXT only (hsp_provenance.tsv)."
+    definition: "Per biological unit (DSRNASE1, DSRNASE3, BICC; OTHER_TRANSCRIPT per hit), from BLASTn HSPs clipped to the candidate interval [cds_start, cds_end]: an HSP with zero query nt after clipping contributes nothing; longest_exact_match_clipped = longest exact run among the unit's clipped HSPs; covered_nt_clipped = union of the query positions covered by all records/HSPs of the same unit (redundant records never add); best_local_identity_clipped = highest identity among the unit's clipped HSPs, always reported with the aligned_nt_clipped of the HSP that provided it (aligned_nt_clipped is not a Pareto axis); n_independent_hsps_clipped, exact 19-mer and 21-mer counts, hit accessions and coordinates are descriptors. Units are never pooled. Whole-HSP attributes (length, identity, E-value, subject coordinates) are PROVENANCE/CONTEXT only (hsp_provenance.tsv)."
     origin: "BLAST+ tabular output with btop"
     evidence_category: TOOL_DERIVED
     roles: [DESCRIPTOR]
@@ -185,7 +185,7 @@ criteria:
     evidence_refs: [camacho2009, project_review_B_specificity]
   - id: C07
     name: specificity_evidence_vector
-    definition: "For each decisional group (PARALOG then CO_TARGET) the vector (longest_exact_match_clipped, covered_nt_clipped, local_identity_clipped), lower is better on every axis. Candidates are compared by Pareto dominance within one length stratum; groups are applied in order; incomparable or equal vectors are a tie."
+    definition: "Per biological unit the vector (longest_exact_match_clipped, covered_nt_clipped, best_local_identity_clipped), lower is better on every axis. PARALOG is the joint comparison of the DSRNASE1 and DSRNASE3 vectors (six axes, never summed or pooled): A dominates B in PARALOG only if A is no worse on every axis of both units and strictly better on at least one; a trade-off between units is a tie. CO_TARGET (BICC) is the next level of the hierarchy. Pareto dominance is applied within one length stratum; incomparable or equal vectors are a tie."
     origin: "Project decision (rounds 3-5)"
     evidence_category: PROJECT_CONVENTION
     roles: [SOFT_PREFERENCE]
@@ -305,12 +305,12 @@ criteria:
     evidence_refs: [morgulis2006, camacho2009]
   - id: C17
     name: search_detection_limit
-    definition: "BLASTn search settings: -task blastn -dust no -word_size 11 -evalue 10 -strand both, BLAST+ version and database size recorded. This is the detection limit of the search, not a risk threshold; every reported HSP enters the descriptors."
+    definition: "BLASTn search settings: -task blastn -dust no -word_size 11 -evalue 10 -strand both, -max_target_seqs 100000 (larger than the database, so no subject is dropped) and no -max_hsps limit, BLAST+ version and database size recorded. This is the detection limit of the search, not a risk threshold; every reported HSP enters the descriptors."
     origin: "BLAST+"
     evidence_category: TOOL_DERIVED
     roles: [DESCRIPTOR]
     affects: []
-    threshold: {task: blastn, dust: "no", word_size: 11, evalue_report_limit: 10, strand: both}
+    threshold: {task: blastn, dust: "no", word_size: 11, evalue_report_limit: 10, strand: both, max_target_seqs: 100000, max_hsps: unlimited}
     justification: "A search needs settings; declaring them keeps them from acting as hidden separators of noise and risk."
     limitations: "Homology below the detection limit is not reported; absence of a hit means 'no homology detected at this limit', never 'safe'."
     revision_condition: "BLAST+ version or settings change."
@@ -344,12 +344,34 @@ policy:
   prioritization:
     - "1. structural requirements (C01-C04)"
     - "2. no automatic specificity exclusion; exclusions are structural or EXCLUDED_AFTER_REVIEW"
-    - "3. specificity by Pareto dominance within one length stratum: PARALOG, then CO_TARGET (C07)"
+    - "3. specificity by Pareto dominance within one length stratum: PARALOG (DSRNASE1 and DSRNASE3 vectors jointly), then CO_TARGET (BICC) (C07)"
     - "4. variants: fewer intercepted sites (C11), then higher fraction_unaffected (C12); defined vs IUPAC not ranked"
     - "5. descriptors never order: position, GC, homopolymer, complexity, length label, exact k-mer counts, E-values, OTHER_TRANSCRIPT hits"
     - "6. ties are preserved; no composite score and no weights"
   cell_signature: [variants_intercepted, paralog_vector_clipped, co_target_vector_clipped]
   cell_signature_excludes: [target_region_position, other_transcript_hits, gc_fraction, low_complexity_fraction, longest_homopolymer]
+  # Biological units of specificity (frozen before the first BLAST). A unit groups every record that represents
+  # the same biological target; units are never pooled with one another.
+  specificity_units:
+    DSRNASE1:
+      group: PARALOG
+      members: [GITV01001583.1, GITV01002042.1, GITV01003945.1, TRINITY_DN13786_c0_g1_i8]
+    DSRNASE3:
+      group: PARALOG
+      members: [TRINITY_DN5008_c0_g1_i24]
+    BICC:
+      group: CO_TARGET
+      members: [TRINITY_DN24799_c0_g1_i7, GITV01000968.1]
+  known_dsrnase2_compatible_excluded_from_risk: [GITV01008430.1, GITV01012450.1, TRINITY_DN22752_c0_g2_i1]
+  other_transcript_membership: "every TSA record that is neither a unit member nor KNOWN_DSRNASE2_COMPATIBLE"
+  unit_aggregation:
+    clip_to_candidate: true
+    zero_query_nt_after_clipping_contributes_nothing: true
+    longest_exact_match_clipped: "maximum over the unit's clipped HSPs"
+    covered_nt_clipped: "union of query positions over all records and HSPs of the same unit"
+    best_local_identity_clipped: "maximum clipped identity of the unit; aligned_nt_clipped of the providing HSP is reported, not a Pareto axis"
+    pool_across_units: false
+    paralog_pareto: "joint comparison of the DSRNASE1 and DSRNASE3 vectors; a trade-off between them is a tie; no weights"
   iterative_selection:
     stratum_nt: 400
     steps:
@@ -398,3 +420,12 @@ amendments:
     reason: "CP2 implementation: the code must read these values from the registry; no change to meaning, thresholds, roles, strata or policy."
     changes_thresholds_roles_or_policy: false
     applied_before_window_generation: true
+  - date: "2026-10-05"
+    criteria: [C06, C07, C17]
+    change: "Disambiguate how specificity evidence is aggregated across several records and targets. Biological units are fixed: DSRNASE1 = GITV01001583.1, GITV01002042.1, GITV01003945.1 and the published dsRNase-1 cDNA; DSRNASE3 = the published dsRNase-3 cDNA; BICC = the published BicC cDNA and GITV01000968.1 (the NB01 high-confidence TSA record of BicC, which therefore must not appear in OTHER_TRANSCRIPT). Evidence is clipped to the candidate and aggregated within a unit (longest exact match = maximum; covered nt = union of query positions, so redundant records never add; best local identity = maximum, reported with the aligned_nt_clipped of the HSP that provided it, which is not a Pareto axis). Units are never pooled: DSRNASE1 and DSRNASE3 are compared jointly in PARALOG over six axes, and a trade-off between them is a tie. The BLAST search settings gain -max_target_seqs 100000 and no -max_hsps limit so that no subject or HSP is dropped."
+    reason: "Made BEFORE any BLAST result existed, to remove an ambiguity in aggregation across multiple accessions and targets. It creates no threshold and introduces no score or weight."
+    changes_thresholds_roles_or_policy: false
+    applied_before_window_generation: true
+    made_before_blast_results: true
+    introduces_threshold: false
+    introduces_score: false

@@ -224,15 +224,16 @@ def test_decision_file_rejects_duplicates_and_wrong_header(tmp_path):
 
 
 # ------------------------------------------------------------------ policy kernel: cells and Pareto
-def _evidence(candidate="a", length=400, variants=(816,), paralog=(0.0, 0.0, 0.0), co_target=(0.0, 0.0, 0.0), other=()):
-    return crit.SpecificityEvidence(candidate, length, frozenset(variants), paralog, co_target, tuple(other))
+def _evidence(candidate="a", length=400, variants=(816,), dsrnase1=(0.0, 0.0, 0.0), dsrnase3=(0.0, 0.0, 0.0),
+              co_target=(0.0, 0.0, 0.0), other=()):
+    return crit.SpecificityEvidence(candidate, length, frozenset(variants), dsrnase1, dsrnase3, co_target, tuple(other))
 
 
 def test_changing_only_other_transcript_hits_changes_neither_cell_nor_pareto_position():
     quiet = _evidence(other=())
     noisy = _evidence(other=({"target": "GITV01000001.1", "longest_exact_match_clipped": 25, "covered_nt_clipped": 300},) * 50)
     assert crit.decisive_signature(quiet) == crit.decisive_signature(noisy)
-    rival = _evidence("b", paralog=(12.0, 30.0, 0.8))
+    rival = _evidence("b", dsrnase1=(12.0, 30.0, 0.8))
     assert crit.compare_specificity(quiet, rival) == crit.compare_specificity(noisy, rival) == "A_BETTER"
     assert crit.compare_specificity(rival, quiet) == crit.compare_specificity(rival, noisy) == "B_BETTER"
     assert crit.compare_specificity(quiet, noisy) == "TIE"
@@ -250,15 +251,15 @@ def test_pareto_dominance_incomparable_equal_and_group_order():
     assert crit.dominates((1, 5, 0.5), (2, 5, 0.5))
     assert not crit.dominates((1, 5, 0.5), (1, 5, 0.5))
     assert not crit.dominates((1, 9, 0.5), (2, 5, 0.5)) and not crit.dominates((2, 5, 0.5), (1, 9, 0.5))
-    better, worse = _evidence("a", paralog=(11, 20, 0.7)), _evidence("b", paralog=(15, 40, 0.9))
+    better, worse = _evidence("a", dsrnase1=(11, 20, 0.7)), _evidence("b", dsrnase1=(15, 40, 0.9))
     assert crit.compare_specificity(better, worse) == "A_BETTER" and crit.compare_specificity(worse, better) == "B_BETTER"
-    incomparable_a, incomparable_b = _evidence("a", paralog=(11, 40, 0.7)), _evidence("b", paralog=(15, 20, 0.7))
+    incomparable_a, incomparable_b = _evidence("a", dsrnase1=(11, 40, 0.7)), _evidence("b", dsrnase1=(15, 20, 0.7))
     assert crit.compare_specificity(incomparable_a, incomparable_b) == "TIE"  # no invented weights
     # equal PARALOG vectors defer to CO_TARGET
     assert crit.compare_specificity(_evidence("a", co_target=(0, 0, 0)), _evidence("b", co_target=(14, 30, 0.8))) == "A_BETTER"
     # an incomparable PARALOG pair is not rescued by the CO_TARGET group
-    assert crit.compare_specificity(_evidence("a", paralog=(11, 40, 0.7), co_target=(0, 0, 0)),
-                                    _evidence("b", paralog=(15, 20, 0.7), co_target=(30, 90, 1.0))) == "TIE"
+    assert crit.compare_specificity(_evidence("a", dsrnase1=(11, 40, 0.7), co_target=(0, 0, 0)),
+                                    _evidence("b", dsrnase1=(15, 20, 0.7), co_target=(30, 90, 1.0))) == "TIE"
 
 
 def test_specificity_is_refused_across_length_strata():
@@ -281,3 +282,57 @@ def test_amendment_records_c03_redundancy_and_the_provenance_split_without_chang
 def test_registry_rejects_incomplete_or_dangling_amendments(registry):
     assert any("amendment lacks" in p for p in _problems(registry, lambda r: r["amendments"][0].pop("reason")))
     assert any("unknown criteria" in p for p in _problems(registry, lambda r: r["amendments"][0].update(criteria=["C99"])))
+
+
+# ------------------------------------------------------------------ biological units of specificity (amendment 3, frozen before any BLAST)
+def test_units_are_frozen_with_bicc_including_the_nb01_tsa_record(registry):
+    units = registry["policy"]["specificity_units"]
+    assert {k: v["group"] for k, v in units.items()} == {"DSRNASE1": "PARALOG", "DSRNASE3": "PARALOG", "BICC": "CO_TARGET"}
+    assert units["DSRNASE1"]["members"] == ["GITV01001583.1", "GITV01002042.1", "GITV01003945.1", "TRINITY_DN13786_c0_g1_i8"]
+    assert units["DSRNASE3"]["members"] == ["TRINITY_DN5008_c0_g1_i24"]
+    assert units["BICC"]["members"] == ["TRINITY_DN24799_c0_g1_i7", "GITV01000968.1"]
+    assert registry["policy"]["unit_aggregation"]["pool_across_units"] is False
+    assert set(registry["policy"]["known_dsrnase2_compatible_excluded_from_risk"]) == {
+        "GITV01008430.1", "GITV01012450.1", "TRINITY_DN22752_c0_g2_i1"}
+
+
+def test_third_amendment_is_pre_data_without_threshold_or_score(registry):
+    amendment = registry["amendments"][2]
+    assert amendment["made_before_blast_results"] is True
+    assert amendment["introduces_threshold"] is False and amendment["introduces_score"] is False
+    assert amendment["changes_thresholds_roles_or_policy"] is False
+    assert set(amendment["criteria"]) == {"C06", "C07", "C17"}
+    assert "GITV01000968.1" in amendment["change"] and "OTHER_TRANSCRIPT" in amendment["change"]
+    assert _criterion(registry, "search_detection_limit")["threshold"]["max_target_seqs"] == 100000
+
+
+@pytest.mark.parametrize(
+    "mutate, needle",
+    [
+        (lambda r: r["policy"]["specificity_units"]["BICC"]["members"].remove("GITV01000968.1"), "BICC must contain"),
+        (lambda r: r["policy"]["specificity_units"]["DSRNASE3"]["members"].append("GITV01001583.1"), "belongs to both"),
+        (lambda r: r["policy"]["unit_aggregation"].update(pool_across_units=True), "never be pooled"),
+        (lambda r: r["policy"]["specificity_units"]["DSRNASE1"].update(group="CO_TARGET"), "specificity_units must be"),
+        (lambda r: r["policy"]["specificity_units"]["DSRNASE1"]["members"].append("GITV01008430.1"), "KNOWN_DSRNASE2_COMPATIBLE"),
+    ],
+)
+def test_registry_rejects_unit_violations(registry, mutate, needle):
+    assert any(needle in problem for problem in _problems(registry, mutate)), needle
+
+
+def test_tradeoff_between_dsrnase1_and_dsrnase3_is_incomparable_and_never_summed():
+    better_on_1 = _evidence("a", dsrnase1=(0, 0, 0.0), dsrnase3=(25, 80, 1.0))
+    better_on_3 = _evidence("b", dsrnase1=(25, 80, 1.0), dsrnase3=(0, 0, 0.0))
+    assert crit.compare_specificity(better_on_1, better_on_3) == "TIE" == crit.compare_specificity(better_on_3, better_on_1)
+    # 80 nt against each paralog is not "160 nt against PARALOG": the evidence keeps the units apart
+    both = _evidence("c", dsrnase1=(0, 80, 0.6), dsrnase3=(0, 80, 0.6))
+    assert crit.decisive_signature(both)[1] == ((0, 80, 0.6), (0, 80, 0.6))
+    assert both.paralog == (0, 80, 0.6, 0, 80, 0.6)
+    # dominance needs "no worse" on the axes of BOTH units
+    assert crit.compare_specificity(_evidence("d", dsrnase1=(0, 40, 0.5), dsrnase3=(0, 40, 0.5)), both) == "A_BETTER"
+    assert crit.compare_specificity(_evidence("e", dsrnase1=(0, 40, 0.5), dsrnase3=(0, 90, 0.5)), both) == "TIE"
+
+
+def test_exact_kmer_counts_and_evalues_are_not_inputs_of_the_dominance_order():
+    names = {field.name for field in dataclasses.fields(crit.SpecificityEvidence)}
+    assert not {"evalue", "e_value", "exact_19mer_count", "exact_21mer_count", "aligned_nt_clipped"} & names

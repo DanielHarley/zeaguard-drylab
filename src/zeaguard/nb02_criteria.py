@@ -169,12 +169,38 @@ def validate_registry(registry: dict[str, Any]) -> list[str]:
         problems.append("manual_review_decisions decision vocabulary differs from the code schema")
     if "max_pairwise_overlap" in policy or "max_pairwise_overlap" in {c.get("name") for c in registry["criteria"]}:
         problems.append("a max pairwise overlap must not be pre-registered")
+    problems.extend(_validate_units(policy))
     for amendment in registry.get("amendments") or []:
         missing = [key for key in AMENDMENT_FIELDS if key not in amendment]
         if missing:
             problems.append(f"amendment lacks {missing}")
         elif not set(amendment["criteria"]) <= seen_ids:
             problems.append("amendment refers to unknown criteria")
+    return problems
+
+
+UNIT_GROUPS = {"DSRNASE1": "PARALOG", "DSRNASE3": "PARALOG", "BICC": "CO_TARGET"}
+
+
+def _validate_units(policy: dict[str, Any]) -> list[str]:
+    """The biological units of specificity are frozen: disjoint, never pooled, known records excluded."""
+    problems: list[str] = []
+    units = policy.get("specificity_units", {})
+    if {name: unit.get("group") for name, unit in units.items()} != UNIT_GROUPS:
+        return ["policy.specificity_units must be DSRNASE1 and DSRNASE3 (PARALOG) and BICC (CO_TARGET)"]
+    owners: dict[str, str] = {}
+    for name, unit in units.items():
+        for member in unit.get("members", []):
+            if member in owners:
+                problems.append(f"{member} belongs to both {owners[member]} and {name}")
+            owners[member] = name
+    if not units["BICC"]["members"] or "GITV01000968.1" not in units["BICC"]["members"]:
+        problems.append("BICC must contain the NB01 high-confidence TSA record GITV01000968.1")
+    known = set(policy.get("known_dsrnase2_compatible_excluded_from_risk", []))
+    if known & set(owners):
+        problems.append("a KNOWN_DSRNASE2_COMPATIBLE record is also a specificity unit member")
+    if policy.get("unit_aggregation", {}).get("pool_across_units") is not False:
+        problems.append("units must never be pooled (unit_aggregation.pool_across_units must be false)")
     return problems
 
 
@@ -257,19 +283,32 @@ Vector = tuple[float, float, float]  # longest_exact_match_clipped, covered_nt_c
 
 @dataclass(frozen=True)
 class SpecificityEvidence:
-    """Decisive evidence of one candidate; ``other_transcript_hits`` is carried but never used to decide."""
+    """Decisive evidence of one candidate, one vector per biological unit (never pooled).
+
+    ``other_transcript_hits`` is carried but never used to decide.
+    """
 
     candidate_id: str
     length_nt: int
     variants_intercepted: frozenset[int]
-    paralog: Vector
-    co_target: Vector
+    dsrnase1: Vector
+    dsrnase3: Vector
+    co_target: Vector  # BICC
     other_transcript_hits: tuple[dict[str, Any], ...] = ()
 
+    @property
+    def paralog(self) -> tuple[float, ...]:
+        """PARALOG = the DSRNASE1 and DSRNASE3 vectors considered jointly (six axes, no sum, no union)."""
+        return (*self.dsrnase1, *self.dsrnase3)
 
-def decisive_signature(evidence: SpecificityEvidence) -> tuple[tuple[int, ...], Vector, Vector]:
-    """Cell signature: variants intercepted + PARALOG vector + CO_TARGET vector (nothing else)."""
-    return (tuple(sorted(evidence.variants_intercepted)), evidence.paralog, evidence.co_target)
+
+def decisive_signature(evidence: SpecificityEvidence) -> tuple[tuple[int, ...], tuple[Vector, Vector], Vector]:
+    """Cell signature: variants intercepted + the PARALOG unit vectors + the CO_TARGET vector (nothing else)."""
+    return (
+        tuple(sorted(evidence.variants_intercepted)),
+        (evidence.dsrnase1, evidence.dsrnase3),
+        evidence.co_target,
+    )
 
 
 def dominates(a: Iterable[float], b: Iterable[float]) -> bool:
@@ -281,6 +320,7 @@ def dominates(a: Iterable[float], b: Iterable[float]) -> bool:
 def compare_specificity(a: SpecificityEvidence, b: SpecificityEvidence) -> str:
     """``A_BETTER``, ``B_BETTER`` or ``TIE`` within one length stratum; PARALOG first, then CO_TARGET.
 
+    PARALOG compares the DSRNASE1 and DSRNASE3 vectors jointly: a trade-off between the two units is a tie.
     Equal vectors defer to the next group; incomparable vectors are a tie (no weights are invented).
     Comparing different lengths is refused: no normalisation is neutral across lengths.
     """
