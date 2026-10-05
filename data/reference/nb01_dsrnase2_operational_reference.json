@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "kind": "nb01_dsrnase2_operational_reference",
+  "description": "Minimal versioned hand-off from NB01 to NB02. GITV01008430.1 is the OPERATIONAL reference because it reproduces the published CDS and protein exactly; this is not a claim of unique biological identity (accession, CDS and protein remain AMBIGUOUS in NB01). Everything below is re-derived from the hash-validated TSA by zeaguard.nb02_reference.verify_reference.",
+  "source": {
+    "adr": "src/workstreams/bioinformatics/decisions/0004-nb01-dsrnase2-identity-criteria.md",
+    "run_record": "src/workstreams/bioinformatics/runs/2026-10-03_nb01-dsrnase2-identity.md",
+    "nb01_merge_commit": "9e0a7a2f2b35adfded6fe79c17f0a74e346603bf",
+    "nb01_published_reference_correspondence": "UNIQUE",
+    "nb01_overall": "AMBIGUOUS_AT_ACCESSION_AND_CDS_AND_PROTEIN_LEVELS"
+  },
+  "coordinates": {
+    "base": 1,
+    "interval": "inclusive",
+    "orientation": "coding (sense) strand of the CDS",
+    "cds_to_stored_strand": "cds_tx_end - cds_pos + 1 for records on the '-' strand",
+    "note": "cds_tx_start/cds_tx_end are 1-based inclusive on the stored strand of the TSA record"
+  },
+  "tsa": {
+    "manifest": "data/reference/manifest.json",
+    "file_sha256": "22d0cff8d0867344a76d615bdca62c31ce0f9133f574058e8daa6b6e41925ae6"
+  },
+  "records": {
+    "operational": {
+      "accession": "GITV01008430.1",
+      "role": "OPERATIONAL_REFERENCE",
+      "record_length": 1503,
+      "strand": "-",
+      "cds_tx_start": 53,
+      "cds_tx_end": 1477,
+      "cds_length": 1425,
+      "cds_sha256": "bf853267151d1c1a43ca687feb7cea7857ff5c651c5546cba721d8b7647d36d7",
+      "protein_length": 474,
+      "protein_sha256": "d5fc6ea32775c901736323db060ca26d3c1ddb0cefcbf49caedde1bcf61f2a17"
+    },
+    "sibling": {
+      "accession": "GITV01012450.1",
+      "role": "KNOWN_DSRNASE2_COMPATIBLE",
+      "record_length": 3494,
+      "strand": "-",
+      "cds_tx_start": 2018,
+      "cds_tx_end": 3442,
+      "cds_length": 1425,
+      "cds_sha256": "8c18687410248fb6036020cc50fc7577d23c7c44b9d0f30cc0677b95b28960f8",
+      "protein_length": 474,
+      "protein_sha256": "ff40d2f6d8d8c344a5fb3087d935c6cee7ccb507b7be99bf409ed66dcbb83590"
+    }
+  },
+  "known_dsrnase2_compatible_records": [
+    {
+      "id": "GITV01008430.1",
+      "role": "OPERATIONAL_REFERENCE"
+    },
+    {
+      "id": "GITV01012450.1",
+      "role": "KNOWN_DSRNASE2_COMPATIBLE"
+    },
+    {
+      "id": "TRINITY_DN22752_c0_g2_i1",
+      "role": "PUBLISHED_DSRNASE2_CDNA"
+    }
+  ],
+  "variants": [
+    {
+      "cds_pos": 9,
+      "codon_index": 3,
+      "codon_position": 3,
+      "operational_base": "C",
+      "sibling_symbol": "Y",
+      "class": "IUPAC_AMBIGUITY",
+      "operational_amino_acid": "V",
+      "sibling_possible_amino_acids": "V",
+      "nb01_read_support": "NOT_ASSESSABLE_LOW_DEPTH"
+    },
+    {
+      "cds_pos": 30,
+      "codon_index": 10,
+      "codon_position": 3,
+      "operational_base": "C",
+      "sibling_symbol": "Y",
+      "class": "IUPAC_AMBIGUITY",
+      "operational_amino_acid": "S",
+      "sibling_possible_amino_acids": "S",
+      "nb01_read_support": "NOT_ASSESSABLE_LOW_DEPTH"
+    },
+    {
+      "cds_pos": 219,
+      "codon_index": 73,
+      "codon_position": 3,
+      "operational_base": "T",
+      "sibling_symbol": "Y",
+      "class": "IUPAC_AMBIGUITY",
+      "operational_amino_acid": "P",
+      "sibling_possible_amino_acids": "P",
+      "nb01_read_support": "NOT_ASSESSABLE_LOW_DEPTH"
+    },
+    {
+      "cds_pos": 312,
+      "codon_index": 104,
+      "codon_position": 3,
+      "operational_base": "A",
+      "sibling_symbol": "R",
+      "class": "IUPAC_AMBIGUITY",
+      "operational_amino_acid": "S",
+      "sibling_possible_amino_acids": "S",
+      "nb01_read_support": "NOT_ASSESSABLE_LOW_DEPTH"
+    },
+    {
+      "cds_pos": 350,
+      "codon_index": 117,
+      "codon_position": 2,
+      "operational_base": "G",
+      "sibling_symbol": "R",
+      "class": "IUPAC_AMBIGUITY",
+      "operational_amino_acid": "R",
+      "sibling_possible_amino_acids": "K/R",
+      "nb01_read_support": "NOT_ASSESSABLE_LOW_DEPTH"
+    },
+    {
+      "cds_pos": 816,
+      "codon_index": 272,
+      "codon_position": 3,
+      "operational_base": "C",
+      "sibling_symbol": "T",
+      "class": "DEFINED_SUBSTITUTION",
+      "operational_amino_acid": "V",
+      "sibling_possible_amino_acids": "V",
+      "nb01_read_support": "NOT_ASSESSABLE_LOW_DEPTH"
+    },
+    {
+      "cds_pos": 1272,
+      "codon_index": 424,
+      "codon_position": 3,
+      "operational_base": "T",
+      "sibling_symbol": "Y",
+      "class": "IUPAC_AMBIGUITY",
+      "operational_amino_acid": "T",
+      "sibling_possible_amino_acids": "T",
+      "nb01_read_support": "BOTH_ALLELES_SUPPORTED"
+    }
+  ],
+  "benchmark": {
+    "id": "D2-BENCH-0814-1143",
+    "candidate_class": "PUBLISHED_EXPERIMENTAL_BENCHMARK",
+    "evidence": "DIRECT_EXPERIMENTAL_D_MAIDIS",
+    "reference_set_only": true,
+    "source": {
+      "citation": "Dalaison-Fuentes et al. 2023, Pestic. Biochem. Physiol. 196:105618, DOI 10.1016/j.pestbp.2023.105618",
+      "pmid": "37945254",
+      "supplement_file": "S0048357523002833-mmc1.pdf",
+      "supplement_sha256": "b2859b4ad39383136fd73c0e7623c095d3b5324da1547385eca215268d6fe429",
+      "supplement_locator": "Table S1 (primer sequences and amplicon lengths)"
+    },
+    "primers": {
+      "forward": {
+        "name": "dsRNase2_Fw",
+        "sequence": "GTCAATGTCGCCCCTCAGT"
+      },
+      "reverse": {
+        "name": "dsRNase2_Rv",
+        "sequence": "AGGCTCTGTTTGTTCGTGTTC"
+      },
+      "t7_tail_5to3": "CGACTCACTATAGGG",
+      "t7_tails_in_dsrna_body": false
+    },
+    "amplicon_lengths_bp": {
+      "without_t7_tails": 330,
+      "with_t7_tails": 360
+    },
+    "interval": {
+      "cds_start": 814,
+      "cds_end": 1143,
+      "length_nt": 330,
+      "sequence_sha256": "97d39c22ae297e91d62c40d7b9afa6530822e111914dbb1bb0013b8be92dc179"
+    },
+    "main_text_locators": {
+      "methods_2_4": "dsRNase-2 fragment of 330 bp; PCR; second PCR adding T7 promoters; dsRNA synthesis",
+      "methods_2_5_1": "INJECTION_PRECONDITIONING protocol",
+      "methods_2_5_2": "ORAL_COFEEDING protocol",
+      "results_3_4": "oral co-feeding results"
+    },
+    "verification": {
+      "supplement_table_s1": "VERIFIED_LOCAL: text layer of the S1 PDF; the primer span re-mapped on the operational CDS is 330 nt",
+      "main_text": "NOT_RETRIEVED_BY_AGENT: sections and protocol facts below were supplied by the project; the full text could not be read at CP1 (ScienceDirect captcha was not bypassed and the CONICET repository handle 11336/221063 was unreachable from this machine)"
+    },
+    "protocols": [
+      {
+        "name": "INJECTION_PRECONDITIONING",
+        "source_locator": "Methods 2.5.1",
+        "dsrnase2_dsrna": {
+          "route": "injection",
+          "dose_ng_per_uL": 200
+        },
+        "recovery_hours": 48,
+        "bicc_dsrna": {
+          "route": "oral",
+          "dose_ng_per_uL": 200
+        },
+        "oral_phase_days": 3,
+        "diet_and_dsrna_renewed": "daily",
+        "endpoints_reported": null,
+        "endpoints_note": "not supplied with the locators; to be read from the article (Results) before any use"
+      },
+      {
+        "name": "ORAL_COFEEDING",
+        "source_locator": "Methods 2.5.2; results Results 3.4",
+        "dsrnase2_dsrna": {
+          "route": "oral (artificial diet)",
+          "dose_ng_per_uL": 200
+        },
+        "bicc_dsrna": {
+          "route": "oral (artificial diet), simultaneous with dsRNase-2",
+          "dose_ng_per_uL": 200
+        },
+        "feeding_days": 3,
+        "consecutive": true,
+        "diet_and_dsrna_renewed": "daily",
+        "endpoints_reported": [
+          "survival: no significant difference",
+          "oviposition: reduced",
+          "embryo viability: lower proportion of viable eggs",
+          "ovarian phenotype: altered",
+          "Dmai-dsRNase-2 transcript in midgut at day 7: reduced",
+          "Dmai-BicC transcript: reduced"
+        ],
+        "authors_conclusion": "dsRNase-2 in the diet improves the response to the dsRNA against BicC"
+      }
+    ],
+    "claims_policy": "The two protocols are never merged. No efficacy score is derived for the fragment: the co-feeding design also delivers BicC dsRNA, so its endpoints are descriptive and not attributable to the dsRNase-2 fragment alone."
+  }
+}
