@@ -27,6 +27,7 @@ Current records:
 1. [0001 NB01 primary reference dataset](0001-nb01-primary-reference-dataset.md)
 2. [0002 NB01 target anchor policy](0002-nb01-target-anchor-policy.md)
 3. [0003 NB01 target identity resolution policy](0003-nb01-target-identity-resolution-policy.md)
+4. [0004 NB01 dsRNase-2 identity criteria](0004-nb01-dsrnase2-identity-criteria.md)
 
 # Versão em PTBR
 
@@ -59,3 +60,4 @@ Registros atuais:
 1. [0001 Dataset primário de referência do NB01](0001-nb01-primary-reference-dataset.md)
 2. [0002 Política de âncoras de alvos do NB01](0002-nb01-target-anchor-policy.md)
 3. [0003 Política de resolução de identidade dos alvos do NB01](0003-nb01-target-identity-resolution-policy.md)
+4. [0004 Critérios de identidade de dsRNase-2 do NB01](0004-nb01-dsrnase2-identity-criteria.md)
