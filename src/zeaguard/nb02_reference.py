@@ -204,6 +204,11 @@ def _strict_record(sequences: dict[str, str], record: dict[str, Any], problems: 
 
 def verify_reference(root: Path) -> dict[str, Any]:
     """Re-derive and verify everything the pin asserts; raise :class:`NB02ContractError` on any divergence."""
+    return verified_reference(root)["report"]
+
+
+def verified_reference(root: Path) -> dict[str, Any]:
+    """Like :func:`verify_reference` but also returns the pin and the verified CDS (for downstream stages)."""
     root = Path(root).resolve()
     pin = load_pin(root)
     operational, sibling = pin["records"]["operational"], pin["records"]["sibling"]
@@ -231,7 +236,7 @@ def verify_reference(root: Path) -> dict[str, Any]:
         problems.append("local NB01 hand-off table disagrees with the re-derived variants")
     if problems:
         raise NB02ContractError("; ".join(problems))
-    return {
+    report = {
         "pin_sha256_lf": pin_sha256(root),
         "tsa_file_sha256": tsa_sha,
         "operational": {key: operational[key] for key in ("accession", "cds_length", "cds_sha256", "protein_sha256")},
@@ -240,6 +245,7 @@ def verify_reference(root: Path) -> dict[str, Any]:
         "benchmark": benchmark,
         "nb01_handoff_crosscheck": crosscheck,
     }
+    return {"report": report, "pin": pin, "operational_cds": operational_cds, "sibling_cds": sibling_cds}
 
 
 def _verify_benchmark(
