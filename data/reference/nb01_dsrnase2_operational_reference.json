@@ -179,14 +179,29 @@
       "methods_2_5_2": "ORAL_COFEEDING protocol",
       "results_3_4": "oral co-feeding results"
     },
+    "evidence_scope": "The experimental-function claim rests on the protocol statements below; their provenance is experimental_protocol_verification, which is separate from the sequence verification.",
     "verification": {
-      "supplement_table_s1": "VERIFIED_LOCAL: text layer of the S1 PDF; the primer span re-mapped on the operational CDS is 330 nt",
-      "main_text": "NOT_RETRIEVED_BY_AGENT: sections and protocol facts below were supplied by the project; the full text could not be read at CP1 (ScienceDirect captcha was not bypassed and the CONICET repository handle 11336/221063 was unreachable from this machine)"
+      "benchmark_sequence_verification": "VERIFIED_FROM_SUPPLEMENT_AND_REFERENCE",
+      "benchmark_sequence_verification_detail": {
+        "supplement": "Table S1 primers and amplicon lengths read from the local S1 PDF text layer (sha256 above)",
+        "reference": "published dsRNase-2 cDNA TRINITY_DN22752_c0_g2_i1 (data/reference/target_anchor_sequences.fasta) and the operational CDS of the hash-validated TSA",
+        "recomputed_by_verify_reference": [
+          "forward and reverse primer sites exact and unique in the operational CDS",
+          "span CDS 814-1143 = 330 nt and its sha256",
+          "amplicon lengths 330 and 360 (two 15 nt T7 tails) consistent with the mapped span",
+          "known variant inside the span: CDS 816 only (defined, synonymous)",
+          "benchmark body identical in the published cDNA and in the operational CDS"
+        ]
+      },
+      "experimental_protocol_verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED",
+      "experimental_protocol_verification_detail": "Protocols INJECTION_PRECONDITIONING and ORAL_COFEEDING and the Results 3.4 endpoints were supplied by the project with the section locators; the agent could not read the main text (ScienceDirect captcha not bypassed; CONICET repository handle 11336/221063 unreachable). They are stored unchanged.",
+      "experimental_protocol_promotion_condition": "Promote to VERIFIED_AGAINST_PRIMARY_TEXT only after the agent reads the main text, confirms each statement, and the change is committed explicitly."
     },
     "protocols": [
       {
         "name": "INJECTION_PRECONDITIONING",
         "source_locator": "Methods 2.5.1",
+        "verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED",
         "dsrnase2_dsrna": {
           "route": "injection",
           "dose_ng_per_uL": 200
@@ -203,7 +218,8 @@
       },
       {
         "name": "ORAL_COFEEDING",
-        "source_locator": "Methods 2.5.2; results Results 3.4",
+        "source_locator": "Methods 2.5.2; Results 3.4",
+        "verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED",
         "dsrnase2_dsrna": {
           "route": "oral (artificial diet)",
           "dose_ng_per_uL": 200

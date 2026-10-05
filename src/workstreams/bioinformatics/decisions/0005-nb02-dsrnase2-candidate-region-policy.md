@@ -24,7 +24,7 @@ Which policy governs the selection of candidate regions (interval and length) of
 
 1. [Criteria registry](../../../../config/nb02_design_criteria.yaml) (pre-registered; every criterion has an evidence category, roles, what it may influence and `evidence_refs`).
 2. [Operational reference pin](../../../../data/reference/nb01_dsrnase2_operational_reference.json), re-derived from the hash-pinned TSA by [nb02_reference.py](../../../zeaguard/nb02_reference.py) (CDS sha256 `bf853267151d1c1a43ca687feb7cea7857ff5c651c5546cba721d8b7647d36d7`; seven known variable CDS positions 9, 30, 219, 312, 350, 816, 1272).
-3. Published benchmark: Dalaison-Fuentes et al. 2023 (DOI 10.1016/j.pestbp.2023.105618). The dsRNase-2 primers of Supplementary Table S1 map exactly to CDS 814-1143 (330 nt, sha256 `97d39c22ae297e91d62c40d7b9afa6530822e111914dbb1bb0013b8be92dc179`). The two protocols (`INJECTION_PRECONDITIONING`, `ORAL_COFEEDING`) and their endpoints were supplied by the project with the section locators Methods 2.4, 2.5.1, 2.5.2 and Results 3.4; the main text was **not** retrievable at CP1.
+3. Published benchmark: Dalaison-Fuentes et al. 2023 (DOI 10.1016/j.pestbp.2023.105618). The dsRNase-2 primers of Supplementary Table S1 map exactly to CDS 814-1143 (330 nt, sha256 `97d39c22ae297e91d62c40d7b9afa6530822e111914dbb1bb0013b8be92dc179`). Two provenance layers are kept apart: `benchmark_sequence_verification = VERIFIED_FROM_SUPPLEMENT_AND_REFERENCE` (primers, span, sha256, T7-tail amplicon lengths, variant 816 and identity with the published cDNA, recomputed by `verify_reference`) and `experimental_protocol_verification = PROJECT_PROVIDED_NOT_AGENT_VERIFIED` (the protocols `INJECTION_PRECONDITIONING` and `ORAL_COFEEDING` and the Results 3.4 endpoints were supplied by the project with the locators Methods 2.4, 2.5.1, 2.5.2 and Results 3.4; the main text was **not** retrievable at CP1). The protocols are stored unchanged; promotion of the second layer requires reading the main text and an explicit commit.
 4. Literature checked at abstract level: Bolognesi 2012, Bachman 2013, Whyard 2009, Miller 2012, dsRIP 2025. Three project reviews (position, specificity, length and architecture) are incorporated as supplied conclusions whose citations were not provided.
 5. [Policy kernel and registry validation](../../../zeaguard/nb02_criteria.py) and its [tests](../../../../tests/test_nb02_criteria.py).
 
@@ -61,7 +61,7 @@ The recommended shortlist is produced iteratively: a provisional candidate is or
 
 ## Limitations
 
-The 21 nt unit, the 60 bp floor and the benchmark generalisation come from other systems or from a design that delivers two dsRNAs. Thresholds are conventions where they exist. The main text of the benchmark article was not read by the agent. The two TSA accessions may be one locus or two.
+The 21 nt unit, the 60 bp floor and the benchmark generalisation come from other systems or from a design that delivers two dsRNAs. Thresholds are conventions where they exist. The main text of the benchmark article was not read by the agent (`experimental_protocol_verification = PROJECT_PROVIDED_NOT_AGENT_VERIFIED`). The 60 nt floor (C03) is redundant given the 300-500 nt range (C02) and affects no NB02 candidate. The two TSA accessions may be one locus or two.
 
 ## What this decision does NOT establish
 
@@ -123,7 +123,7 @@ Qual política governa a seleção de regiões candidatas (intervalo e comprimen
 
 1. [Registro de critérios](../../../../config/nb02_design_criteria.yaml) (pré-registrado; cada critério tem categoria de evidência, papéis, o que pode influenciar e `evidence_refs`).
 2. [Pin da referência operacional](../../../../data/reference/nb01_dsrnase2_operational_reference.json), rederivado do TSA com hash fixado por [nb02_reference.py](../../../zeaguard/nb02_reference.py) (sha256 da CDS `bf853267151d1c1a43ca687feb7cea7857ff5c651c5546cba721d8b7647d36d7`; sete posições variáveis conhecidas da CDS: 9, 30, 219, 312, 350, 816, 1272).
-3. Benchmark publicado: Dalaison-Fuentes et al. 2023 (DOI 10.1016/j.pestbp.2023.105618). Os primers de dsRNase-2 da Tabela Suplementar S1 mapeiam exatamente na CDS 814-1143 (330 nt, sha256 `97d39c22ae297e91d62c40d7b9afa6530822e111914dbb1bb0013b8be92dc179`). Os dois protocolos (`INJECTION_PRECONDITIONING`, `ORAL_COFEEDING`) e seus endpoints foram fornecidos pelo projeto com os localizadores Methods 2.4, 2.5.1, 2.5.2 e Results 3.4; o texto principal **não** pôde ser recuperado no CP1.
+3. Benchmark publicado: Dalaison-Fuentes et al. 2023 (DOI 10.1016/j.pestbp.2023.105618). Os primers de dsRNase-2 da Tabela Suplementar S1 mapeiam exatamente na CDS 814-1143 (330 nt, sha256 `97d39c22ae297e91d62c40d7b9afa6530822e111914dbb1bb0013b8be92dc179`). Duas camadas de proveniência ficam separadas: `benchmark_sequence_verification = VERIFIED_FROM_SUPPLEMENT_AND_REFERENCE` (primers, intervalo, sha256, comprimentos de amplicon com caudas T7, variante 816 e identidade com o cDNA publicado, recalculados por `verify_reference`) e `experimental_protocol_verification = PROJECT_PROVIDED_NOT_AGENT_VERIFIED` (os protocolos `INJECTION_PRECONDITIONING` e `ORAL_COFEEDING` e os endpoints de Results 3.4 foram fornecidos pelo projeto com os localizadores Methods 2.4, 2.5.1, 2.5.2 e Results 3.4; o texto principal **não** pôde ser recuperado no CP1). Os protocolos são armazenados sem alteração; promover a segunda camada exige ler o texto principal e um commit explícito.
 4. Literatura conferida no nível do resumo: Bolognesi 2012, Bachman 2013, Whyard 2009, Miller 2012, dsRIP 2025. Três revisões do projeto (posição, especificidade, comprimento e arquitetura) entram como conclusões fornecidas, sem citações.
 5. [Kernel de política e validação do registro](../../../zeaguard/nb02_criteria.py) e seus [testes](../../../../tests/test_nb02_criteria.py).
 
@@ -160,7 +160,7 @@ A shortlist recomendada é produzida iterativamente: um candidato provisório é
 
 ## Limitações
 
-A unidade de 21 nt, o piso de 60 pb e a generalização do benchmark vêm de outros sistemas ou de um desenho que entrega dois dsRNAs. Limiares são convenções onde existem. O texto principal do artigo do benchmark não foi lido pelo agente. Os dois accessions do TSA podem ser um locus ou dois.
+A unidade de 21 nt, o piso de 60 pb e a generalização do benchmark vêm de outros sistemas ou de um desenho que entrega dois dsRNAs. Limiares são convenções onde existem. O texto principal do artigo do benchmark não foi lido pelo agente (`experimental_protocol_verification = PROJECT_PROVIDED_NOT_AGENT_VERIFIED`). O piso de 60 nt (C03) é redundante diante da faixa de 300-500 nt (C02) e não afeta nenhum candidato do NB02. Os dois accessions do TSA podem ser um locus ou dois.
 
 ## O que esta decisão NÃO estabelece
 

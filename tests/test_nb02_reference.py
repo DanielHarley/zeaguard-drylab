@@ -94,7 +94,10 @@ def _benchmark_for(cds: str, forward: str, reverse: str, **overrides):
         "primers": {"forward": {"sequence": forward}, "reverse": {"sequence": reverse}, "t7_tail_5to3": "CGACTCACTATAGGG"},
         "amplicon_lengths_bp": {"without_t7_tails": len(body), "with_t7_tails": len(body) + 30},
         "interval": {"cds_start": start, "cds_end": end, "length_nt": len(body), "sequence_sha256": sha256_text(body)},
-        "protocols": [{"name": "INJECTION_PRECONDITIONING"}, {"name": "ORAL_COFEEDING"}],
+        "verification": {"benchmark_sequence_verification": ref.SEQUENCE_VERIFICATION,
+                         "experimental_protocol_verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED"},
+        "protocols": [{"name": "INJECTION_PRECONDITIONING", "verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED"},
+                      {"name": "ORAL_COFEEDING", "verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED"}],
     }
     benchmark.update(overrides)
     return benchmark
@@ -182,7 +185,7 @@ def test_pin_benchmark_is_reference_set_with_two_separate_protocols_and_no_effic
     assert cofeeding["dsrnase2_dsrna"]["dose_ng_per_uL"] == 200 and cofeeding["bicc_dsrna"]["dose_ng_per_uL"] == 200
     assert cofeeding["feeding_days"] == 3 and cofeeding["diet_and_dsrna_renewed"] == "daily"
     assert not any("efficacy" in str(key).lower() and "score" in str(key).lower() for key in _keys(benchmark))
-    assert "NOT_RETRIEVED_BY_AGENT" in benchmark["verification"]["main_text"]  # never claims an unread article as read
+    assert benchmark["verification"]["experimental_protocol_verification"] == "PROJECT_PROVIDED_NOT_AGENT_VERIFIED"  # never claims an unread article as read
 
 
 def test_pin_hash_is_line_ending_independent(tmp_path):
@@ -204,3 +207,47 @@ def test_verify_reference_reproduces_pin_from_the_hash_validated_tsa():
     assert benchmark["variants_inside"] == [816]
     assert benchmark["sibling_primer_sites"] == {"forward": "NO_EXACT_MATCH", "reverse": "EXACT_MATCH"}
     assert report["nb01_handoff_crosscheck"]["status"] in {"MATCH", "ABSENT"}
+
+
+# ------------------------------------------------------------------ two separate provenance layers of the benchmark
+def test_pin_separates_sequence_verification_from_protocol_provenance():
+    benchmark = ref.load_pin(ROOT)["benchmark"]
+    verification = benchmark["verification"]
+    assert verification["benchmark_sequence_verification"] == ref.SEQUENCE_VERIFICATION == "VERIFIED_FROM_SUPPLEMENT_AND_REFERENCE"
+    assert verification["experimental_protocol_verification"] == "PROJECT_PROVIDED_NOT_AGENT_VERIFIED"
+    assert verification["experimental_protocol_verification"] in ref.PROTOCOL_VERIFICATION_STATES
+    assert all(p["verification"] == "PROJECT_PROVIDED_NOT_AGENT_VERIFIED" for p in benchmark["protocols"])
+    assert all(p["endpoints_reported"] is None or p["endpoints_reported"] for p in benchmark["protocols"])  # stored, not removed
+    assert benchmark["protocols"][1]["endpoints_reported"]
+    assert "generic" not in json.dumps(verification).lower()
+    assert "promotion_condition" in json.dumps(verification)
+
+
+def test_verify_benchmark_rejects_missing_or_inconsistent_verification_layers():
+    forward, reverse = "ACGTACGTAC", "TTGGCCATGG"
+    cds = "GG" + forward + "AAAA" + reverse_complement(reverse) + "GG"
+    good = {"benchmark_sequence_verification": ref.SEQUENCE_VERIFICATION,
+            "experimental_protocol_verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED"}
+    protocols = [{"name": "INJECTION_PRECONDITIONING", "verification": good["experimental_protocol_verification"]},
+                 {"name": "ORAL_COFEEDING", "verification": good["experimental_protocol_verification"]}]
+    problems: list[str] = []
+    ref._verify_benchmark(_benchmark_for(cds, forward, reverse, verification=good, protocols=protocols), cds, cds, [], problems)
+    assert problems == []
+    bad = {"benchmark_sequence_verification": "VERIFIED", "experimental_protocol_verification": "VERIFIED"}
+    problems = []
+    ref._verify_benchmark(_benchmark_for(cds, forward, reverse, verification=bad, protocols=protocols), cds, cds, [], problems)
+    joined = " ".join(problems)
+    assert "benchmark_sequence_verification" in joined and "experimental_protocol_verification" in joined
+    protocols[0]["verification"] = "VERIFIED_AGAINST_PRIMARY_TEXT"  # one protocol promoted alone: inconsistent
+    problems = []
+    ref._verify_benchmark(_benchmark_for(cds, forward, reverse, verification=good, protocols=protocols), cds, cds, [], problems)
+    assert any("differs from experimental_protocol_verification" in p for p in problems)
+
+
+def test_published_cdna_body_matches_the_operational_benchmark_body():
+    pin = ref.load_pin(ROOT)["benchmark"]
+    body = ref.published_cdna_body(ROOT, pin["primers"]["forward"]["sequence"], pin["primers"]["reverse"]["sequence"])
+    from zeaguard.nb01_dsrnase_investigation import sha256_text
+    assert len(body) == 330 and sha256_text(body) == BENCHMARK_SHA
+    with pytest.raises(ref.NB02ContractError):
+        ref.published_cdna_body(ROOT, "AAAAAAAAAAAAAAAAAAAA", pin["primers"]["reverse"]["sequence"])

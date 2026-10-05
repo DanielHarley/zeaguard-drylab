@@ -264,3 +264,20 @@ def test_pareto_dominance_incomparable_equal_and_group_order():
 def test_specificity_is_refused_across_length_strata():
     with pytest.raises(ValueError, match="length stratum"):
         crit.compare_specificity(_evidence(length=300), _evidence(length=500))
+
+
+# ------------------------------------------------------------------ dated amendments (closing review of CP1)
+def test_amendment_records_c03_redundancy_and_the_provenance_split_without_changing_policy(registry):
+    amendment = registry["amendments"][0]
+    assert amendment["criteria"] == ["C03", "C19"]
+    assert amendment["changes_thresholds_roles_or_policy"] is False and amendment["applied_before_window_generation"] is True
+    c03 = _criterion(registry, "min_length_floor")
+    assert "Redundant given C02" in c03["limitations"] and c03["threshold"] == {"min_nt": 60}
+    c19 = _criterion(registry, "published_benchmark_reference")
+    assert "benchmark_sequence_verification" in c19["definition"] and "experimental_protocol_verification" in c19["definition"]
+    assert "PROJECT_PROVIDED_NOT_AGENT_VERIFIED" in c19["limitations"]
+
+
+def test_registry_rejects_incomplete_or_dangling_amendments(registry):
+    assert any("amendment lacks" in p for p in _problems(registry, lambda r: r["amendments"][0].pop("reason")))
+    assert any("unknown criteria" in p for p in _problems(registry, lambda r: r["amendments"][0].update(criteria=["C99"])))

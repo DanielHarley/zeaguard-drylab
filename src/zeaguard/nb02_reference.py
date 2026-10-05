@@ -38,6 +38,12 @@ RECORD_KEYS = (
 )
 CLASS_DEFINED = "DEFINED_SUBSTITUTION"
 CLASS_IUPAC = "IUPAC_AMBIGUITY"
+PUBLISHED_DSRNASE2_CDNA_ID = "TRINITY_DN22752_c0_g2_i1"
+
+# Two semantically separate provenance layers of the benchmark. The sequence layer is recomputed by
+# verify_reference; the protocol layer is only promoted after the primary text is read by the agent.
+SEQUENCE_VERIFICATION = "VERIFIED_FROM_SUPPLEMENT_AND_REFERENCE"
+PROTOCOL_VERIFICATION_STATES = frozenset({"PROJECT_PROVIDED_NOT_AGENT_VERIFIED", "VERIFIED_AGAINST_PRIMARY_TEXT"})
 
 
 class NB02ContractError(RuntimeError):
@@ -151,6 +157,31 @@ def _unique_site(sequence: str, query: str, label: str) -> int:
     return first + 1
 
 
+def published_cdna_body(root: Path, forward: str, reverse: str) -> str:
+    """Benchmark body re-found in the published dsRNase-2 cDNA (versioned anchor FASTA), coding orientation.
+
+    The cDNA is stored on the opposite strand of its CDS, so both orientations are tried and exactly
+    one must carry the primer pair (forward forward, reverse reverse-complemented).
+    """
+    cdna = next(
+        (r.sequence for r in nb01_identity.parse_fasta(Path(root) / nb01_identity.DEFAULT_ANCHOR_SEQUENCE_PATH)
+         if r.identifier == PUBLISHED_DSRNASE2_CDNA_ID),
+        None,
+    )
+    if cdna is None:
+        raise NB02ContractError(f"{PUBLISHED_DSRNASE2_CDNA_ID} is absent from the versioned anchor FASTA")
+    bodies: list[str] = []
+    for oriented in (cdna, nb01_identity.reverse_complement(cdna)):
+        try:
+            start, end = find_primer_span(oriented, forward, reverse)
+        except NB02ContractError:
+            continue
+        bodies.append(oriented[start - 1 : end])
+    if len(bodies) != 1:
+        raise NB02ContractError("the benchmark primers must match the published cDNA in exactly one orientation")
+    return bodies[0]
+
+
 def _strict_record(sequences: dict[str, str], record: dict[str, Any], problems: list[str]) -> str:
     accession = record["accession"]
     sequence = sequences[accession]
@@ -192,7 +223,9 @@ def verify_reference(root: Path) -> dict[str, Any]:
     if pinned != variants:
         problems.append("variant table differs from the one re-derived from the TSA")
 
-    benchmark = _verify_benchmark(pin["benchmark"], operational_cds, sibling_cds, [v["cds_pos"] for v in variants], problems)
+    benchmark = _verify_benchmark(
+        pin["benchmark"], operational_cds, sibling_cds, [v["cds_pos"] for v in variants], problems, root
+    )
     crosscheck = crosscheck_nb01_handoff(root, variants)
     if crosscheck["status"] == "MISMATCH":
         problems.append("local NB01 hand-off table disagrees with the re-derived variants")
@@ -210,7 +243,12 @@ def verify_reference(root: Path) -> dict[str, Any]:
 
 
 def _verify_benchmark(
-    benchmark: dict[str, Any], operational_cds: str, sibling_cds: str, variant_positions: list[int], problems: list[str]
+    benchmark: dict[str, Any],
+    operational_cds: str,
+    sibling_cds: str,
+    variant_positions: list[int],
+    problems: list[str],
+    root: Path | None = None,
 ) -> dict[str, Any]:
     forward, reverse = benchmark["primers"]["forward"]["sequence"], benchmark["primers"]["reverse"]["sequence"]
     start, end = find_primer_span(operational_cds, forward, reverse)
@@ -227,11 +265,25 @@ def _verify_benchmark(
     names = [protocol["name"] for protocol in benchmark["protocols"]]
     if names != ["INJECTION_PRECONDITIONING", "ORAL_COFEEDING"]:
         problems.append(f"benchmark protocols must be exactly the two separate protocols, got {names}")
+    verification = benchmark.get("verification", {})
+    if verification.get("benchmark_sequence_verification") != SEQUENCE_VERIFICATION:
+        problems.append("benchmark_sequence_verification must be " + SEQUENCE_VERIFICATION)
+    if verification.get("experimental_protocol_verification") not in PROTOCOL_VERIFICATION_STATES:
+        problems.append("experimental_protocol_verification is missing or outside its vocabulary")
+    for protocol in benchmark["protocols"]:
+        if protocol.get("verification") != verification.get("experimental_protocol_verification"):
+            problems.append(f"{protocol['name']}: protocol verification differs from experimental_protocol_verification")
     inside = [position for position in variant_positions if start <= position <= end]
     sibling_sites = {}
     for label, primer in (("forward", forward), ("reverse", nb01_identity.reverse_complement(reverse))):
         sibling_sites[label] = "EXACT_MATCH" if primer in sibling_cds else "NO_EXACT_MATCH"
-    return {**derived, "variants_inside": inside, "sibling_primer_sites": sibling_sites}
+    result = {**derived, "variants_inside": inside, "sibling_primer_sites": sibling_sites}
+    if root is not None:
+        cdna_body = published_cdna_body(root, forward, reverse)
+        result["published_cdna_body"] = "EXACT_MATCH" if cdna_body == body else "DIFFERS"
+        if cdna_body != body:
+            problems.append("the benchmark body differs between the published cDNA and the operational CDS")
+    return result
 
 
 def crosscheck_nb01_handoff(root: Path, variants: list[dict[str, Any]]) -> dict[str, Any]:

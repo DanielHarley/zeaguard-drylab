@@ -54,7 +54,10 @@ CRITERION_FIELDS = (
     "id", "name", "definition", "origin", "evidence_category", "roles", "affects", "threshold",
     "justification", "limitations", "revision_condition", "evidence_refs",
 )
-FORBIDDEN_THRESHOLD_KEY = re.compile(r"(overlap|kmer|k_mer|mer_cutoff|evalue_cutoff|e_value_cutoff|cutoff)", re.I)
+AMENDMENT_FIELDS = (
+    "date", "criteria", "change", "reason", "changes_thresholds_roles_or_policy", "applied_before_window_generation",
+)
+FORBIDDEN_THRESHOLD_KEY =re.compile(r"(overlap|kmer|k_mer|mer_cutoff|evalue_cutoff|e_value_cutoff|cutoff)", re.I)
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -166,6 +169,12 @@ def validate_registry(registry: dict[str, Any]) -> list[str]:
         problems.append("manual_review_decisions decision vocabulary differs from the code schema")
     if "max_pairwise_overlap" in policy or "max_pairwise_overlap" in {c.get("name") for c in registry["criteria"]}:
         problems.append("a max pairwise overlap must not be pre-registered")
+    for amendment in registry.get("amendments") or []:
+        missing = [key for key in AMENDMENT_FIELDS if key not in amendment]
+        if missing:
+            problems.append(f"amendment lacks {missing}")
+        elif not set(amendment["criteria"]) <= seen_ids:
+            problems.append("amendment refers to unknown criteria")
     return problems
 
 

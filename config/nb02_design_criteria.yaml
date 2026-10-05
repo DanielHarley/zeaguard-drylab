@@ -144,7 +144,7 @@ criteria:
     affects: [eligibility]
     threshold: {min_nt: 60}
     justification: "Only widely accepted length statement; non-binding here because C02 is stricter."
-    limitations: "Coleoptera, oral diet."
+    limitations: "Coleoptera, oral diet. Redundant given C02 (300-500 nt): it affects no NB02 candidate and is kept only as a guard."
     revision_condition: "Evidence in Hemiptera contradicts the floor."
     evidence_refs: [bolognesi2012]
   - id: C04
@@ -329,15 +329,15 @@ criteria:
     evidence_refs: [project_review_B_specificity]
   - id: C19
     name: published_benchmark_reference
-    definition: "The published 330 nt fragment (CDS 814-1143) is the PUBLISHED_EXPERIMENTAL_BENCHMARK of the REFERENCE SET. It appears in every table and comparison, is evaluated with the same criteria (at the 330 nt stratum), does not count as a recommended candidate and carries no efficacy score. INJECTION_PRECONDITIONING and ORAL_COFEEDING are recorded separately."
+    definition: "The published 330 nt fragment (CDS 814-1143) is the PUBLISHED_EXPERIMENTAL_BENCHMARK of the REFERENCE SET. It appears in every table and comparison, is evaluated with the same criteria (at the 330 nt stratum), does not count as a recommended candidate and carries no efficacy score. INJECTION_PRECONDITIONING and ORAL_COFEEDING are recorded separately. Two provenance layers are kept apart in the pin: benchmark_sequence_verification (VERIFIED_FROM_SUPPLEMENT_AND_REFERENCE, recomputed by verify_reference) and experimental_protocol_verification (PROJECT_PROVIDED_NOT_AGENT_VERIFIED until the main text is read by the agent)."
     origin: "Dalaison-Fuentes et al. 2023; pin"
     evidence_category: EVIDENCE_BACKED
     roles: [DESCRIPTOR]
     affects: []
     threshold: null
-    justification: "Direct experimental evidence in D. maidis that this fragment works in the published designs."
-    limitations: "Co-feeding delivers BicC dsRNA as well, so endpoints are not attributable to the fragment alone; main text not retrievable at CP1."
-    revision_condition: "Main text read directly and any statement found to differ."
+    justification: "The sequence and its mapping are verified from the supplement and the reference; the experimental-function claim rests on protocol statements supplied by the project."
+    limitations: "Co-feeding delivers BicC dsRNA as well, so endpoints are not attributable to the fragment alone; the protocols and Results 3.4 endpoints are PROJECT_PROVIDED_NOT_AGENT_VERIFIED because the main text was not retrievable at CP1."
+    revision_condition: "Main text read directly and any statement found to differ; promotion of experimental_protocol_verification requires evidence and an explicit commit."
     evidence_refs: [dalaison2023]
 
 policy:
@@ -385,4 +385,10 @@ not_implemented:
   - {name: repeat_metrics, reason: "no decisional function or documented constraint"}
   - {name: ecological_off_target, reason: "out of NB02 scope; later stage for the regions that remain"}
 
-amendments: []
+amendments:
+  - date: "2026-10-05"
+    criteria: [C03, C19]
+    change: "C03: record that the 60 nt floor is redundant given C02 (300-500 nt) and affects no NB02 candidate. C19: split the benchmark provenance into benchmark_sequence_verification and experimental_protocol_verification."
+    reason: "Closing review of CP1 (provenance honesty; no change to any threshold, role, stratum or policy)."
+    changes_thresholds_roles_or_policy: false
+    applied_before_window_generation: true
