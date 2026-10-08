@@ -99,10 +99,11 @@ restriction sites, codon optimisation, plasmid backbone, ecological off-target
 and any efficacy prediction are outside NB02; see the run record for the full
 limitations.
 
-## Notebook 03: candidate dsRNA regions against Dmai-BicC (checkpoints 0-1)
+## Notebook 03: candidate dsRNA regions against Dmai-BicC (checkpoints 0-2)
 
 Notebook 03 will select **region and length** for a nominal 400 nt dsRNA against Dmai-BicC inside the operational
-CDS (`GITV01000968.1`, CDS only). So far only the contract exists: no candidate window has been generated.
+CDS (`GITV01000968.1`, CDS only). CP0 and CP1 establish the contract; CP2 enumerates and describes the complete
+design space. Specificity analysis and candidate selection remain pending downstream checkpoints.
 
 - CP0 (`python -m zeaguard.nb03_cp0`) re-derives the BicC reference, the `observed_sequence_differences` between the
   published cDNA and the TSA record, a BLASTn/TBLASTN discovery of BicC-like records and the primer-defined
@@ -113,3 +114,12 @@ CDS (`GITV01000968.1`, CDS only). So far only the contract exists: no candidate 
   membership decisions `config/nb03_unit_membership_decisions.tsv` and ADR 0006. Specificity is a joint six-axis
   Pareto of `BICC_LIKE` and `DSRNASE2`; the count of intersected observed differences comes next; everything else
   is descriptive. There is no score, no weight and no new threshold.
+- CP2 (`PYTHONPATH=src python -m zeaguard.nb03_design`) enumerates all 389,538 intervals of 300-500 nt,
+  increasing length then CDS start with step one, and writes `design_space.tsv`, `benchmark_descriptor.tsv`,
+  `cp2_summary.json` and `run_manifest.json` under the gitignored `results/bioinformatics/nb03/cp2/`.
+  Sequences can be reconstructed from the hash-verified sense CDS and inclusive coordinates. Composition,
+  per-window default DUST masking, position, observed differences, potential 21-nt derived windows and
+  benchmark overlap are described without ranking. Overlap fractions explicitly use candidate and
+  operational-benchmark denominators; `EXACT_MATCH` denotes CDS 215-587. The equivalent design-space window
+  and the separate `REFERENCE_SET` benchmark retain distinct memberships. CP2 performs no candidate BLAST,
+  specificity calculation, Pareto comparison, cell construction, shortlist or Wet Lab hand-off.

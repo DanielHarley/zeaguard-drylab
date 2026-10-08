@@ -339,7 +339,7 @@ criteria:
     evidence_refs: [dalaison2022_table_s1, dalaison2023_table_s1]
   - id: C23
     name: benchmark_relation_descriptors
-    definition: "overlap_with_benchmark_nt, overlap_fraction and relation_to_benchmark in {DISJOINT, PARTIAL_OVERLAP, FULLY_WITHIN, CONTAINS_BENCHMARK}, computed on the operational 373 nt body. They never enter the Pareto, the signature or the ordering: proximity is neither rewarded nor penalised."
+    definition: "overlap_with_benchmark_nt is the inclusive interval intersection with CDS 215-587. overlap_fraction_of_candidate = overlap_with_benchmark_nt / candidate_length; overlap_fraction_of_benchmark = overlap_with_benchmark_nt / 373. relation_to_benchmark is DISJOINT for zero overlap, EXACT_MATCH for CDS 215-587, FULLY_WITHIN for a contained candidate shorter than 373 nt, CONTAINS_BENCHMARK for a containing candidate longer than 373 nt, otherwise PARTIAL_OVERLAP. All are DESCRIPTIVE_ONLY, outside Pareto, the decisional signature, ordering and tie-breaking."
     origin: "Project decision of 2026-10-08"
     evidence_category: PROJECT_CONVENTION
     roles: [DESCRIPTOR]
@@ -436,7 +436,7 @@ policy:
     permitted_interpretation: "greater robustness to the two currently observed sequences"
     forbidden_interpretations: [population robustness, allele robustness, polymorphism robustness, population conservation]
   cell_signature: [count_intersected_observed_sequence_differences, bicc_like_vector_clipped, dsrnase2_vector_clipped]
-  cell_signature_excludes: [intersected_observed_sequence_difference_positions, target_region_position, other_transcript_hits, gc_fraction, low_complexity_fraction, longest_homopolymer, potential_21nt_derived_windows, fraction_unaffected, benchmark_relation]
+  cell_signature_excludes: [intersected_observed_sequence_difference_positions, target_region_position, other_transcript_hits, gc_fraction, low_complexity_fraction, longest_homopolymer, potential_21nt_derived_windows, fraction_unaffected, benchmark_relation, overlap_with_benchmark_nt, overlap_fraction_of_candidate, overlap_fraction_of_benchmark, relation_to_benchmark]
   hard_filters: [inside_operational_cds, length_range, defined_bases_only]
   descriptive_only_criteria: [intersected_observed_sequence_difference_positions, length_strata, homology_evidence_metrics_clipped, potential_21nt_derived_windows, fraction_unaffected, target_region_position, gc_fraction, longest_homopolymer, low_complexity_fraction, search_detection_limit, shuffled_control, exact_kmer_counts, evalue_and_hsp_counts, descriptive_only_units, unit_relationship_status, published_benchmark_reference, benchmark_relation_descriptors]
   small_rna_descriptor:
@@ -456,8 +456,9 @@ policy:
     counts_as_recommended: false
     participates_in_candidate_cells: false
     proximity_influences_ranking: false
-    relation_categories: [DISJOINT, PARTIAL_OVERLAP, FULLY_WITHIN, CONTAINS_BENCHMARK]
-    relation_descriptors: [overlap_with_benchmark_nt, overlap_fraction, relation_to_benchmark]
+    relation_categories: [DISJOINT, PARTIAL_OVERLAP, FULLY_WITHIN, CONTAINS_BENCHMARK, EXACT_MATCH]
+    relation_descriptors: [overlap_with_benchmark_nt, overlap_fraction_of_candidate, overlap_fraction_of_benchmark, relation_to_benchmark]
+    overlap_fraction_denominators: {overlap_fraction_of_candidate: candidate_length_nt, overlap_fraction_of_benchmark: operational_benchmark_length_nt}
     relation_role: DESCRIPTIVE_ONLY
   design:
     design_domain: CDS_ONLY
@@ -500,4 +501,10 @@ not_implemented:
   - {name: rna_secondary_structure, reason: "no documented need"}
   - {name: ecological_off_target, reason: "downstream of NB03, for the regions that remain"}
 
-amendments: []
+amendments:
+  - date: "2026-10-08"
+    criteria: [C23]
+    change: "Pre-CP2 descriptive clarification: replace ambiguous overlap_fraction with overlap_fraction_of_candidate (overlap / candidate length) and overlap_fraction_of_benchmark (overlap / 373); add EXACT_MATCH for the geometric design window at CDS 215-587."
+    reason: "User-approved clarification before any NB03 window generation. Denominators and exact coordinate equality must be explicit; no filter, preference, Pareto axis, decisional signature or ordering changes."
+    changes_thresholds_roles_or_policy: false
+    applied_before_window_generation: true

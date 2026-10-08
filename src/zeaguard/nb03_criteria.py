@@ -60,7 +60,12 @@ PARETO_AXES_PER_UNIT = ("longest_exact_match_clipped", "covered_nt_clipped", "be
 CELL_SIGNATURE = ["count_intersected_observed_sequence_differences", "bicc_like_vector_clipped", "dsrnase2_vector_clipped"]
 CELL_SIGNATURE_MUST_EXCLUDE = frozenset({"intersected_observed_sequence_difference_positions",
                                          "target_region_position", "other_transcript_hits", "potential_21nt_derived_windows",
-                                         "fraction_unaffected", "benchmark_relation"})
+                                         "fraction_unaffected", "benchmark_relation", "overlap_with_benchmark_nt",
+                                         "overlap_fraction_of_candidate", "overlap_fraction_of_benchmark", "relation_to_benchmark"})
+BENCHMARK_RELATION_CATEGORIES = frozenset({"DISJOINT", "PARTIAL_OVERLAP", "FULLY_WITHIN", "CONTAINS_BENCHMARK", "EXACT_MATCH"})
+BENCHMARK_RELATION_DESCRIPTORS = (
+    "overlap_with_benchmark_nt", "overlap_fraction_of_candidate", "overlap_fraction_of_benchmark", "relation_to_benchmark",
+)
 MEMBERSHIP_COLUMNS = ("record_id", "unit", "relationship_status", "decision", "rationale", "evidence_source",
                       "evidence_sha256", "decided_by", "decided_utc")
 RELATIONSHIP_STATUSES = frozenset({"NOT_APPLICABLE", "UNRESOLVED"})
@@ -252,8 +257,12 @@ def _validate_policy(policy: dict[str, Any], by_name: dict[str, dict[str, Any]])
             "participates_in_candidate_cells": False, "proximity_influences_ranking": False, "relation_role": "DESCRIPTIVE_ONLY"}
     if any(benchmark.get(key) != value for key, value in want.items()):
         problems.append("policy.benchmark differs from the pre-registration")
-    if set(benchmark.get("relation_categories", [])) != {"DISJOINT", "PARTIAL_OVERLAP", "FULLY_WITHIN", "CONTAINS_BENCHMARK"}:
+    if set(benchmark.get("relation_categories", [])) != BENCHMARK_RELATION_CATEGORIES:
         problems.append("policy.benchmark.relation_categories differ from the pre-registration")
+    if tuple(benchmark.get("relation_descriptors", [])) != BENCHMARK_RELATION_DESCRIPTORS or benchmark.get(
+        "overlap_fraction_denominators"
+    ) != {"overlap_fraction_of_candidate": "candidate_length_nt", "overlap_fraction_of_benchmark": "operational_benchmark_length_nt"}:
+        problems.append("benchmark overlap descriptors must use explicit candidate and operational-benchmark denominators")
     comparator = (strata.get("threshold") or {})
     if (comparator.get("benchmark_comparator_length_nt"), comparator.get("benchmark_published_reported_length_nt")) != (373, 372):
         problems.append("length_strata must use the reconstructed 373 nt as comparator and keep 372 as published metadata")

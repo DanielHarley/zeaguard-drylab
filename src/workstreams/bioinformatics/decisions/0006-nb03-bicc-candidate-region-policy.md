@@ -60,6 +60,10 @@ A composite score with weights (rejected: no defensible weights). A hard filter 
 9. **Modularity.** dsRNA-BicC is meant to act on BicC, dsRNA-dsRNase2 on dsRNase-2, and co-feeding or co-expression delivers both. The interpretability direction follows from this modular strategy.
 10. **Out of scope.** Architecture (hairpin or linear), promoter, terminator, plasmid, chassis, formulation and ecological off-target stay downstream of NB03.
 
+## Pre-CP2 descriptive clarification (2026-10-08)
+
+Before any NB03 candidate window was generated, the user approved explicit benchmark overlap denominators: `overlap_fraction_of_candidate = overlap_with_benchmark_nt / candidate_length` and `overlap_fraction_of_benchmark = overlap_with_benchmark_nt / 373`. The ambiguous `overlap_fraction` field is removed. `EXACT_MATCH` identifies the design window at CDS 215-587; strictly shorter contained windows are `FULLY_WITHIN`, strictly longer containing windows are `CONTAINS_BENCHMARK`, zero overlap is `DISJOINT`, and every other positive overlap is `PARTIAL_OVERLAP`. All four descriptors remain `DESCRIPTIVE_ONLY`, outside Pareto, the decisional signature, ordering and tie-breaking. Registry amendment C23 records this clarification without changing decisional policy. The geometric design window and the separately characterized `REFERENCE_SET` benchmark retain distinct memberships despite identical coordinates and sequence.
+
 ## Rationale
 
 Each rule is either backed by recorded evidence or declared a convention, and each convention is bounded so that it cannot act silently as a biological threshold. Keeping 372 and 373 side by side makes the inconsistency auditable instead of hiding it in a corrected sequence. Keeping BICC_LIKE unresolved lets it inform interpretability without turning a hypothesis into a fact.
@@ -98,11 +102,11 @@ Not yet created (Notebook 03 belongs to the closing checkpoint).
 
 ## Related commits
 
-CP0: `2d1ae8f` on `feat/nb03-bicc-candidate-regions` (base `584e585`). CP1 files: not yet committed.
+CP0: `2d1ae8f` on `feat/nb03-bicc-candidate-regions` (base `584e585`). CP1: `099f751780283fecbc63da177c113aec9f6d60d5`. CP2 changes remain uncommitted pending user review.
 
 ## Provenance
 
-Written at checkpoint 1, before any candidate window, candidate search, cell or ranking existed. No dated amendment has been applied. The 372/373 policy, the CDS-only domain, the unit taxonomy, the joint Pareto and the descriptive roles were decided by the project on 2026-10-08; the primary Table S1 was supplied by the user and its bibliographic content was validated outside this repository.
+Written at checkpoint 1, before any candidate window, candidate search, cell or ranking existed. The C23 descriptive clarification was recorded on 2026-10-08 before CP2 window generation. The 372/373 policy, the CDS-only domain, the unit taxonomy, the joint Pareto and the descriptive roles were decided by the project on 2026-10-08; the primary Table S1 was supplied by the user and its bibliographic content was validated outside this repository.
 
 # Versão em PTBR
 
@@ -168,6 +172,10 @@ Score composto com pesos (rejeitada: sem pesos defensáveis). Filtro duro por GC
 9. **Modularidade.** O dsRNA-BicC deve agir sobre BicC, o dsRNA-dsRNase2 sobre dsRNase-2, e co-feeding ou coexpressão entrega ambos. A direção de interpretabilidade decorre dessa estratégia modular.
 10. **Fora de escopo.** Arquitetura (hairpin ou linear), promotor, terminador, plasmídeo, chassi, formulação e off-target ecológico ficam a jusante do NB03.
 
+## Clarificação descritiva antes do CP2 (2026-10-08)
+
+Antes da geração de qualquer janela NB03, o usuário aprovou denominadores explícitos: `overlap_fraction_of_candidate = overlap_with_benchmark_nt / candidate_length` e `overlap_fraction_of_benchmark = overlap_with_benchmark_nt / 373`. O campo ambíguo `overlap_fraction` foi removido. `EXACT_MATCH` identifica a janela de design CDS 215-587. Janelas contidas estritamente menores são `FULLY_WITHIN`, janelas que contêm o benchmark e são estritamente maiores são `CONTAINS_BENCHMARK`, ausência de sobreposição é `DISJOINT` e os demais casos positivos são `PARTIAL_OVERLAP`. Todos permanecem `DESCRIPTIVE_ONLY`, fora do Pareto, da assinatura decisional, da ordenação e do desempate. A emenda C23 registra a clarificação. A janela geométrica e o benchmark `REFERENCE_SET` mantêm pertencimentos distintos apesar das mesmas coordenadas e sequência.
+
 ## Justificativa
 
 Cada regra ou tem evidência registrada ou é declarada convenção, e cada convenção é limitada para não agir em silêncio como limiar biológico. Manter 372 e 373 lado a lado torna a inconsistência auditável em vez de escondê-la em uma sequência corrigida. Manter BICC_LIKE não resolvido deixa que ele informe a interpretabilidade sem transformar uma hipótese em fato.
@@ -206,8 +214,8 @@ Ainda não criado (o Notebook 03 pertence ao checkpoint de fechamento).
 
 ## Commits relacionados
 
-CP0: `2d1ae8f` em `feat/nb03-bicc-candidate-regions` (base `584e585`). Arquivos do CP1: ainda não commitados.
+CP0: `2d1ae8f` em `feat/nb03-bicc-candidate-regions` (base `584e585`). CP1: `099f751780283fecbc63da177c113aec9f6d60d5`. Alterações do CP2 permanecem sem commit, aguardando revisão do usuário.
 
 ## Proveniência
 
-Escrito no checkpoint 1, antes de existir qualquer janela candidata, busca de candidatos, célula ou ranking. Nenhuma emenda datada foi aplicada. A política 372/373, o domínio só-CDS, a taxonomia de unidades, o Pareto conjunto e os papéis descritivos foram decididos pelo projeto em 2026-10-08; a Tabela S1 primária foi fornecida pelo usuário e seu conteúdo bibliográfico foi validado fora deste repositório.
+Escrito no checkpoint 1, antes de existir qualquer janela candidata, busca de candidatos, célula ou ranking. A clarificação descritiva C23 foi registrada em 2026-10-08 antes da geração de janelas do CP2. A política 372/373, o domínio só-CDS, a taxonomia de unidades, o Pareto conjunto e os papéis descritivos foram decididos pelo projeto em 2026-10-08; a Tabela S1 primária foi fornecida pelo usuário e seu conteúdo bibliográfico foi validado fora deste repositório.

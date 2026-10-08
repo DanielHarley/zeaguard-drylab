@@ -28,7 +28,12 @@ def _mutated(mutation):
 def test_registry_is_valid_and_loads():
     assert crit.validate_registry(REGISTRY) == []
     assert crit.load_registry(ROOT)["registry"] == "nb03_design_criteria"
-    assert REGISTRY["status"] == "PRE_REGISTERED" and REGISTRY["amendments"] == []
+    assert REGISTRY["status"] == "PRE_REGISTERED"
+    assert len(REGISTRY["amendments"]) == 1
+    clarification = REGISTRY["amendments"][0]
+    assert clarification["criteria"] == ["C23"]
+    assert clarification["applied_before_window_generation"] is True
+    assert clarification["changes_thresholds_roles_or_policy"] is False
 
 
 def test_pin_is_valid_offline_and_agrees_with_the_registry():
@@ -97,7 +102,13 @@ def test_benchmark_relation_is_descriptive_and_outside_the_signature():
     criterion = _criterion(REGISTRY, "benchmark_relation_descriptors")
     assert criterion["roles"] == ["DESCRIPTOR"] and criterion["affects"] == []
     bench = REGISTRY["policy"]["benchmark"]
-    assert set(bench["relation_categories"]) == {"DISJOINT", "PARTIAL_OVERLAP", "FULLY_WITHIN", "CONTAINS_BENCHMARK"}
+    assert set(bench["relation_categories"]) == {"DISJOINT", "PARTIAL_OVERLAP", "FULLY_WITHIN", "CONTAINS_BENCHMARK", "EXACT_MATCH"}
+    assert tuple(bench["relation_descriptors"]) == crit.BENCHMARK_RELATION_DESCRIPTORS
+    assert set(bench["relation_descriptors"]) <= set(REGISTRY["policy"]["cell_signature_excludes"])
+    assert "overlap_fraction" not in bench["relation_descriptors"]
+    assert _mutated(lambda r: r["policy"]["benchmark"]["relation_descriptors"].__setitem__(1, "overlap_fraction"))
+    assert _mutated(lambda r: r["policy"]["benchmark"]["relation_categories"].remove("EXACT_MATCH"))
+    assert _mutated(lambda r: r["policy"]["benchmark"]["overlap_fraction_denominators"].update(overlap_fraction_of_benchmark="candidate_length_nt"))
     assert bench["relation_role"] == "DESCRIPTIVE_ONLY" and "benchmark_relation" in REGISTRY["policy"]["cell_signature_excludes"]
     problems = _mutated(lambda r: _criterion(r, "benchmark_relation_descriptors").update(roles=["SOFT_PREFERENCE"], affects=["primary_ordering"]))
     assert problems
