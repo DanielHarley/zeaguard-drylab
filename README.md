@@ -98,3 +98,18 @@ hairpin, protected-end, dual-loop), primers, promoter, loop, terminator,
 restriction sites, codon optimisation, plasmid backbone, ecological off-target
 and any efficacy prediction are outside NB02; see the run record for the full
 limitations.
+
+## Notebook 03: candidate dsRNA regions against Dmai-BicC (checkpoints 0-1)
+
+Notebook 03 will select **region and length** for a nominal 400 nt dsRNA against Dmai-BicC inside the operational
+CDS (`GITV01000968.1`, CDS only). So far only the contract exists: no candidate window has been generated.
+
+- CP0 (`python -m zeaguard.nb03_cp0`) re-derives the BicC reference, the `observed_sequence_differences` between the
+  published cDNA and the TSA record, a BLASTn/TBLASTN discovery of BicC-like records and the primer-defined
+  benchmark. The primary 2022 Table S1 (user-provided, kept out of Git) gives primers for a **373 nt** body while the
+  publication reports 372 bp; both numbers are preserved and the difference is an unresolved publication inconsistency.
+- CP1 freezes the contract before any window: the versioned pin `data/reference/nb01_bicc_operational_reference.json`
+  (checked by `zeaguard.nb03_criteria.verify_pin`), the pre-registered `config/nb03_design_criteria.yaml`, the unit
+  membership decisions `config/nb03_unit_membership_decisions.tsv` and ADR 0006. Specificity is a joint six-axis
+  Pareto of `BICC_LIKE` and `DSRNASE2`; the count of intersected observed differences comes next; everything else
+  is descriptive. There is no score, no weight and no new threshold.

@@ -49,6 +49,9 @@ required_paths:
   - config/nb02_candidate_limitations.tsv
   - data/reference/nb02_dsrnase2_candidate_regions.tsv
   - data/reference/nb02_dsrnase2_candidate_regions.fasta
+  - data/reference/nb01_bicc_operational_reference.json
+  - config/nb03_design_criteria.yaml
+  - config/nb03_unit_membership_decisions.tsv
   - environment.yml
   - pyproject.toml
 
