@@ -29,11 +29,15 @@ def test_registry_is_valid_and_loads():
     assert crit.validate_registry(REGISTRY) == []
     assert crit.load_registry(ROOT)["registry"] == "nb03_design_criteria"
     assert REGISTRY["status"] == "PRE_REGISTERED"
-    assert len(REGISTRY["amendments"]) == 1
+    assert len(REGISTRY["amendments"]) == 2
     clarification = REGISTRY["amendments"][0]
     assert clarification["criteria"] == ["C23"]
     assert clarification["applied_before_window_generation"] is True
     assert clarification["changes_thresholds_roles_or_policy"] is False
+    native_amendment = REGISTRY["amendments"][1]
+    assert native_amendment["applied_before_candidate_specificity_analysis"] is True
+    assert native_amendment["changes_thresholds_roles_or_policy"] is True
+    assert native_amendment["applied_before_window_generation"] is False
 
 
 def test_pin_is_valid_offline_and_agrees_with_the_registry():
@@ -140,7 +144,7 @@ def test_a_new_hard_filter_or_a_hidden_threshold_is_rejected():
 def test_pareto_is_joint_with_exactly_six_axes_and_no_weights_scores_or_sums():
     pareto = REGISTRY["policy"]["pareto"]
     assert pareto["units"] == ["BICC_LIKE", "DSRNASE2"]
-    assert pareto["axes_per_unit"] == ["longest_exact_match_clipped", "covered_nt_clipped", "best_local_identity_clipped"]
+    assert pareto["axes_per_unit"] == ["longest_exact_match", "covered_nt", "best_local_identity"]
     assert pareto["n_decisional_axes"] == 6 == len(pareto["units"]) * len(pareto["axes_per_unit"])
     assert pareto["direction"] == "lower_is_better" and pareto["direction_classification"] == "PROJECT_CONVENTION"
     assert pareto["comparison"] == "joint" and pareto["hierarchy_between_units"] is False and pareto["incomparable_is_tie"] is True
@@ -158,7 +162,7 @@ def test_pareto_policy_mutations_are_rejected():
 
 
 def _evidence(cid, bicc, ds2, diffs=(), length=400):
-    return crit.SpecificityEvidence(cid, length, frozenset(diffs), bicc, ds2)
+    return crit.SpecificityEvidence(cid, length, frozenset(diffs), bicc, ds2, crit.CANONICAL_EVIDENCE_BASIS)
 
 
 def test_joint_dominance_ties_and_no_hierarchy():
@@ -182,7 +186,7 @@ def test_signature_has_no_descriptor_and_the_count_is_the_decisional_metric():
     assert bicc_like == (1, 2, 3) and dsrnase2 == (4, 5, 6)
     assert evidence.intersected_observed_sequence_difference_positions == (597, 1092)
     assert REGISTRY["policy"]["cell_signature"] == crit.CELL_SIGNATURE == [
-        "count_intersected_observed_sequence_differences", "bicc_like_vector_clipped", "dsrnase2_vector_clipped",
+        "count_intersected_observed_sequence_differences", "bicc_like_vector", "dsrnase2_vector",
     ]
 
 

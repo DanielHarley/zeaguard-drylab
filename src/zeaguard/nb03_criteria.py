@@ -27,6 +27,8 @@ from zeaguard.nb01_dsrnase_investigation import CommandLog
 REGISTRY_PATH = Path("config/nb03_design_criteria.yaml")
 MEMBERSHIP_PATH = Path("config/nb03_unit_membership_decisions.tsv")
 PIN_PATH = Path("data/reference/nb01_bicc_operational_reference.json")
+CANONICAL_EVIDENCE_BASIS = "CANDIDATE_NATIVE_ALIGNMENT"
+DIAGNOSTIC_EVIDENCE_BASIS = "FULL_CDS_CLIPPED_ALIGNMENT_DIAGNOSTIC"
 
 EVIDENCE_CATEGORIES = nb02_criteria.EVIDENCE_CATEGORIES
 ROLES = nb02_criteria.ROLES
@@ -47,8 +49,9 @@ MANDATORY_REVIEW_CRITERION = "other_transcript_specificity"
 REQUIRED_DESCRIPTORS = frozenset({
     "gc_fraction", "longest_homopolymer", "low_complexity_fraction", "target_region_position", "potential_21nt_derived_windows",
     "fraction_unaffected", "exact_kmer_counts", "evalue_and_hsp_counts", "descriptive_only_units", "shuffled_control",
-    "benchmark_relation_descriptors", "unit_relationship_status", "search_detection_limit", "homology_evidence_metrics_clipped",
+    "benchmark_relation_descriptors", "unit_relationship_status", "search_detection_limit", "homology_evidence_metrics_candidate_native",
     "length_strata", "published_benchmark_reference", "intersected_observed_sequence_difference_positions",
+    "full_cds_clipped_alignment_diagnostic",
 })
 UNIT_ROLE_BY_NAME = {
     "KNOWN_BICC_COMPATIBLE": "KNOWN_COMPATIBLE_EXCLUDED_FROM_RISK", "BICC_LIKE": "DECISIONAL_INTERPRETABILITY",
@@ -56,8 +59,8 @@ UNIT_ROLE_BY_NAME = {
     "OTHER_TRANSCRIPT": "DESCRIPTIVE_PLUS_MANUAL_REVIEW",
 }
 PARETO_UNITS = ("BICC_LIKE", "DSRNASE2")
-PARETO_AXES_PER_UNIT = ("longest_exact_match_clipped", "covered_nt_clipped", "best_local_identity_clipped")
-CELL_SIGNATURE = ["count_intersected_observed_sequence_differences", "bicc_like_vector_clipped", "dsrnase2_vector_clipped"]
+PARETO_AXES_PER_UNIT = ("longest_exact_match", "covered_nt", "best_local_identity")
+CELL_SIGNATURE = ["count_intersected_observed_sequence_differences", "bicc_like_vector", "dsrnase2_vector"]
 CELL_SIGNATURE_MUST_EXCLUDE = frozenset({"intersected_observed_sequence_difference_positions",
                                          "target_region_position", "other_transcript_hits", "potential_21nt_derived_windows",
                                          "fraction_unaffected", "benchmark_relation", "overlap_with_benchmark_nt",
@@ -81,6 +84,10 @@ class NB03PinError(RuntimeError):
 
 class NB03MembershipError(ValueError):
     """A unit membership decision is invalid."""
+
+
+class NB03EvidenceBasisError(ValueError):
+    """A decisional operation was given non-canonical or undeclared specificity provenance."""
 
 
 # --------------------------------------------------------------------------- registry
@@ -185,6 +192,15 @@ def _keys(node: Any) -> Iterable[str]:
 
 def _validate_policy(policy: dict[str, Any], by_name: dict[str, dict[str, Any]]) -> list[str]:
     problems: list[str] = []
+    if (policy.get("specificity_evidence_basis"), policy.get("specificity_query_unit"),
+        policy.get("shuffled_control_query_unit")) != (CANONICAL_EVIDENCE_BASIS, "CANDIDATE_SEQUENCE", "EACH_CANDIDATE_SEQUENCE"):
+        problems.append("specificity and shuffled controls must use candidate-native query sequences")
+    diagnostic = policy.get("full_cds_clipped_alignment_diagnostic", {})
+    if diagnostic != {"basis": DIAGNOSTIC_EVIDENCE_BASIS, "role": "DESCRIPTIVE_ONLY", "purpose": "QA_ONLY",
+                      "enters_decisional_metrics": False, "enters_decisive_signature": False}:
+        problems.append("full-CDS clipping must remain diagnostic-only QA outside all decisions")
+    if policy.get("unit_aggregation", {}).get("candidate_native_hsps_only") is not True:
+        problems.append("canonical unit metrics must come exclusively from candidate-native HSPs")
     design = policy.get("design", {})
     if design.get("design_domain") != "CDS_ONLY":
         problems.append("design.design_domain must be CDS_ONLY")
@@ -217,7 +233,7 @@ def _validate_policy(policy: dict[str, Any], by_name: dict[str, dict[str, Any]])
     if any(pareto.get(key) != value for key, value in expected.items()):
         problems.append("policy.pareto must be a joint, non-hierarchical, lower_is_better PROJECT_CONVENTION with incomparable = tie")
     if tuple(pareto.get("units", ())) != PARETO_UNITS or tuple(pareto.get("axes_per_unit", ())) != PARETO_AXES_PER_UNIT:
-        problems.append("policy.pareto must compare exactly BICC_LIKE and DSRNASE2 on the three clipped axes")
+        problems.append("policy.pareto must compare exactly BICC_LIKE and DSRNASE2 on the three candidate-native axes")
     elif pareto.get("n_decisional_axes") != len(PARETO_UNITS) * len(PARETO_AXES_PER_UNIT) or pareto["n_decisional_axes"] != 6:
         problems.append("policy.pareto must have exactly six decisional axes")
     if any(FORBIDDEN_POLICY_KEY.search(key) for key in _keys(pareto)):
@@ -567,7 +583,7 @@ def load_validated_membership(root: Path) -> list[MembershipDecision]:
 
 
 # --------------------------------------------------------------------------- policy kernel (data-free)
-Vector = tuple[float, float, float]  # longest_exact_match_clipped, covered_nt_clipped, best_local_identity_clipped
+Vector = tuple[float, float, float]  # longest_exact_match, covered_nt, best_local_identity
 
 
 @dataclass(frozen=True)
@@ -579,6 +595,11 @@ class SpecificityEvidence:
     observed_differences_intersected: frozenset[int]
     bicc_like: Vector
     dsrnase2: Vector
+    specificity_evidence_basis: str  # Explicit provenance is mandatory; there is no implicit native default.
+
+    def require_canonical_basis(self) -> None:
+        if self.specificity_evidence_basis != CANONICAL_EVIDENCE_BASIS:
+            raise NB03EvidenceBasisError("decisional specificity requires CANDIDATE_NATIVE_ALIGNMENT; diagnostic clipping is excluded")
 
     @property
     def intersected_observed_sequence_difference_positions(self) -> tuple[int, ...]:
@@ -588,11 +609,13 @@ class SpecificityEvidence:
     @property
     def joint(self) -> tuple[float, ...]:
         """The six decisional axes, in the registry order; never summed or weighted."""
+        self.require_canonical_basis()
         return (*self.bicc_like, *self.dsrnase2)
 
 
 def decisive_signature(evidence: SpecificityEvidence) -> tuple[int, Vector, Vector]:
     """Cell signature: the intersected-differences count and the two unit vectors only."""
+    evidence.require_canonical_basis()
     return count_intersected(evidence), evidence.bicc_like, evidence.dsrnase2
 
 

@@ -1,0 +1,224 @@
+{
+  "scope": "synthetic_method_diagnostic_only_no_TSA_or_NB03_candidate_search",
+  "blast_version": "blastn: 2.17.0+\n Package: blast 2.17.0, build Aug 22 2026 11:52:50",
+  "database_info": "Database: /mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/subject.fasta\n\t1 sequences; 2,337 total bases\n\nDate: Oct 8, 2026  3:35 AM\tLongest sequence: 2,337 bases\n\nBLASTDB Version: 5\n\nVolumes:\n\t/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/synthetic_database",
+  "full_query_length": 2337,
+  "window_length": 400,
+  "window_on_full_query": [
+    501,
+    900
+  ],
+  "mismatched_subject_positions": [
+    501,
+    502,
+    503,
+    504,
+    505,
+    506,
+    507,
+    508,
+    509,
+    510
+  ],
+  "full_query_hsps": [
+    {
+      "qstart": 1,
+      "qend": 2337,
+      "sstart": 1,
+      "send": 2337,
+      "btop": "500ACCGA-C-1TGCG3-T-G1827",
+      "identity_percent": 99.658,
+      "alignment_length": 2339
+    },
+    {
+      "qstart": 747,
+      "qend": 776,
+      "sstart": 776,
+      "send": 747,
+      "btop": "2AT4CGAC12GTCG4AT2",
+      "identity_percent": 80.0,
+      "alignment_length": 30
+    },
+    {
+      "qstart": 2248,
+      "qend": 2270,
+      "sstart": 286,
+      "send": 309,
+      "btop": "11ACGA2TC2-A5",
+      "identity_percent": 83.333,
+      "alignment_length": 24
+    },
+    {
+      "qstart": 1580,
+      "qend": 1591,
+      "sstart": 513,
+      "send": 524,
+      "btop": "12",
+      "identity_percent": 100.0,
+      "alignment_length": 12
+    },
+    {
+      "qstart": 513,
+      "qend": 524,
+      "sstart": 1580,
+      "send": 1591,
+      "btop": "12",
+      "identity_percent": 100.0,
+      "alignment_length": 12
+    },
+    {
+      "qstart": 286,
+      "qend": 309,
+      "sstart": 2248,
+      "send": 2270,
+      "btop": "11CAAG2CT2A-5",
+      "identity_percent": 83.333,
+      "alignment_length": 24
+    }
+  ],
+  "independent_window_hsps": [
+    {
+      "qstart": 11,
+      "qend": 400,
+      "sstart": 511,
+      "send": 900,
+      "btop": "390",
+      "identity_percent": 100.0,
+      "alignment_length": 390
+    },
+    {
+      "qstart": 247,
+      "qend": 276,
+      "sstart": 776,
+      "send": 747,
+      "btop": "2AT4CGAC12GTCG4AT2",
+      "identity_percent": 80.0,
+      "alignment_length": 30
+    },
+    {
+      "qstart": 13,
+      "qend": 24,
+      "sstart": 1580,
+      "send": 1591,
+      "btop": "12",
+      "identity_percent": 100.0,
+      "alignment_length": 12
+    }
+  ],
+  "clip_full_query_hsps_to_window": {
+    "longest_exact_match_clipped": 390,
+    "covered_nt_clipped": 400,
+    "best_local_identity_clipped": 1.0,
+    "best_identity_aligned_nt_clipped": 12,
+    "n_hsps_clipped": 3,
+    "exact_19mer_count_clipped": 372,
+    "exact_21mer_count_clipped": 370,
+    "hit_records": "subject"
+  },
+  "independent_window_alignment": {
+    "longest_exact_match_clipped": 390,
+    "covered_nt_clipped": 390,
+    "best_local_identity_clipped": 1.0,
+    "best_identity_aligned_nt_clipped": 390,
+    "n_hsps_clipped": 3,
+    "exact_19mer_count_clipped": 372,
+    "exact_21mer_count_clipped": 370,
+    "hit_records": "subject"
+  },
+  "same_three_metrics": false,
+  "commands": [
+    {
+      "command": [
+        "blastn",
+        "-version"
+      ],
+      "started_utc": "2026-10-08T06:35:48.192784+00:00",
+      "finished_utc": "2026-10-08T06:35:48.524480+00:00"
+    },
+    {
+      "command": [
+        "makeblastdb",
+        "-in",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/subject.fasta",
+        "-dbtype",
+        "nucl",
+        "-out",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/synthetic_database"
+      ],
+      "started_utc": "2026-10-08T06:35:48.524537+00:00",
+      "finished_utc": "2026-10-08T06:35:48.653664+00:00"
+    },
+    {
+      "command": [
+        "blastdbcmd",
+        "-db",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/synthetic_database",
+        "-info"
+      ],
+      "started_utc": "2026-10-08T06:35:48.653682+00:00",
+      "finished_utc": "2026-10-08T06:35:48.705536+00:00"
+    },
+    {
+      "command": [
+        "blastn",
+        "-query",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/full_query.fasta",
+        "-db",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/synthetic_database",
+        "-task",
+        "blastn",
+        "-dust",
+        "no",
+        "-word_size",
+        "11",
+        "-evalue",
+        "10",
+        "-strand",
+        "both",
+        "-max_target_seqs",
+        "100000",
+        "-num_threads",
+        "1",
+        "-outfmt",
+        "6 qseqid sseqid pident length qlen slen qstart qend sstart send sstrand evalue bitscore mismatch gapopen gaps qcovs btop"
+      ],
+      "started_utc": "2026-10-08T06:35:48.705597+00:00",
+      "finished_utc": "2026-10-08T06:35:48.758256+00:00"
+    },
+    {
+      "command": [
+        "blastn",
+        "-query",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/window_query.fasta",
+        "-db",
+        "/mnt/c/Programming/Python/zeaguard-drylab/results/bioinformatics/nb03/cp3_method_check/synthetic_database",
+        "-task",
+        "blastn",
+        "-dust",
+        "no",
+        "-word_size",
+        "11",
+        "-evalue",
+        "10",
+        "-strand",
+        "both",
+        "-max_target_seqs",
+        "100000",
+        "-num_threads",
+        "1",
+        "-outfmt",
+        "6 qseqid sseqid pident length qlen slen qstart qend sstart send sstrand evalue bitscore mismatch gapopen gaps qcovs btop"
+      ],
+      "started_utc": "2026-10-08T06:35:48.760645+00:00",
+      "finished_utc": "2026-10-08T06:35:48.819091+00:00"
+    }
+  ],
+  "file_sha256": {
+    "check_clipping_equivalence.py": "72d11876df2dcb023418fd74c4c1a05fcd0443d1f7a4ea578edfe95845f75f8b",
+    "full_query.fasta": "058b61000d72e2199f1f04e4e99e2c5a3185deb45311e82b9d7b52ad1401ebea",
+    "full_query_blast.outfmt6.tsv": "23b9bf38bdfa3ae4b8d5fa23561e875db1fbbd9c4af353a6938757458a56bcea",
+    "subject.fasta": "bc6dafac5d055e602b5e2ce150461e84745cc8a2a4a97ec21b9d65b51d6cbf41",
+    "window_query.fasta": "5ad9db837b36664364dc0c28bb3fc308fd30306667a1772b25eaa08affd6a597",
+    "window_query_blast.outfmt6.tsv": "b33b89f1d3ea8fc9a591719c5d7fd910f338b30e1f4162ce31b460ba8ff1161f"
+  }
+}

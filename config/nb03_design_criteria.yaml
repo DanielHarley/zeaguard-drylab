@@ -117,13 +117,13 @@ criteria:
     roles: [DESCRIPTOR]
     affects: [comparison_scope]
     threshold: {ranking_length_nt: 400, benchmark_comparator_length_nt: 373, benchmark_published_reported_length_nt: 372, sensitivity_lengths_nt: [300, 500]}
-    justification: "Equal lengths remove any length term from the clipped metrics without normalising, which is not neutral. The sequence-based comparator must be the sequence that exists."
+    justification: "Equal-length native queries keep length strata explicit without normalisation. The sequence-based comparator must be the sequence that exists."
     limitations: "400 nt is the ranking length by project convention, not by biology; the best region at 300 or 500 nt may differ and is reported, not decided."
     revision_condition: "The Wet Lab nominal length changes, or the 372/373 inconsistency is resolved by the authors."
     evidence_refs: [dalaison2022_table_s1]
   - id: C05
-    name: homology_evidence_metrics_clipped
-    definition: "Per biological unit, from BLASTn HSPs clipped to the candidate interval: longest_exact_match_clipped (longest exact run), covered_nt_clipped (union of query positions over all records and HSPs of the unit) and best_local_identity_clipped (highest clipped identity, always reported with the aligned_nt_clipped of the providing HSP, which is not an axis). Units are never pooled. Whole-HSP attributes are provenance only."
+    name: homology_evidence_metrics_candidate_native
+    definition: "Per biological unit, exclusively from HSPs detected when the candidate sequence itself is the BLAST query: longest_exact_match (longest exact run), covered_nt (union of candidate-query coordinates over records and HSPs of the unit) and best_local_identity (highest identical-column fraction). aligned_nt_for_best_identity is the alignment-column length of the providing HSP, reported descriptively and not an axis. Units are never pooled."
     origin: "BLAST+ tabular output with btop (same reader as NB02)"
     evidence_category: TOOL_DERIVED
     roles: [DESCRIPTOR]
@@ -135,7 +135,7 @@ criteria:
     evidence_refs: [camacho2009]
   - id: C06
     name: specificity_evidence_vector
-    definition: "Joint Pareto comparison of the BICC_LIKE and DSRNASE2 units, no hierarchy between them. Each unit contributes longest_exact_match_clipped, covered_nt_clipped and best_local_identity_clipped: six axes in total, all lower_is_better. A dominates B if A is <= B on all six axes and < B on at least one. A trade-off between the units is incomparable (a tie). Comparison happens within one length stratum only."
+    definition: "Joint Pareto comparison of BICC_LIKE and DSRNASE2 using CANDIDATE_NATIVE_ALIGNMENT only. Each unit contributes longest_exact_match, covered_nt and best_local_identity: six axes in total, all lower_is_better. A dominates B if A is <= B on all six axes and < B on at least one. A trade-off between units is incomparable (a tie). Comparison happens within one length stratum only and remains a downstream CP4 operation."
     origin: "Project decision of 2026-10-08"
     evidence_category: PROJECT_CONVENTION
     roles: [SOFT_PREFERENCE]
@@ -267,7 +267,7 @@ criteria:
     evidence_refs: [camacho2009]
   - id: C17
     name: shuffled_control
-    definition: "Five composition-preserving shuffles of the CDS (fixed seeds 1-5) pass through the same BLAST and clipping as a reproducible sanity check. Descriptor only."
+    definition: "Five composition-preserving shuffles of each candidate query and of the separate benchmark (fixed seeds 1-5) pass through the same candidate-native BLAST settings. Controls are batched by length stratum and remain DESCRIPTIVE_ONLY; no threshold is inferred from them."
     origin: "NB02 policy carried over"
     evidence_category: PROJECT_CONVENTION
     roles: [DESCRIPTOR]
@@ -279,7 +279,7 @@ criteria:
     evidence_refs: []
   - id: C18
     name: exact_kmer_counts
-    definition: "Exact 19-mer and 21-mer counts per unit, clipped to the candidate. Descriptors only; they are not a cutoff and absence is not safety."
+    definition: "Exact 19-mer and 21-mer counts per unit from an independent direct sequence scan on both strands; count query starts whose entire k-mer is inside the candidate. These are independent of BLAST and DESCRIPTIVE_ONLY, without a cutoff or safety interpretation."
     origin: "Independent exact scan, as in NB02"
     evidence_category: OPERATIONAL_ASSUMPTION
     roles: [DESCRIPTOR]
@@ -363,13 +363,35 @@ criteria:
     revision_condition: "A dated amendment before the analysis."
     evidence_refs: []
 
+  - id: C25
+    name: full_cds_clipped_alignment_diagnostic
+    definition: "FULL_CDS_CLIPPED_ALIGNMENT_DIAGNOSTIC is DESCRIPTIVE_ONLY / QA_ONLY. HSPs obtained using the full CDS and then clipped may quantify methodological discrepancies but never supply canonical vectors, signatures, Pareto, ordering, cells or shortlist. The synthetic 400 versus 390 nt coverage counterexample is regression evidence, not a biological constant."
+    origin: "User-approved pre-CP3 methodological correction, 2026-10-08; preserved synthetic diagnostic"
+    evidence_category: PROJECT_CONVENTION
+    roles: [DESCRIPTOR]
+    affects: []
+    threshold: null
+    justification: "Flanking context can alter HSP formation or extension; the experimental sequence being evaluated is the candidate itself."
+    limitations: "The counterexample demonstrates possible non-equivalence and does not predict discrepancies for biological candidates."
+    revision_condition: "A dated methodological amendment supported by independent evidence."
+    evidence_refs: []
+
 policy:
+  specificity_evidence_basis: CANDIDATE_NATIVE_ALIGNMENT
+  specificity_query_unit: CANDIDATE_SEQUENCE
+  shuffled_control_query_unit: EACH_CANDIDATE_SEQUENCE
+  full_cds_clipped_alignment_diagnostic:
+    basis: FULL_CDS_CLIPPED_ALIGNMENT_DIAGNOSTIC
+    role: DESCRIPTIVE_ONLY
+    purpose: QA_ONLY
+    enters_decisional_metrics: false
+    enters_decisive_signature: false
   prioritization:
     - "1. structural requirements (C01-C03); no other hard filter exists"
     - "2. no automatic specificity exclusion; exclusions are structural or EXCLUDED_AFTER_REVIEW"
     - "3. specificity by joint Pareto dominance of BICC_LIKE and DSRNASE2 within one length stratum (C06)"
     - "4. count_intersected_observed_sequence_differences, lower_is_better (C07)"
-    - "5. descriptors never order (C04-C05, C08, C10-C24)"
+    - "5. descriptors never order (C04-C05, C08, C10-C25)"
     - "6. ties are preserved; no composite score, no weights, no summation across units"
   # Biological units of specificity (frozen before the first candidate window). Disjoint; never pooled.
   specificity_units:
@@ -398,11 +420,10 @@ policy:
       relationship_status: NOT_APPLICABLE
       members: "every TSA record that is not a member of another unit"
   unit_aggregation:
-    clip_to_candidate: true
-    zero_query_nt_after_clipping_contributes_nothing: true
-    longest_exact_match_clipped: "maximum over the unit's clipped HSPs"
-    covered_nt_clipped: "union of query positions over all records and HSPs of the same unit"
-    best_local_identity_clipped: "maximum clipped identity of the unit; aligned_nt_clipped of the providing HSP is reported, not an axis"
+    candidate_native_hsps_only: true
+    longest_exact_match: "maximum over native-query HSPs of the unit"
+    covered_nt: "union of candidate-query positions over all records and HSPs of the same unit"
+    best_local_identity: "maximum identical-column fraction of native HSPs; aligned_nt_for_best_identity is the providing HSP's alignment-column length, reported descriptively"
     pool_across_units: false
   membership_decisions:
     path: config/nb03_unit_membership_decisions.tsv
@@ -414,7 +435,7 @@ policy:
     comparison: joint
     hierarchy_between_units: false
     units: [BICC_LIKE, DSRNASE2]
-    axes_per_unit: [longest_exact_match_clipped, covered_nt_clipped, best_local_identity_clipped]
+    axes_per_unit: [longest_exact_match, covered_nt, best_local_identity]
     n_decisional_axes: 6
     direction: lower_is_better
     direction_classification: PROJECT_CONVENTION
@@ -435,10 +456,10 @@ policy:
     nature_status: UNRESOLVED
     permitted_interpretation: "greater robustness to the two currently observed sequences"
     forbidden_interpretations: [population robustness, allele robustness, polymorphism robustness, population conservation]
-  cell_signature: [count_intersected_observed_sequence_differences, bicc_like_vector_clipped, dsrnase2_vector_clipped]
+  cell_signature: [count_intersected_observed_sequence_differences, bicc_like_vector, dsrnase2_vector]
   cell_signature_excludes: [intersected_observed_sequence_difference_positions, target_region_position, other_transcript_hits, gc_fraction, low_complexity_fraction, longest_homopolymer, potential_21nt_derived_windows, fraction_unaffected, benchmark_relation, overlap_with_benchmark_nt, overlap_fraction_of_candidate, overlap_fraction_of_benchmark, relation_to_benchmark]
   hard_filters: [inside_operational_cds, length_range, defined_bases_only]
-  descriptive_only_criteria: [intersected_observed_sequence_difference_positions, length_strata, homology_evidence_metrics_clipped, potential_21nt_derived_windows, fraction_unaffected, target_region_position, gc_fraction, longest_homopolymer, low_complexity_fraction, search_detection_limit, shuffled_control, exact_kmer_counts, evalue_and_hsp_counts, descriptive_only_units, unit_relationship_status, published_benchmark_reference, benchmark_relation_descriptors]
+  descriptive_only_criteria: [full_cds_clipped_alignment_diagnostic, intersected_observed_sequence_difference_positions, length_strata, homology_evidence_metrics_candidate_native, potential_21nt_derived_windows, fraction_unaffected, target_region_position, gc_fraction, longest_homopolymer, low_complexity_fraction, search_detection_limit, shuffled_control, exact_kmer_counts, evalue_and_hsp_counts, descriptive_only_units, unit_relationship_status, published_benchmark_reference, benchmark_relation_descriptors]
   small_rna_descriptor:
     k: 21
     classification: OPERATIONAL_ASSUMPTION
@@ -508,3 +529,11 @@ amendments:
     reason: "User-approved clarification before any NB03 window generation. Denominators and exact coordinate equality must be explicit; no filter, preference, Pareto axis, decisional signature or ordering changes."
     changes_thresholds_roles_or_policy: false
     applied_before_window_generation: true
+  - date: "2026-10-08"
+    criteria: [C05, C06, C17, C18, C25]
+    change: "Adopt CANDIDATE_NATIVE_ALIGNMENT as the canonical CP3 evidence basis and remove _clipped from native metric/vector names. Full-CDS clipping remains FULL_CDS_CLIPPED_ALIGNMENT_DIAGNOSTIC, DESCRIPTIVE_ONLY / QA_ONLY. Shuffle each candidate and benchmark query with seeds 1-5; exact k-mers remain independent descriptors."
+    reason: "Before real CP3 analysis, a synthetic 400 nt window had 400 nt coverage from full-CDS HSP clipping and 390 nt from its native-query alignment. Flanking context can affect HSP formation/extension. The candidate sequence is the experimental unit, so its native HSPs must define specificity. This correction precedes analysis of all 7779 biological windows and was not motivated by their results."
+    changes_thresholds_roles_or_policy: true
+    applied_before_window_generation: false
+    applied_before_candidate_specificity_analysis: true
+    synthetic_diagnostic_record: src/workstreams/bioinformatics/runs/2026-10-08_nb03-pre-cp3-native-alignment-amendment.md

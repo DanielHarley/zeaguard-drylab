@@ -140,7 +140,7 @@ def test_descriptive_positions_and_overlap_do_not_enter_decisional_signature(con
     def signature(row):
         positions = frozenset(int(p) for p in row["intersected_observed_sequence_difference_positions"].split(",") if p)
         return criteria.decisive_signature(criteria.SpecificityEvidence("synthetic", row["length_nt"], positions,
-                                                                       (1, 2, 3), (4, 5, 6)))
+                                                                       (1, 2, 3), (4, 5, 6), criteria.CANONICAL_EVIDENCE_BASIS))
 
     left, right = context.describe(198, 597, 0), context.describe(693, 1092, 0)
     assert left["count_intersected_observed_sequence_differences"] == right["count_intersected_observed_sequence_differences"] == 1
