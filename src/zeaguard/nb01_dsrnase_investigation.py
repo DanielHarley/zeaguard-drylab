@@ -2148,9 +2148,9 @@ def btop_substitutions(hsp: Hsp) -> dict[int, tuple[str, str]]:
         elif op == "X":
             position += 1
             found[position] = (q, s)
-        elif op == "D":  # query base against a subject gap
+        elif op == "I":  # query base against a subject gap: the query position advances
             position += 1
-        # op == "I": subject base against a query gap, query position unchanged
+        # op == "D": subject base against a query gap, query position unchanged
     return found
 
 
