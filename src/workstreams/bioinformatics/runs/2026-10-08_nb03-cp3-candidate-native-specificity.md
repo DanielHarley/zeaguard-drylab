@@ -10,7 +10,19 @@
 
 Base: `b82dd0ddd55e62aa4111fcaca785e60c9362e1a3` (pre-CP3 native-alignment amendment). Earlier checkpoints: CP0 `2d1ae8f48e9af684422faabaebed0f6486f658c5`, CP1 `099f751780283fecbc63da177c113aec9f6d60d5`, CP2 `4e141876c478a76aada15d3f4b89b80dc9f6863f`.
 
-The canonical run executed on `b82dd0d` with the CP3 implementation uncommitted (`git.dirty = true` in the run manifest). This record describes that pre-commit execution; its content is consolidated in the CP3 commit that follows. The commit SHA is not embedded here, to avoid self-reference; the commit introducing this file is the CP3 commit.
+Two executions are recorded:
+
+1. The initial execution ran on `b82dd0d` with the CP3 implementation still uncommitted and the registry whose LF SHA-256 was `127106430145d5c8bed16b994c2372753908997baa8f181a1ebe86078b372cb7`. Its manifest hash was `680ebf1af243ec5ee2c7563ab290a909421ce457622c9e2a17f6f73312b7fcbd`. It is superseded as the provenance reference.
+2. The canonical scientific execution was repeated at the CP3 commit, with that commit's code, tests, registry and ADR. It is the provenance reference.
+
+```yaml
+canonical_scientific_execution_commit: 748bd81248be0e34c2fc4158a78660d5e4f1ba25
+canonical_registry_sha256_lf: ebce5b08354b1eb990da95b4a56e45cce018b3617197069906c6580cee832ef6
+canonical_run_manifest_sha256: 19d280fc9b01c1e155d5b28825c84930792a76430018b245a6a0b98a9f2f2439
+cp3_scientific_outputs_changed: false
+```
+
+The commit that later updates this record is documentation only and is deliberately not the execution commit: the manifest references `748bd81`, and no further execution is made to chase a self-referential fixed point.
 
 ## Branch
 
@@ -18,7 +30,7 @@ The canonical run executed on `b82dd0d` with the CP3 implementation uncommitted 
 
 ## Execution status
 
-`COMPLETED`, `G3_PENDING_FINAL_COMMIT` until the CP3 commit exists. After that commit, `G3_PASS` and `CP4_READY_TO_PLAN_OR_IMPLEMENT` hold for the contract recorded below.
+`COMPLETED`. `G3_PASS`, `CP3_PROVENANCE_NORMALIZED` and `CP4_READY_TO_IMPLEMENT` hold for the contract recorded below.
 
 ## Question / objective
 
@@ -72,7 +84,7 @@ BLAST batches (all returned code 0):
 
 ## Outputs
 
-All CP3 outputs are gitignored under `results/bioinformatics/nb03/cp3/`. Full SHA-256 values of the canonical execution, recomputed directly from the files:
+All CP3 outputs are gitignored under `results/bioinformatics/nb03/cp3/`. Full SHA-256 values of the canonical execution at `748bd81`, recomputed directly from the files. The first seven rows are byte-identical to the initial execution; the last three differ from it (see below):
 
 | file | SHA-256 |
 |---|---|
@@ -83,11 +95,11 @@ All CP3 outputs are gitignored under `results/bioinformatics/nb03/cp3/`. Full SH
 | `shuffled_controls.tsv` | `a11b3df7125601e9b97d54404915fc4f3eb0d0ba118a200af93831e5eb84328c` |
 | `benchmark_specificity.tsv` | `ea206eed11fafefb4a1f83590332732e1343019383961c55e5b0454ea22a89af` |
 | `cp3_summary.json` | `8013cc52306530ef130859aec366d35f6d52edf54662c2c637fa715d80ca3157` |
-| `run_manifest.json` | `680ebf1af243ec5ee2c7563ab290a909421ce457622c9e2a17f6f73312b7fcbd` |
-| `database_info.txt` | `ef58fcaaa176d23d0d680cebb184795161b7f6a01f3c3228fde44ee0722a00d0` |
-| `execution_log.json` | `22e23e0b86106bbd48eea80eda191d5b79cde6bd4b7004a569db04938784fb9b` |
+| `run_manifest.json` | `19d280fc9b01c1e155d5b28825c84930792a76430018b245a6a0b98a9f2f2439` |
+| `database_info.txt` | `b64a5badaaec1d84ddf0f792d1aae39207b196336f3ceed71b9304d4baa4f401` |
+| `execution_log.json` | `3cbd689e82f76d0ead9b3284a863ea96b132f111ef3243ec551c75b1c351105a` |
 
-The first eight are deterministic evidence outputs. `database_info.txt` and `execution_log.json` are execution/provenance metadata: they contain timestamps and absolute paths and need not be byte-identical between executions. They are deliberately not promoted to canonical evidence and are not hashed in the manifest. The manifest hashes the seven data/summary evidence files plus the ten query FASTAs and ten raw BLAST tables; all 27 declared entries were recomputed and matched. Its own hash is reported here, not inside itself.
+The first eight are deterministic evidence outputs. `database_info.txt` and `execution_log.json` are execution/provenance metadata: they contain timestamps and absolute paths and need not be byte-identical between executions. They are deliberately not promoted to canonical evidence and are not hashed in the manifest. The manifest hashes the seven data/summary evidence files plus the ten query FASTAs and ten raw BLAST tables; all 27 declared entries were recomputed and matched. Its own hash is reported here, not inside itself. The initial execution's values for the three non-identical files were `680ebf1af243ec5ee2c7563ab290a909421ce457622c9e2a17f6f73312b7fcbd` (manifest), `ef58fcaaa176d23d0d680cebb184795161b7f6a01f3c3228fde44ee0722a00d0` (`database_info.txt`) and `22e23e0b86106bbd48eea80eda191d5b79cde6bd4b7004a569db04938784fb9b` (`execution_log.json`).
 
 ## Validation / QC
 
@@ -95,7 +107,7 @@ The first eight are deterministic evidence outputs. `database_info.txt` and `exe
 - Independent recomputation of every query-by-unit aggregate gave zero differences in `candidate_unit_specificity.tsv` (7779 rows), `other_transcript_summary.tsv` (7779), `benchmark_specificity.tsv` (1) and `shuffled_controls.tsv` (38900). The 7779 IDs equal the canonical CP2 list with no missing, extra or duplicated query; `cp3_summary.json` was re-derived from the tables. An independent re-implementation of the exact k-mer scan matched all 46680 rows.
 - `independent_reexecution = BYTE_IDENTICAL_FOR_CANONICAL_EVIDENCE_OUTPUTS`: a second full materialization into a temporary directory reproduced the eight evidence outputs, including `run_manifest.json`, the ten query FASTAs and ten raw tables, byte for byte. `database_info.txt` and `execution_log.json` were not compared for identity, by design. No third execution was run for this record, because the implementation and the evidence outputs are unchanged since that audit.
 - Tests, canonical WSL environment: `PYTHONPATH=src python -m pytest tests/test_nb03_specificity.py` gave `20 passed in 10.52s`; `PYTHONPATH=src python -m pytest` gave `371 passed in 110.75s`, with zero failures or skips. The audit baseline was 18 CP3 and 369 total; the two new tests cover an identity tie between HSPs of different lengths (in both input orders) and the registered tie rule.
-- Registry hash: the manifest's `registry_sha256_lf` (`127106430145d5c8bed16b994c2372753908997baa8f181a1ebe86078b372cb7`) is the registry used to run CP3. The registry was afterwards amended only to document the tie-break and the `covered_nt` semantics (amendment 3, `cp3_outputs_changed: false`); its LF hash is now `ebce5b08354b1eb990da95b4a56e45cce018b3617197069906c6580cee832ef6`. No threshold, role, policy or output changed. `nb03_specificity.py` is unchanged (LF SHA-256 `e8d04d5f2874241592187bc82eb79cce1bbaa9dd4bbc004f3c0c615864894824`, equal to the manifest value). A re-run today would record the new registry hash in the manifest and nothing else different in the evidence.
+- Provenance normalization: after amendment 3 (tie-break and `covered_nt` documentation, `cp3_outputs_changed: false`) the registry LF hash changed from `127106430145d5c8bed16b994c2372753908997baa8f181a1ebe86078b372cb7` to `ebce5b08354b1eb990da95b4a56e45cce018b3617197069906c6580cee832ef6`. The canonical CP3 was therefore re-executed with the official command (`python -m zeaguard.nb03_specificity`, same BLAST parameters, ten batches) on the committed `748bd81` code and registry. The new manifest records the final registry hash; relative to the initial manifest only `inputs.registry_sha256_lf` and the `git` block changed, and its 27 declared hashes (7 evidence files, 10 query FASTAs, 10 raw tables) are identical and match the files. The seven scientific outputs are byte-identical to the initial execution (`cp3_scientific_outputs_changed = false`). Full suite after the re-execution: `371 passed in 108.08s`, zero failures or skips. `nb03_specificity.py` is unchanged (LF SHA-256 `e8d04d5f2874241592187bc82eb79cce1bbaa9dd4bbc004f3c0c615864894824`).
 - NB02 regression: `data/reference/nb02_dsrnase2_candidate_regions.tsv` SHA-256 `341bc9f32cf120a18295d2f4129de81856a5b765a0759d77f62cace541a42939`; `.fasta` SHA-256 `a673be55faf1c2c31c9b02d99263d2ab1670e2d711a2be7350faca93dde8ef2e`. No NB02 file differs from `master`.
 - CP2 regression: `design_space.tsv` `142e5e856a6740b2a225e947cbe7feae181ae0cab01d0084af56c74465719ee4`; `benchmark_descriptor.tsv` `4cb81a3b9514ec77e1b1a5ce9add88df933696cde633288485da57a718b65272`; `cp2_summary.json` `7c390f0a7a81f080d52bf402e661674be579235230a06b910d52e59a12282239`; `run_manifest.json` `124ce71cc5f8d68fe1a7eb66f6d62630623d72bd3697268debac0cadb760a4e3`.
 
@@ -122,13 +134,17 @@ RNAi efficacy, active or effective small RNAs, that any region is safe, free of 
 
 None in the scientific results. The independent audit found only traceability gaps, closed by this record: the missing run record, the undocumented best-identity tie rule, and the unhashed execution metadata (kept as metadata by decision). The synthetic non-equivalence diagnostic that motivated the native basis is preserved in `tests/fixtures/nb03_clipping_non_equivalence/` and in [its record](2026-10-08_nb03-pre-cp3-native-alignment-amendment.md). Subject bases were not re-compared with the database in the audit; subject coordinates and orientation were.
 
+## Manifest `git.dirty` (PROVENANCE_PLATFORM_ARTIFACT)
+
+The canonical manifest records `git.dirty = true`, preserved exactly as written. The interpretation is a platform artifact, not a corrupt manifest and not a modified analysis: `git status` in the Windows checkout was clean (0 entries) and `git -c core.autocrlf=true status` in WSL was also clean, while the WSL Git without that setting reported the CRLF working tree as modified (30 entries). No tracked file was scientifically modified during the execution, and the runner was not changed. The statement `dirty = false` is therefore not made; the manifest value is kept and explained here.
+
 ## Related decisions
 
 [ADR 0006](../decisions/0006-nb03-bicc-candidate-region-policy.md), including the pre-CP3 amendment and the tie-handling paragraph, and the [criteria registry](../../../../config/nb03_design_criteria.yaml).
 
 ## Related Issue / PR / commits
 
-CP0 `2d1ae8f48e9af684422faabaebed0f6486f658c5`, CP1 `099f751780283fecbc63da177c113aec9f6d60d5`, CP2 `4e141876c478a76aada15d3f4b89b80dc9f6863f`, amendment `b82dd0ddd55e62aa4111fcaca785e60c9362e1a3`. The CP3 commit is the one that adds this record. No push, issue or PR was created.
+CP0 `2d1ae8f48e9af684422faabaebed0f6486f658c5`, CP1 `099f751780283fecbc63da177c113aec9f6d60d5`, CP2 `4e141876c478a76aada15d3f4b89b80dc9f6863f`, amendment `b82dd0ddd55e62aa4111fcaca785e60c9362e1a3`. The CP3 code, tests, registry and ADR commit is `748bd81248be0e34c2fc4158a78660d5e4f1ba25`, the canonical scientific execution commit. A later documentation-only commit finalizes this record. No push, issue or PR was created.
 
 ## Evidence classification
 
