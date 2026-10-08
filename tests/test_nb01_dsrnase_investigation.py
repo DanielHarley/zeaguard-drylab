@@ -156,6 +156,47 @@ def test_btop_parse():
     assert [c[0] for c in inv.parse_btop("-A3")] == ["D", "=", "=", "="]
 
 
+def _plus_hsp(btop, qend):
+    return inv.Hsp("q", "s", 90.0, qend, 100, 100, 1, qend, 1, qend, "plus", 1.0, 20.0, 1, 1, 1, 1.0, btop)
+
+
+def test_btop_substitutions_without_gaps_is_unchanged():
+    assert inv.btop_substitutions(_plus_hsp("3AG2", 6)) == {4: ("A", "G")}
+    assert inv.btop_substitutions(_plus_hsp("1TG1CA2", 6)) == {2: ("T", "G"), 4: ("C", "A")}
+
+
+def test_btop_substitutions_counts_a_query_base_against_a_subject_gap_as_a_query_position():
+    # BTOP "2A-1AG": = = | A vs gap in the SUBJECT | = | A/G  -> the mismatch is query position 5, not 4
+    hsp = inv.Hsp("q", "s", 90.0, 6, 100, 100, 1, 5, 1, 5, "plus", 1.0, 20.0, 1, 1, 1, 1.0, "2A-1AG")
+    assert [c[0] for c in inv.parse_btop(hsp.btop)] == ["=", "=", "I", "=", "X"]  # "I": the query position advances
+    assert inv.btop_substitutions(hsp) == {5: ("A", "G")}
+    query = "ACGTA"  # position 5 is the query A of the A/G mismatch
+    assert query[5 - 1] == "A"
+
+
+def test_btop_substitutions_does_not_advance_over_a_subject_base_against_a_query_gap():
+    # query ACTAC aligned to subject ACGTGC:  AC-TAC / ACGTGC  -> BTOP "2-G1AG1"; the mismatch is query position 4
+    query = "ACTAC"
+    hsp = _plus_hsp("2-G1AG1", len(query))
+    assert [c[0] for c in inv.parse_btop(hsp.btop)] == ["=", "=", "D", "=", "X", "="]  # "D": the query position stays
+    found = inv.btop_substitutions(hsp)
+    assert found == {4: ("A", "G")} and query[4 - 1] == "A"
+
+
+def test_btop_substitutions_after_gaps_in_both_directions_and_before_them():
+    # BTOP "1TG1A-1-C1AG" = | T/G | = | A vs subject gap (I) | = | subject-only C (D) | = | A/G
+    # query positions 1,2,3,4,5,(none),6,7 -> mismatches at 2 and 7
+    query = "ATCAGCA"
+    hsp = _plus_hsp("1TG1A-1-C1AG", len(query))
+    found = inv.btop_substitutions(hsp)
+    assert found == {2: ("T", "G"), 7: ("A", "G")}
+    assert all(query[position - 1] == base for position, (base, _) in found.items())
+    # two query-gap columns in a row must not move the query at all
+    assert inv.btop_substitutions(_plus_hsp("2-G-T1AG", 4)) == {4: ("A", "G")}
+    # query gaps before an I: only the I advances
+    assert inv.btop_substitutions(_plus_hsp("1-GA-1AG", 4)) == {4: ("A", "G")}
+
+
 # ------------------------------------------------------------------ alignment
 def test_alignment_is_deterministic_and_handles_all_modes():
     a, b = "ACGTACGTTTGACCA", "GGACGTACGATTGACCATT"
