@@ -136,12 +136,14 @@ def test_the_top_tied_cells_are_variant_free_and_within_the_pre_registered_bound
 
 
 @needs_cp3
-def test_provisional_candidates_cannot_be_recommended_without_a_versioned_review():
-    result = cells.run_cp4(ROOT, ROOT / "results/bioinformatics/nb02/cp4_test")
-    assert result["manifest"]["counts"]["recommended"] == 0
+def test_provisional_candidates_need_a_versioned_review_and_the_recorded_one_satisfies_it(tmp_path):
+    result = cells.run_cp4(ROOT, tmp_path / "cp4")
+    decisions = crit.load_review_decisions(ROOT / crit.REVIEW_DECISIONS_PATH)
     for candidate in result["candidates"]:
-        assert candidate["recommendation_status"] == "PENDING_REVIEW" and candidate["status"] == "PROVISIONAL"
-        assert candidate["review_decision"] == ""
+        # without any decision the gate refuses, whatever the rest of the evidence looks like
+        assert crit.recommendation_status(candidate["candidate_id"], {}) == "PENDING_REVIEW"
         with pytest.raises(crit.NB02ReviewError):
             crit.assert_can_recommend(candidate["candidate_id"], {})
+        # only the decision recorded for this run lifts it
+        assert candidate["recommendation_status"] == crit.recommendation_status(candidate["candidate_id"], decisions)
     assert "final shortlist" in result["manifest"]["not_done"]

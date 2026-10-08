@@ -73,11 +73,11 @@ Revise if the main text of the benchmark article contradicts the supplied protoc
 
 ## Related notebook
 
-Not applicable at this checkpoint (the NB02 notebook is created in a later checkpoint).
+[Notebook 02](../notebooks/02_dsrnase2_dsrna_candidate_regions.ipynb) (read-only: it loads and displays the stored results of the five checkpoints).
 
 ## Related dataset / artifact
 
-[Pin](../../../../data/reference/nb01_dsrnase2_operational_reference.json), [criteria registry](../../../../config/nb02_design_criteria.yaml), [decision file](../../../../config/nb02_manual_review_decisions.tsv).
+[Pin](../../../../data/reference/nb01_dsrnase2_operational_reference.json), [criteria registry](../../../../config/nb02_design_criteria.yaml), [review decisions](../../../../config/nb02_manual_review_decisions.tsv), [candidate limitations](../../../../config/nb02_candidate_limitations.tsv), and the versioned hand-off [TSV](../../../../data/reference/nb02_dsrnase2_candidate_regions.tsv) and [FASTA](../../../../data/reference/nb02_dsrnase2_candidate_regions.fasta). Per-checkpoint hashes are in the `run_manifest.json` files under `results/bioinformatics/nb02/` (not tracked by Git, see the [run record](../runs/2026-10-07_nb02-dsrnase2-candidate-regions.md)).
 
 ## Related Issue
 
@@ -89,11 +89,15 @@ Not applicable at this checkpoint (the NB02 notebook is created in a later check
 
 ## Related commits
 
-`not yet committed to master` (work on branch `feat/nb02-dsrnase2-dsrna-candidate-regions`, base `9e0a7a2`).
+`not yet merged into master` (work on branch `feat/nb02-dsrnase2-dsrna-candidate-regions`, base `9e0a7a2`). The commits are listed in the [run record](../runs/2026-10-07_nb02-dsrnase2-candidate-regions.md).
 
 ## Provenance
 
-Written at checkpoint 1, before any candidate window, specificity search or ranking was produced. The policy was refined over several review rounds of the plan; the benchmark protocol facts and the three literature-review conclusions were supplied by the project and are not independently verified here.
+Written at checkpoint 1, before any candidate window, specificity search or ranking was produced, and amended three times with dated entries in the registry, each before the stage it affected and none changing a threshold, a role, a stratum or the policy: the benchmark provenance split and the C03 redundancy note; the machine-readable C13 and C16 values, before any window existed; and the biological units with their within-unit aggregation, before the first BLAST result existed. The decision text was completed at checkpoint 5 with the related notebook, artefacts and commits; no criterion was changed after the candidates were visible. The benchmark protocol facts and the three literature-review conclusions were supplied by the project and are not independently verified here.
+
+## Outcome under this policy
+
+Recorded for traceability; it is the result of applying the decision, not part of it. In the 400 nt ranking stratum no HSP was found against DSRNASE1, DSRNASE3 or BICC, so the specificity level did not separate any candidate and the ordering was decided by the variant counts. Two contiguous variant-free cells tied at the top; both representatives received a versioned `APPROVED` OTHER_TRANSCRIPT review decision and form the `RECOMMENDED_SHORTLIST`, with the published 330 nt benchmark kept in the `REFERENCE_SET`. One recommended region overlaps the benchmark by 327 nt; that convergence is recorded and did not participate in the ranking. Details, limitations and deviations are in the run record.
 
 # Versão em PTBR
 
@@ -172,11 +176,11 @@ Revisar se o texto principal do artigo do benchmark contradisser os fatos de pro
 
 ## Notebook relacionado
 
-Não aplicável neste checkpoint (o notebook do NB02 é criado em checkpoint posterior).
+[Notebook 02](../notebooks/02_dsrnase2_dsrna_candidate_regions.ipynb) (somente leitura: carrega e exibe os resultados armazenados dos cinco checkpoints).
 
 ## Dataset / artefato relacionado
 
-[Pin](../../../../data/reference/nb01_dsrnase2_operational_reference.json), [registro de critérios](../../../../config/nb02_design_criteria.yaml), [arquivo de decisões](../../../../config/nb02_manual_review_decisions.tsv).
+[Pin](../../../../data/reference/nb01_dsrnase2_operational_reference.json), [registro de critérios](../../../../config/nb02_design_criteria.yaml), [decisões de revisão](../../../../config/nb02_manual_review_decisions.tsv), [limitações dos candidatos](../../../../config/nb02_candidate_limitations.tsv) e o handoff versionado em [TSV](../../../../data/reference/nb02_dsrnase2_candidate_regions.tsv) e [FASTA](../../../../data/reference/nb02_dsrnase2_candidate_regions.fasta). Os hashes por checkpoint estão nos `run_manifest.json` sob `results/bioinformatics/nb02/` (não rastreados pelo Git, ver o [run record](../runs/2026-10-07_nb02-dsrnase2-candidate-regions.md)).
 
 ## Issue relacionada
 
@@ -188,8 +192,12 @@ Não aplicável neste checkpoint (o notebook do NB02 é criado em checkpoint pos
 
 ## Commits relacionados
 
-`ainda não integrado ao master` (trabalho na branch `feat/nb02-dsrnase2-dsrna-candidate-regions`, base `9e0a7a2`).
+`ainda não integrado ao master` (trabalho na branch `feat/nb02-dsrnase2-dsrna-candidate-regions`, base `9e0a7a2`). Os commits estão listados no [run record](../runs/2026-10-07_nb02-dsrnase2-candidate-regions.md).
 
 ## Proveniência
 
-Escrito no checkpoint 1, antes de qualquer janela candidata, busca de especificidade ou ranking. A política foi refinada em várias rodadas de revisão do plano; os fatos de protocolo do benchmark e as conclusões das três revisões de literatura foram fornecidos pelo projeto e não foram verificados independentemente aqui.
+Escrito no checkpoint 1, antes de qualquer janela candidata, busca de especificidade ou ranking, e emendado três vezes com entradas datadas no registro, cada uma antes da etapa que afetava e nenhuma alterando limiar, papel, estrato ou política: a separação da proveniência do benchmark e a nota de redundância de C03; os valores de C13 e C16 legíveis por máquina, antes de existir qualquer janela; e as unidades biológicas com sua agregação interna, antes de existir qualquer resultado de BLAST. O texto da decisão foi completado no checkpoint 5 com o notebook, os artefatos e os commits relacionados; nenhum critério foi alterado depois de os candidatos ficarem visíveis. Os fatos de protocolo do benchmark e as conclusões das três revisões de literatura foram fornecidos pelo projeto e não foram verificados independentemente aqui.
+
+## Resultado sob esta política
+
+Registrado para rastreabilidade; é o resultado de aplicar a decisão, não parte dela. No estrato de ranking de 400 nt não foi encontrado nenhum HSP contra DSRNASE1, DSRNASE3 ou BICC, então o nível de especificidade não separou nenhum candidato e a ordenação foi decidida pelas contagens de variantes. Duas células contíguas sem variantes empataram no topo; ambos os representantes receberam decisão versionada `APPROVED` de revisão de OTHER_TRANSCRIPT e formam a `RECOMMENDED_SHORTLIST`, com o benchmark publicado de 330 nt mantido no `REFERENCE_SET`. Uma região recomendada sobrepõe o benchmark em 327 nt; essa convergência é registrada e não participou do ranking. Detalhes, limitações e desvios estão no run record.

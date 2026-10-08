@@ -36,6 +36,7 @@ external_tools:
 required_paths:
   - src/workstreams/bioinformatics/notebooks/00_reproducibility_gate.ipynb
   - src/workstreams/bioinformatics/notebooks/01_reference_dataset_and_target_identity.ipynb
+  - src/workstreams/bioinformatics/notebooks/02_dsrnase2_dsrna_candidate_regions.ipynb
   - src/workstreams/evidence/evidence_database.xlsx
   - src/zeaguard
   - config/project.yaml
@@ -45,6 +46,9 @@ required_paths:
   - data/reference/nb01_dsrnase2_operational_reference.json
   - config/nb02_design_criteria.yaml
   - config/nb02_manual_review_decisions.tsv
+  - config/nb02_candidate_limitations.tsv
+  - data/reference/nb02_dsrnase2_candidate_regions.tsv
+  - data/reference/nb02_dsrnase2_candidate_regions.fasta
   - environment.yml
   - pyproject.toml
 

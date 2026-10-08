@@ -149,8 +149,16 @@ def _row(candidate="D2-L400-0100-0499", scope="OTHER_TRANSCRIPT", decision="APPR
     return (candidate, scope, decision, justification, "reviewer", "2026-10-05T12:00:00Z", evidence)
 
 
-def test_real_decision_file_is_versioned_header_only_with_no_decisions_yet():
-    assert crit.load_review_decisions(ROOT / crit.REVIEW_DECISIONS_PATH) == {}
+def test_the_real_decision_file_holds_the_recorded_reviews_and_validates():
+    decisions = crit.load_review_decisions(ROOT / crit.REVIEW_DECISIONS_PATH)
+    assert set(decisions) == {("D2-L400-0351-0750", "OTHER_TRANSCRIPT"), ("D2-L400-0817-1216", "OTHER_TRANSCRIPT")}
+    for decision in decisions.values():
+        assert decision.decision == "APPROVED" and decision.reviewer and decision.justification
+        assert len(decision.evidence_sha256) == 64 and decision.decided_utc
+        assert crit.recommendation_status(decision.candidate_id, decisions) == "RECOMMENDABLE"
+        crit.assert_can_recommend(decision.candidate_id, decisions)
+    # the gate is not satisfied by the file merely existing: an unreviewed candidate stays pending
+    assert crit.recommendation_status("D2-L400-0001-0400", decisions) == "PENDING_REVIEW"
 
 
 def test_candidate_without_other_transcript_review_cannot_become_recommended(tmp_path):
