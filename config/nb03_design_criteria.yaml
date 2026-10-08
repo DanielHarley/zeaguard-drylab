@@ -389,8 +389,8 @@ policy:
   prioritization:
     - "1. structural requirements (C01-C03); no other hard filter exists"
     - "2. no automatic specificity exclusion; exclusions are structural or EXCLUDED_AFTER_REVIEW"
-    - "3. specificity by joint Pareto dominance of BICC_LIKE and DSRNASE2 within one length stratum (C06)"
-    - "4. count_intersected_observed_sequence_differences, lower_is_better (C07)"
+    - "3. specificity by joint Pareto dominance of BICC_LIKE and DSRNASE2 within one length stratum (C06); a DOMINATED window stays dominated whatever its difference count (amendment 4)"
+    - "4. count_intersected_observed_sequence_differences, lower_is_better (C07), as tiers among NONDOMINATED windows only (amendment 4)"
     - "5. descriptors never order (C04-C05, C08, C10-C25)"
     - "6. ties are preserved; no composite score, no weights, no summation across units"
   # Biological units of specificity (frozen before the first candidate window). Disjoint; never pooled.
@@ -465,6 +465,48 @@ policy:
     permitted_interpretation: "greater robustness to the two currently observed sequences"
     forbidden_interpretations: [population robustness, allele robustness, polymorphism robustness, population conservation]
   cell_signature: [count_intersected_observed_sequence_differences, bicc_like_vector, dsrnase2_vector]
+  # Amendment 4 (pre-CP4A): how cells form and how Pareto status and difference counts interact. Mechanics only:
+  # no score, weight, sum, threshold, hard filter or automatic representative.
+  selection_semantics:
+    decision_order: [specificity_pareto_status, count_intersected_observed_sequence_differences, manual_review]
+    specificity_first: true
+    differences_rescue_dominated_windows: false
+    pareto:
+      status_values: [NONDOMINATED, DOMINATED]
+      computed_per: DESIGN_SPACE_WINDOW
+      computed_within: EACH_LENGTH_STRATUM_SEPARATELY
+      strata_nt: [300, 373, 400, 500]
+      retain_constant_axes: true
+    priority_set: NONDOMINATED_DESIGN_SPACE_WINDOWS
+    dominated_windows: "remain in tables and cells and do not advance to nominal manual review; the label means Pareto-dominated under the preregistered specificity axes only"
+    difference_tier:
+      applied_to: NONDOMINATED_WINDOWS_ONLY
+      tier_label: "equals count_intersected_observed_sequence_differences (tier 0 = no intersected difference)"
+      preferred: lowest_count_first
+      equal_counts: tied
+      hard_filter: false
+      threshold: null
+      permitted_interpretation: "greater robustness to the two currently observed sequences"
+    cell:
+      definition: maximal_contiguous_run_of_DESIGN_SPACE_windows
+      same_target: true
+      same_length: true
+      cds_start_step_nt: 1
+      same_decisive_signature: true
+      reappearing_signature_after_interruption: NEW_CELL
+      scope: ALL_DESIGN_SPACE_WINDOWS_OF_L300_L373_L400_L500
+      reference_set_members: false
+      role: GROUPING_NOT_PREFERENCE
+      uniform_pareto_status_required: true
+    manual_review_scope:
+      length_nt: 400
+      pareto_status: NONDOMINATED
+      members: ALL_CELL_MEMBERS
+      difference_tiers: PRESERVE_ALL_PRESENT
+      initial_status: PENDING
+    sensitivity_strata: {lengths_nt: [300, 373, 500], role: ANALYTICAL_ONLY, nominal_manual_review: false}
+    automatic_representative: false
+    display_order: {classification: CANONICAL_DISPLAY_ORDER_ONLY, fields: [length_nt, pareto_status, difference_count, cell_start, cds_start, window_id], is_ranking: false, is_tie_breaker: false}
   cell_signature_excludes: [intersected_observed_sequence_difference_positions, target_region_position, other_transcript_hits, gc_fraction, low_complexity_fraction, longest_homopolymer, potential_21nt_derived_windows, fraction_unaffected, benchmark_relation, overlap_with_benchmark_nt, overlap_fraction_of_candidate, overlap_fraction_of_benchmark, relation_to_benchmark]
   hard_filters: [inside_operational_cds, length_range, defined_bases_only]
   descriptive_only_criteria: [full_cds_clipped_alignment_diagnostic, intersected_observed_sequence_difference_positions, length_strata, homology_evidence_metrics_candidate_native, potential_21nt_derived_windows, fraction_unaffected, target_region_position, gc_fraction, longest_homopolymer, low_complexity_fraction, search_detection_limit, shuffled_control, exact_kmer_counts, evalue_and_hsp_counts, descriptive_only_units, unit_relationship_status, published_benchmark_reference, benchmark_relation_descriptors]
@@ -555,3 +597,12 @@ amendments:
     documents_existing_implementation_behavior: true
     cp3_outputs_changed: false
     cp3_run_record: src/workstreams/bioinformatics/runs/2026-10-08_nb03-cp3-candidate-native-specificity.md
+  - date: "2026-10-08"
+    criteria: [C06, C07]
+    change: "AMENDMENT 4 - PRE-CP4A CELL AND PRIORITIZATION SEMANTICS. Specificity first: Pareto status (NONDOMINATED or DOMINATED, per window, separately within L300, L373, L400 and L500) precedes the difference count, which only forms tiers among NONDOMINATED windows and never rescues a dominated one. A cell is a maximal contiguous run of DESIGN_SPACE windows with the same target, the same length, consecutive CDS starts (step 1 nt) and the same decisive signature; a signature reappearing after an interruption starts a new cell; cells are materialized for all four strata and a cell may not mix Pareto statuses. The PRIORITY_SET is the NONDOMINATED DESIGN_SPACE windows. Nominal manual review covers L400 NONDOMINATED windows (all members, all difference tiers present); L300, L373 and L500 are analytical sensitivity strata. There is no automatic representative. Row ordering is CANONICAL_DISPLAY_ORDER_ONLY, not a ranking or tie-breaker."
+    reason: "CP1 preregistered the cell signature and the decision variables but not cell formation, the cell scope or how Pareto status and difference counts interact. The user resolved these mechanics after CP3 and before any CP4A Pareto front, signature or cell was calculated or inspected, so they cannot depend on selection results."
+    changes_thresholds_roles_or_policy: true
+    applied_before_window_generation: false
+    applied_before_candidate_specificity_analysis: false
+    applied_before_cp4a_results: true
+    cp3_outputs_changed: false

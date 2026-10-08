@@ -290,8 +290,44 @@ def _validate_policy(policy: dict[str, Any], by_name: dict[str, dict[str, Any]])
         problems.append("manual_review_decisions must define OTHER_TRANSCRIPT, BICC_LIKE and DSRNASE2 and require OTHER_TRANSCRIPT")
     if "max_pairwise_overlap" in policy or "max_pairwise_overlap" in by_name:
         problems.append("a max pairwise overlap must not be pre-registered")
+    problems.extend(_validate_selection_semantics(policy.get("selection_semantics")))
     problems.extend(_validate_units(policy))
     return problems
+
+
+def _validate_selection_semantics(semantics: Any) -> list[str]:
+    """Amendment 4: cells, Pareto-before-differences, the L400 review scope and the absence of representatives."""
+    if not isinstance(semantics, dict):
+        return ["policy.selection_semantics (amendment 4) is missing"]
+    cell, tier, review = (semantics.get(key) or {} for key in ("cell", "difference_tier", "manual_review_scope"))
+    checks = {
+        "decision order must be Pareto status, difference count, manual review": semantics.get("decision_order") == [
+            "specificity_pareto_status", "count_intersected_observed_sequence_differences", "manual_review"],
+        "specificity must come first and differences may not rescue dominated windows": (
+            semantics.get("specificity_first"), semantics.get("differences_rescue_dominated_windows")) == (True, False),
+        "Pareto status is per window and per length stratum": (semantics.get("pareto") or {}).get("computed_within") == "EACH_LENGTH_STRATUM_SEPARATELY"
+            and (semantics.get("pareto") or {}).get("strata_nt") == [300, 373, 400, 500],
+        "the priority set must be the NONDOMINATED DESIGN_SPACE windows": semantics.get("priority_set") == "NONDOMINATED_DESIGN_SPACE_WINDOWS",
+        "difference tiers apply to NONDOMINATED windows only, with no hard filter or threshold": (
+            tier.get("applied_to"), tier.get("hard_filter"), tier.get("threshold")) == ("NONDOMINATED_WINDOWS_ONLY", False, None),
+        "a cell must be a maximal contiguous run with the same target, length and decisive signature": (
+            cell.get("definition"), cell.get("same_target"), cell.get("same_length"), cell.get("cds_start_step_nt"),
+            cell.get("same_decisive_signature"), cell.get("reappearing_signature_after_interruption")) == (
+            "maximal_contiguous_run_of_DESIGN_SPACE_windows", True, True, 1, True, "NEW_CELL"),
+        "cells cover all four strata, exclude REFERENCE_SET, are not a preference and keep one Pareto status": (
+            cell.get("scope"), cell.get("reference_set_members"), cell.get("role"), cell.get("uniform_pareto_status_required")) == (
+            "ALL_DESIGN_SPACE_WINDOWS_OF_L300_L373_L400_L500", False, "GROUPING_NOT_PREFERENCE", True),
+        "nominal manual review is L400 NONDOMINATED, all members, PENDING": (
+            review.get("length_nt"), review.get("pareto_status"), review.get("members"), review.get("initial_status")) == (
+            400, "NONDOMINATED", "ALL_CELL_MEMBERS", "PENDING"),
+        "L300, L373 and L500 must stay analytical sensitivity strata": (semantics.get("sensitivity_strata") or {}).get("role") == "ANALYTICAL_ONLY"
+            and (semantics.get("sensitivity_strata") or {}).get("lengths_nt") == [300, 373, 500],
+        "no automatic representative may exist": semantics.get("automatic_representative") is False,
+        "display order must be CANONICAL_DISPLAY_ORDER_ONLY and neither a ranking nor a tie-breaker": (
+            (semantics.get("display_order") or {}).get("classification"), (semantics.get("display_order") or {}).get("is_ranking"),
+            (semantics.get("display_order") or {}).get("is_tie_breaker")) == ("CANONICAL_DISPLAY_ORDER_ONLY", False, False),
+    }
+    return [f"policy.selection_semantics: {message}" for message, ok in checks.items() if not ok]
 
 
 def _validate_units(policy: dict[str, Any]) -> list[str]:

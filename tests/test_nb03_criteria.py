@@ -29,7 +29,7 @@ def test_registry_is_valid_and_loads():
     assert crit.validate_registry(REGISTRY) == []
     assert crit.load_registry(ROOT)["registry"] == "nb03_design_criteria"
     assert REGISTRY["status"] == "PRE_REGISTERED"
-    assert len(REGISTRY["amendments"]) == 3
+    assert len(REGISTRY["amendments"]) == 4
     clarification = REGISTRY["amendments"][0]
     assert clarification["criteria"] == ["C23"]
     assert clarification["applied_before_window_generation"] is True
@@ -43,6 +43,8 @@ def test_registry_is_valid_and_loads():
     assert tie_documentation["changes_thresholds_roles_or_policy"] is False
     assert tie_documentation["documents_existing_implementation_behavior"] is True
     assert tie_documentation["cp3_outputs_changed"] is False
+    cell_semantics = REGISTRY["amendments"][3]
+    assert cell_semantics["criteria"] == ["C06", "C07"] and cell_semantics["applied_before_cp4a_results"] is True
 
 
 def test_pin_is_valid_offline_and_agrees_with_the_registry():
