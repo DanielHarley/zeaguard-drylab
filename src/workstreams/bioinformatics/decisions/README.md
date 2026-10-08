@@ -28,6 +28,7 @@ Current records:
 2. [0002 NB01 target anchor policy](0002-nb01-target-anchor-policy.md)
 3. [0003 NB01 target identity resolution policy](0003-nb01-target-identity-resolution-policy.md)
 4. [0004 NB01 dsRNase-2 identity criteria](0004-nb01-dsrnase2-identity-criteria.md)
+5. [0005 NB02 dsRNase-2 candidate region policy](0005-nb02-dsrnase2-candidate-region-policy.md)
 
 # Versão em PTBR
 
@@ -61,3 +62,4 @@ Registros atuais:
 2. [0002 Política de âncoras de alvos do NB01](0002-nb01-target-anchor-policy.md)
 3. [0003 Política de resolução de identidade dos alvos do NB01](0003-nb01-target-identity-resolution-policy.md)
 4. [0004 Critérios de identidade de dsRNase-2 do NB01](0004-nb01-dsrnase2-identity-criteria.md)
+5. [0005 Política de regiões candidatas de dsRNase-2 do NB02](0005-nb02-dsrnase2-candidate-region-policy.md)
