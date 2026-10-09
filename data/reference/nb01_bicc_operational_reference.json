@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "kind": "nb01_bicc_operational_reference",
+  "description": "Versioned hand-off from NB01/NB03 CP0 to the NB03 design stages. GITV01000968.1 is the OPERATIONAL reference (NB01 RESOLVED_HIGH_CONFIDENCE, re-derived at CP0); this is not a claim of unique biological identity. Everything below is re-derived from the hash-validated TSA, the versioned anchor FASTA and the pinned primers by zeaguard.nb03_criteria.verify_pin; the raw primary Table S1 file stays external and gitignored.",
+  "source": {
+    "nb01_run_record": "src/workstreams/bioinformatics/runs/2026-09-11_nb01-target-identity-resolution.md",
+    "nb01_resolution": {
+      "status": "RESOLVED_HIGH_CONFIDENCE",
+      "identity_percent": 99.058,
+      "query_coverage_percent": 100,
+      "alignment_length_nt": 2655,
+      "bitscore": 4678
+    },
+    "nb03_cp0_commit": "2d1ae8f48e9af684422faabaebed0f6486f658c5",
+    "nb03_cp0_stage": "NB03 CP0 (reference, observed differences, BicC-like discovery, benchmark reconstruction; no windows, no ranking)"
+  },
+  "coordinates": {
+    "base": 1,
+    "interval": "inclusive",
+    "orientation": "coding (sense) strand of the CDS",
+    "cds_tx_start_end": "1-based inclusive on the stored strand of the TSA record",
+    "cds_to_stored_strand": "cds_tx_start + cds_pos - 1 for records on the '+' strand"
+  },
+  "tsa": {
+    "manifest": "data/reference/manifest.json",
+    "file_sha256": "22d0cff8d0867344a76d615bdca62c31ce0f9133f574058e8daa6b6e41925ae6"
+  },
+  "operational_reference": {
+    "accession": "GITV01000968.1",
+    "role": "OPERATIONAL_REFERENCE",
+    "record_length": 6066,
+    "record_sha256": "6d67491d7042b2377ae2149249b530c93442136b74d20038f67903593259bc9a",
+    "strand": "+",
+    "cds_tx_start": 65,
+    "cds_tx_end": 2401,
+    "cds_length": 2337,
+    "cds_sha256": "05cb44b0bf9d0c72d2adaa5b09cf9c0795039e29858e666c6082a170e5924f30",
+    "protein_length": 778,
+    "protein_sha256": "b6318f70856358ef1ed021d974bebcae5df73bf2cb5eb1f8f02d84eaa1a391bc",
+    "utr5_length": 64,
+    "utr3_length": 3665,
+    "iupac_metadata": {
+      "n_symbols": 1,
+      "positions": [
+        {
+          "record_position": 3624,
+          "symbol": "R",
+          "region": "UTR"
+        }
+      ],
+      "inside_cds": false
+    }
+  },
+  "published_reference": {
+    "transcript_id": "TRINITY_DN24799_c0_g1_i7",
+    "stored_orientation": "STORED_ANTISENSE_REVERSE_COMPLEMENT_OF_CODING",
+    "transcript_length": 2655,
+    "stored_sha256": "da59dc63fbf8022eaec9f89fa3f644ac1860b2625a0f1bd0b666ff22ef37977b",
+    "sense_sha256": "03b17d3ca2fbb84dea39d71d2ef0786ee29084faa3bf01668ad5b3768673c104",
+    "cds_in_sense_orientation": {
+      "start": 50,
+      "end": 2386,
+      "length": 2337
+    },
+    "utr5_length": 49,
+    "utr3_length": 269,
+    "cds_sha256": "dd6b13186056443bf1f0ffbba23ff0dd7f1b9b952b3a987f9041523d653f7065",
+    "protein_length": 778,
+    "protein_sha256": "17125130b2c760dc9e3deafa89fde9a03b3443a15e27ba10ba40e51943ba77ca",
+    "cds_relationship": {
+      "same_length_as_operational_cds": true,
+      "indels_in_cds": 0,
+      "protein_identical_to_operational": false
+    },
+    "placement_on_operational_record": {
+      "method": "pairwise blastn (query published cDNA as stored, subject operational record), best-spanning HSP",
+      "subject_strand_of_stored_cdna": "minus",
+      "published_sense_strand_on_record": "+",
+      "published_transcript_span_on_record": [
+        16,
+        2663
+      ],
+      "blastn_identity_percent": 99.058,
+      "mismatch": 18,
+      "gaps": 7
+    }
+  },
+  "observed_sequence_differences": {
+    "nature_status": "UNRESOLVED",
+    "nature_note": "polymorphism, isoform, assembly difference, sequencing error or other; none of these is established",
+    "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0",
+    "comparison": "published BicC CDS vs GITV01000968.1 CDS, coding orientation, same length, no indel",
+    "permitted_interpretation": "fewer observed_sequence_differences intersected = greater robustness to the two currently observed sequences",
+    "items": [
+      {
+        "cds_position": 597,
+        "published_base": "C",
+        "operational_base": "T",
+        "published_codon": "CGC",
+        "operational_codon": "CGT",
+        "codon_position": 3,
+        "codon_index": 199,
+        "published_amino_acid": "R",
+        "operational_amino_acid": "R",
+        "synonymous_status": "SYNONYMOUS",
+        "substitution_class": "TRANSITION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      },
+      {
+        "cds_position": 1092,
+        "published_base": "C",
+        "operational_base": "A",
+        "published_codon": "ATC",
+        "operational_codon": "ATA",
+        "codon_position": 3,
+        "codon_index": 364,
+        "published_amino_acid": "I",
+        "operational_amino_acid": "I",
+        "synonymous_status": "SYNONYMOUS",
+        "substitution_class": "TRANSVERSION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      },
+      {
+        "cds_position": 1120,
+        "published_base": "G",
+        "operational_base": "A",
+        "published_codon": "GCC",
+        "operational_codon": "ACC",
+        "codon_position": 1,
+        "codon_index": 374,
+        "published_amino_acid": "A",
+        "operational_amino_acid": "T",
+        "synonymous_status": "NONSYNONYMOUS",
+        "substitution_class": "TRANSITION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      },
+      {
+        "cds_position": 1287,
+        "published_base": "A",
+        "operational_base": "G",
+        "published_codon": "GCA",
+        "operational_codon": "GCG",
+        "codon_position": 3,
+        "codon_index": 429,
+        "published_amino_acid": "A",
+        "operational_amino_acid": "A",
+        "synonymous_status": "SYNONYMOUS",
+        "substitution_class": "TRANSITION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      },
+      {
+        "cds_position": 2094,
+        "published_base": "G",
+        "operational_base": "T",
+        "published_codon": "CTG",
+        "operational_codon": "CTT",
+        "codon_position": 3,
+        "codon_index": 698,
+        "published_amino_acid": "L",
+        "operational_amino_acid": "L",
+        "synonymous_status": "SYNONYMOUS",
+        "substitution_class": "TRANSVERSION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      },
+      {
+        "cds_position": 2259,
+        "published_base": "T",
+        "operational_base": "C",
+        "published_codon": "CGT",
+        "operational_codon": "CGC",
+        "codon_position": 3,
+        "codon_index": 753,
+        "published_amino_acid": "R",
+        "operational_amino_acid": "R",
+        "synonymous_status": "SYNONYMOUS",
+        "substitution_class": "TRANSITION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      },
+      {
+        "cds_position": 2280,
+        "published_base": "T",
+        "operational_base": "C",
+        "published_codon": "GCT",
+        "operational_codon": "GCC",
+        "codon_position": 3,
+        "codon_index": 760,
+        "published_amino_acid": "A",
+        "operational_amino_acid": "A",
+        "synonymous_status": "SYNONYMOUS",
+        "substitution_class": "TRANSITION",
+        "read_support_status": "NOT_ASSESSED_FOR_NB03_CP0"
+      }
+    ]
+  },
+  "benchmark": {
+    "id": "BICC-BENCH-PRIMER-DEFINED",
+    "membership": "REFERENCE_SET",
+    "candidate_class": "PUBLISHED_EXPERIMENTAL_BENCHMARK",
+    "reference_set_only": true,
+    "source": {
+      "primary_source_role": "PRIMARY_2022_TABLE_S1",
+      "citation": "Dalaison-Fuentes et al. 2022, Pest Manag Sci 78(7):3108-3116",
+      "doi": "10.1002/ps.6937",
+      "table": "Table S1. Primers used for dsRNA synthesis and RT-(q)PCR",
+      "filename": "ps6937-sup-0006-tables1.docx",
+      "primary_table_s1_sha256": "0d235a577ed7ac5782a90e07cdb6679db1ecf2da4d0e9bc79e37bf377b0bc4be",
+      "origin": "user-provided primary supplementary file",
+      "ingested_on": "2026-10-08",
+      "source_url": null,
+      "raw_file_kept_in_git": false
+    },
+    "primers": {
+      "forward": {
+        "name": "BicC_Fw",
+        "sequence": "TAGAGCCGGCAGATGAGTTT"
+      },
+      "reverse": {
+        "name": "BicC_Rv",
+        "sequence": "TCCACACCTTCCATCTCTCC"
+      },
+      "forward_t7": {
+        "name": "BicC_Fw_T7",
+        "sequence": "CGACTCACTATAGGGTAGAGCCGGCAGATGAGTTT"
+      },
+      "reverse_t7": {
+        "name": "BicC_Rv_T7",
+        "sequence": "CGACTCACTATAGGGTCCACACCTTCCATCTCTCC"
+      },
+      "partial_t7_tail_5to3": "CGACTCACTATAGGG",
+      "partial_t7_tail_length_nt": 15,
+      "t7_promoter_full_5to3": "TAATACGACTCACTATAGGG",
+      "t7_tails_in_dsrna_body": false
+    },
+    "published_reported_body_length_nt": 372,
+    "reconstructed_body_length_nt": 373,
+    "published_reported_t7_amplicon_length_nt": 402,
+    "reconstructed_t7_amplicon_length_nt": 403,
+    "length_discrepancy_nt": 1,
+    "length_discrepancy_status": "UNRESOLVED_PUBLICATION_INCONSISTENCY",
+    "length_discrepancy_cause_asserted": false,
+    "operational_sequence_length_nt": 373,
+    "published_reported_length_role": "PUBLISHED_REPORTED_METADATA",
+    "benchmark_sequence_basis": "PRIMARY_2022_PRIMER_DEFINED_RECONSTRUCTION",
+    "primary_2022_primers_verification": "VERIFIED_FROM_PRIMARY_2022_TABLE_S1",
+    "benchmark_sequence_verification": "VERIFIED_FROM_PRIMARY_2022_PRIMERS_WITH_REPORTED_LENGTH_DISCREPANCY",
+    "experimental_protocol_verification": "PROJECT_PROVIDED_NOT_AGENT_VERIFIED",
+    "experimental_protocol_verification_note": "Table S1 does not verify the oral or injection protocol; it stays as supplied by the project",
+    "body": {
+      "orientation": "CODING_SENSE",
+      "length_nt": 373,
+      "sha256": "e866ebd114008e708e962704b4424dbbd633e8f1da0895a68afcd619660053fb"
+    },
+    "amplicon_with_t7_tails": {
+      "length_nt": 403,
+      "sha256": "2e282725cd4967b272283bb681dc86ff1da78054af7f0ea336147122b64b3afb"
+    },
+    "coordinates": {
+      "published_cdna_as_stored": {
+        "start": 2020,
+        "end": 2392,
+        "strand_of_body_on_stored": "-"
+      },
+      "published_cdna_sense": {
+        "start": 264,
+        "end": 636
+      },
+      "operational_record": {
+        "accession": "GITV01000968.1",
+        "start": 279,
+        "end": 651,
+        "strand_of_body": "+"
+      },
+      "cds_sense": {
+        "start": 215,
+        "end": 587
+      }
+    },
+    "benchmark_nt_inside_cds": 373,
+    "benchmark_nt_outside_cds": 0,
+    "observed_sequence_differences_intersected": [],
+    "hypothesis_not_promoted": "a reported length equal to (end - start) of the mapped span would be a non-inclusive count; this is a separate hypothesis, not an explanation, and no value is adjusted"
+  },
+  "cp0_outputs_sha256": {
+    "note": "sha256 (LF-normalised) of the gitignored CP0 outputs, registered so that evidence hashes can be cited without the files; a fresh CP0 run must reproduce them",
+    "reference_summary.json": "5404ea3ed0c7e0fb4964616467f0f100cf9c0ce0c256816ed0764b8c41451e94",
+    "observed_sequence_differences.tsv": "3220f69012c8d9f94a9c666eb55480b98d815796f69861eb751b4f3916df0ab0",
+    "benchmark_reconstruction.json": "30c29adbe899506b2ae3428d6ea3bd9b16d7523b95289fd7a79236459422a76f",
+    "bicc_like_discovery_all_records.tsv": "19398a446a46251d67a0888bad8599450b50a1a0690c381253ed94074edde5b6",
+    "bicc_like_discovery.tsv": "9a276e6406f022593d5b4fd99d6cdff3f1dabffdccc4bc45cb65e29c4f7e8aca",
+    "bicc_like_followup.tsv": "8cdfd70a93178b952c5b907cdb80ea6319d878647205b55e8eba4ed9595a9d47"
+  }
+}
