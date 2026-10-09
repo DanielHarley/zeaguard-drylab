@@ -377,9 +377,17 @@ def test_adr_accepts_only_the_preregistration_policy_through_cp1():
 
 
 def test_no_candidate_window_artifact_is_versioned():
-    assert not list((ROOT / "data/reference").glob("nb03_*candidate*"))
-    assert not (ROOT / "config/nb03_manual_review_decisions.tsv").exists()
+    """Artifact-state sentinel, not a scientific assertion.
+
+    ``manual review decision record: EXPECTED_AT_CP4B`` -- the registry creates it at CP4 and CP4B versioned it;
+    its schema and scope are checked by ``tests/test_nb03_manual_review.py``.
+    ``final candidate handoff: NOT_YET_MATERIALIZED`` -- no candidate-window artifact is versioned yet.
+    """
     assert REGISTRY["policy"]["manual_review_decisions"]["created_at"] == "CP4"
+    assert (ROOT / "config/nb03_manual_review_decisions.tsv").exists()  # EXPECTED_AT_CP4B
+    for name in ("nb03_bicc_candidate_regions.tsv", "nb03_bicc_candidate_regions.fasta"):
+        assert not (ROOT / "data/reference" / name).exists()  # NOT_YET_MATERIALIZED
+    assert not list((ROOT / "data/reference").glob("nb03_*candidate*"))
 
 
 # ------------------------------------------------------------------ real data (shared CP0 run)
