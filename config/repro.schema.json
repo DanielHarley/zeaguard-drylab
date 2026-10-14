@@ -14,7 +14,7 @@
     "snapshot_dir"
   ],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"enum": [1, 2]},
     "platform": {
       "type": "object",
       "additionalProperties": false,
@@ -71,10 +71,24 @@
       "minItems": 1,
       "items": {"type": "string", "minLength": 1}
     },
+    "checkpoint_required_paths": {
+      "type": "object",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1}
+      }
+    },
     "supporting_configs": {
       "type": "array",
       "items": {"type": "string", "minLength": 1}
     },
     "snapshot_dir": {"type": "string", "minLength": 1}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": 1}}},
+      "then": {"not": {"required": ["checkpoint_required_paths"]}}
+    }
+  ]
 }

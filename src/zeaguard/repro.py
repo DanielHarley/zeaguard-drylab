@@ -295,9 +295,28 @@ def check_git_state(context: dict[str, Any], allow_dirty: bool) -> list[CheckRes
     return [CheckResult("git", "PASS", detail)]
 
 
-def check_required_paths(cfg: ReproConfig) -> list[CheckResult]:
+def _required_paths_for_checkpoint(
+    cfg: ReproConfig, checkpoint: str | None,
+) -> list[str]:
+    """Keep legacy order for None, otherwise sort the literal additive union.
+
+Profiles are configured keys, with no implicit inheritance or gate mapping.
+Deduplication compares strings only, without physical path normalization.
+"""
+    if checkpoint is None:
+        return cfg.required_paths
+    profiles = cfg.raw.get("checkpoint_required_paths", {})
+    if not isinstance(checkpoint, str) or checkpoint not in profiles:
+        raise ReproGateError(f"unknown or unconfigured checkpoint: {checkpoint!r}")
+    return sorted(set(cfg.required_paths).union(profiles[checkpoint]))
+
+
+def check_required_paths(
+    cfg: ReproConfig, checkpoint: str | None = None,
+) -> list[CheckResult]:
+    """Check base paths plus extras for an explicitly configured profile."""
     results: list[CheckResult] = []
-    for relative in cfg.required_paths:
+    for relative in _required_paths_for_checkpoint(cfg, checkpoint):
         path = cfg.root / relative
         passed = path.exists() and os.access(path, os.R_OK)
         results.append(
@@ -347,6 +366,7 @@ def run_all_checks(
     config_path: str | Path = "config/repro.yaml",
     schema_path: str | Path = "config/repro.schema.json",
     allow_dirty: bool = False,
+    checkpoint: str | None = None,
 ) -> tuple[ReproConfig, ReproReport, dict[str, Any]]:
     cfg = load_repro_config(config_path, schema_path)
     context = collect_run_context(cfg.root)
@@ -358,7 +378,7 @@ def run_all_checks(
         *dependency_results,
         *tool_results,
         *check_git_state(context, allow_dirty),
-        *check_required_paths(cfg),
+        *(check_required_paths(cfg) if checkpoint is None else check_required_paths(cfg, checkpoint)),
     ]
     collected = {
         "context": context,
@@ -423,9 +443,18 @@ def write_env_snapshot(snapshot: dict[str, Any], snapshot_dir: str | Path) -> Pa
     return final / "snapshot.json"
 
 
-def assert_environment_ready(allow_dirty: bool = False) -> None:
-    """Verify that the current environment matches the latest local snapshot."""
-    cfg, report, collected = run_all_checks(allow_dirty=allow_dirty)
+def assert_environment_ready(
+    allow_dirty: bool = False, checkpoint: str | None = None,
+) -> None:
+    """Verify the snapshot environment and paths for an optional configured profile.
+
+None preserves the historical call signature used by existing consumers.
+This environment check does not certify a scientific checkpoint or gate.
+"""
+    if checkpoint is None:
+        cfg, report, collected = run_all_checks(allow_dirty=allow_dirty)
+    else:
+        cfg, report, collected = run_all_checks(allow_dirty=allow_dirty, checkpoint=checkpoint)
     report.raise_if_failed()
     snapshot_dir = cfg.root / cfg.snapshot_dir
     latest_path = snapshot_dir / "latest.json"
