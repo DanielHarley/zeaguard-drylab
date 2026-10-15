@@ -1,0 +1,11 @@
+config/nb04* text eol=lf
+data/reference/nb04* text eol=lf
+src/zeaguard/nb04_cp0.py text eol=lf
+src/zeaguard/nb04_policy.py text eol=lf
+src/zeaguard/nb04_complement.py text eol=lf
+scripts/prepare_nb04_cp0_inputs.py text eol=lf
+scripts/validate_nb04_cp0.py text eol=lf
+tests/test_nb04_cp0.py text eol=lf
+src/workstreams/bioinformatics/decisions/0007-nb04-nto-sequence-specificity-policy.md text eol=lf
+src/workstreams/bioinformatics/runs/2026-10-14_nb04-cp0-limited-implementation.md text eol=lf
+src/workstreams/bioinformatics/runs/2026-10-14_nb04-cp0-complementary-contract-patch.md text eol=lf

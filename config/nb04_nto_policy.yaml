@@ -1,0 +1,805 @@
+analysis_arms:
+- analysis_arm_id: EXACT_CANONICAL
+  analysis_role: CANONICAL
+  biological_decision_role: false
+  declaration_requirement: DECLARED_PRE_G0
+  evidence_state: NOT_EVALUATED
+  execution: REQUIRED_AFTER_APPLICABLE_GATES
+  execution_required_for_completion: true
+  formal_search_space_id: NB04_EXACT_K19_K21_BOTH_ACGT_V1
+  modality: EXACT
+  modality_requirement_status: REQUIRED
+  pairing_model_id: NOT_APPLICABLE
+  parameterization_requirement: FULLY_PARAMETERIZED_PRE_G0
+  purpose: CANONICAL_SEQUENCE_EVIDENCE
+  search_calibration_id: NOT_APPLICABLE
+  search_configuration_id: NOT_APPLICABLE
+  selection_rule_id: NOT_APPLICABLE
+  technical_state: NOT_RUN
+  validation_requirement: COMPLETE_WITHIN_DECLARED_FORMAL_SPACE
+- analysis_arm_id: NEAR_MATCH_CANONICAL
+  analysis_role: CANONICAL
+  biological_decision_role: false
+  declaration_requirement: DECLARED_PRE_G0
+  evidence_state: NOT_EVALUATED
+  execution: NOT_REQUIRED
+  execution_required_for_completion: false
+  formal_search_space_id: NOT_APPLICABLE
+  modality: NEAR_MATCH
+  modality_requirement_status: NOT_REQUIRED_BY_FROZEN_POLICY
+  pairing_model_id: NOT_APPLICABLE
+  parameterization_requirement: NOT_APPLICABLE
+  purpose: CANONICAL_SEQUENCE_EVIDENCE
+  search_calibration_id: NOT_APPLICABLE
+  search_configuration_id: NOT_APPLICABLE
+  selection_rule_id: NOT_APPLICABLE
+  technical_state: NOT_RUN
+  validation_requirement: NOT_APPLICABLE
+- analysis_arm_id: LOCAL_ALIGNMENT_CANONICAL
+  analysis_role: CANONICAL
+  biological_decision_role: false
+  declaration_requirement: DECLARED_PRE_G0
+  evidence_state: NOT_EVALUATED
+  execution: REQUIRED_AFTER_APPLICABLE_GATES
+  execution_required_for_completion: true
+  formal_search_space_id: NOT_APPLICABLE
+  modality: LOCAL_ALIGNMENT
+  modality_requirement_status: REQUIRED
+  pairing_model_id: NOT_APPLICABLE
+  parameterization_requirement: G1_AFTER_CALIBRATION
+  purpose: CANONICAL_SEQUENCE_EVIDENCE
+  search_calibration_id: DEFERRED_TO_G1
+  search_configuration_id: DEFERRED_TO_G1
+  selection_rule_id: NB04_TUNING_QA_CONFIG_HASH_ORDER_HOLDOUT_V1
+  technical_state: NOT_RUN
+  validation_requirement: B4_APPLICABLE_CALIBRATION_AND_EXECUTION_INTEGRITY
+- analysis_arm_id: NEAR_MATCH_K21_H1
+  analysis_role: SENSITIVITY
+  biological_decision_role: false
+  declaration_requirement: DECLARED_PRE_G0
+  evidence_state: NOT_EVALUATED
+  execution: OPTIONAL
+  execution_required_for_completion: false
+  formal_search_space_id: NB04_NEAR_K21_H1_BOTH_ACGT_V1
+  modality: NEAR_MATCH
+  modality_requirement_status: NOT_REQUIRED_BY_FROZEN_POLICY
+  pairing_model_id: NB04_LITERAL_HAMMING_UNGAPPED_V1
+  parameterization_requirement: FULLY_PARAMETERIZED_PRE_G0
+  purpose: DESCRIPTIVE_SENSITIVITY
+  search_calibration_id: NOT_APPLICABLE
+  search_configuration_id: NOT_APPLICABLE
+  selection_rule_id: NOT_APPLICABLE
+  technical_state: NOT_RUN
+  validation_requirement: COMPLETE_WITHIN_DECLARED_FORMAL_SPACE
+- analysis_arm_id: NEAR_MATCH_K21_H2
+  analysis_role: SENSITIVITY
+  biological_decision_role: false
+  declaration_requirement: DECLARED_PRE_G0
+  evidence_state: NOT_EVALUATED
+  execution: OPTIONAL
+  execution_required_for_completion: false
+  formal_search_space_id: NB04_NEAR_K21_H2_BOTH_ACGT_V1
+  modality: NEAR_MATCH
+  modality_requirement_status: NOT_REQUIRED_BY_FROZEN_POLICY
+  pairing_model_id: NB04_LITERAL_HAMMING_UNGAPPED_V1
+  parameterization_requirement: FULLY_PARAMETERIZED_PRE_G0
+  purpose: DESCRIPTIVE_SENSITIVITY
+  search_calibration_id: NOT_APPLICABLE
+  search_configuration_id: NOT_APPLICABLE
+  selection_rule_id: NOT_APPLICABLE
+  technical_state: NOT_RUN
+  validation_requirement: COMPLETE_WITHIN_DECLARED_FORMAL_SPACE
+- analysis_arm_id: EXACT_K16_SENSITIVITY
+  analysis_role: SENSITIVITY
+  biological_decision_role: false
+  declaration_requirement: DECLARED_PRE_G0
+  evidence_state: NOT_EVALUATED
+  execution: OPTIONAL
+  execution_required_for_completion: false
+  formal_search_space_id: NB04_EXACT_K16_BOTH_ACGT_V1
+  modality: EXACT
+  modality_requirement_status: NOT_REQUIRED_BY_FROZEN_POLICY
+  pairing_model_id: NOT_APPLICABLE
+  parameterization_requirement: FULLY_PARAMETERIZED_PRE_G0
+  purpose: DESCRIPTIVE_SENSITIVITY
+  search_calibration_id: NOT_APPLICABLE
+  search_configuration_id: NOT_APPLICABLE
+  selection_rule_id: NOT_APPLICABLE
+  technical_state: NOT_RUN
+  validation_requirement: COMPLETE_WITHIN_DECLARED_FORMAL_SPACE
+calibration:
+  B4_8: EXPLICIT_AUTHORIZATION_BEFORE_F01_TOY_HARNESS
+  B4_9: SCALE_DECISION_BEFORE_G1_F05_F06_CALIBRATION
+  PC03_detection_class: CHARACTERIZED_NOT_ASSERTED
+  PC06_detection_class: CHARACTERIZED_NOT_ASSERTED
+  QA_B_blocks_configuration_freeze: true
+  QA_H_blocks_configuration_freeze: false
+  biological_decision_role: false
+  calibration_inconclusive_definition:
+    all_tuning_candidates_demonstrably_failed: FAILED
+    characterized: Interpretable completed evidence with obligations applicable to
+      role and scope satisfied, required characterizations recorded, and provenance
+      to declared configuration/domain/fixtures. TUNING does not grant final QA-P
+      or G1.
+    failed: Demonstrated blocking QA failure or invalid necessary execution, localized
+      to configuration and scope. Non-recovery of CHARACTERIZED_NOT_ASSERTED alone
+      is not failure.
+    inconclusive: Informative execution occurred but necessary evidence is incomplete,
+      insufficient or unresolved, without a demonstrated blocking failure that already
+      determines FAILED for that same result. No PASS, absence or G1 freeze follows.
+    multiple_tuning_eligible: SELECT_FIRST_FROZEN_ORDER_NOT_INCONCLUSIVE
+    no_executions: NO_CALIBRATION_RESULT
+    not_executed: EXECUTION_OR_QA_STATE_ONLY_WITH_NO_FABRICATED_CALIBRATION_RESULT
+    not_tested_added_to_result_vocabulary: false
+    partially_evaluated_tuning_campaign: CALIBRATION_INCONCLUSIVE
+    result_vocabulary:
+    - CHARACTERIZED
+    - CALIBRATION_INCONCLUSIVE
+    - FAILED
+    same_result_precedence: DEMONSTRATED_BLOCKING_FAILURE_BEFORE_RESIDUAL_INSUFFICIENCY
+    selected_validation_complete: CHARACTERIZED_PENDING_EXISTING_G1_REVIEW_REQUIREMENTS
+    selected_validation_failure: FAILED_ATTEMPT_NO_SUBSTITUTE_FROM_SAME_VALIDATION
+    selected_validation_insufficient: CALIBRATION_INCONCLUSIVE
+  complementary_record_requirement: Ratification and independent audit completed for
+    the pinned complementary contract. G0 remains pending external human review.
+  design: B4_v2.1.2_WITH_A1_AND_RATIFIED_CLOSURE
+  envelope_extrapolation_margin_bases: 0
+  envelope_extrapolation_margin_records: 0
+  envelope_geometry: ONLY_ACTUALLY_TESTED_COMBINATIONS_AND_ARCHITECTURES_NO_AUTOMATIC_RECTANGLE
+  execution_preference:
+  - SINGLE_PASS_WITH_DECLARED_QA
+  - DETERMINISTIC_PARTITION_WHERE_REQUIRED
+  - TRUNCATION_UNRESOLVED
+  fixture_status: NOT_MATERIALIZED
+  freeze_fields:
+  - fixture_set_id
+  - fixture_role
+  - planted_instance_id
+  - full_base_difference_gap_pattern
+  - expected_coordinates_and_orientation
+  - candidate_configuration_id
+  - candidate_version
+  - complete_effective_parameters_and_defaults
+  - pinned_build
+  - per_end_numeric_tolerance_nt
+  - independent_technical_justification
+  - freeze_id
+  - freeze_version
+  - fixture_sha256
+  - configuration_sha256
+  - tolerance_record_sha256
+  - freeze_time_before_any_informative_execution
+  informative_execution_requires_prior_complete_freeze: true
+  numeric_coordinate_tolerances: null
+  production_dbsize_searchsp: NO_ARTIFICIAL_ADJUSTMENT
+  qa_e_additional_permutations: 1
+  qa_e_recipe: CLOSURE_A.2_NB04_QAE_PERMUTATION_V1
+  qa_f1: RECOVERY_WITHOUT_UNNORMALIZED_SET_EQUALITY
+  qa_f2_normalization: SEARCHSP_FROM_PINNED_BUILD_WHOLE_FIXTURE_REFERENCE_BEFORE_NORMALIZED_COMPARISON
+  qa_f_partition: CLOSURE_A.3_BALANCE_BASES_PRESERVE_WHOLE_RECORDS_CANONICAL_ORDER_TIE_FIRST
+  qa_f_shards: 2
+  qa_status: NOT_TESTED
+  recipe_pc02_pc03_pc06: NB04_SYNTHETIC_CASE_SHA256_ACGT_V1_CLOSURE_A.8
+  selection_rule:
+    biological_decision_role: false
+    blocking_qa:
+    - QA-A
+    - QA-B
+    - QA-C
+    - QA-D
+    - QA-E
+    - QA-F1
+    - QA-F2
+    - QA-G
+    - QA-I
+    - QA-J
+    - QA-K
+    - QA-L
+    - QA-M
+    - QA-N
+    - QA-P
+    - QA-Q
+    candidate_order: LEX_ASCENDING_SHA256_CANONICAL_EFFECTIVE_TECHNICAL_PAYLOAD_PRE_TUNING
+    candidate_set: FINITE_COMPLETE_FROZEN_BEFORE_FIRST_INFORMATIVE_TUNING
+    characterization_qa:
+    - QA-H
+    - QA-O
+    - QA-R
+    characterization_used_as_new_threshold_or_weight: false
+    later_campaign_requires_unused_validation: true
+    numeric_parameter_selection_stage: AUTHORIZED_CP1_G1_AFTER_G0
+    order_excludes:
+    - free_name
+    - candidate_configuration_id
+    - notes
+    - timestamps
+    - local_paths
+    - discovery_order
+    - results
+    - observed_metrics
+    order_may_change_after_results: false
+    performance_threshold: null
+    qa_p_timing: STRUCTURAL_DISJOINTNESS_PRE_SELECTION_AND_FINAL_VALIDATION_EVIDENCE_PRE_G1
+    selection: FIRST_TUNING_ELIGIBLE_IN_FROZEN_ORDER
+    selection_inputs: TUNING_ONLY
+    selection_rule_id: NB04_TUNING_QA_CONFIG_HASH_ORDER_HOLDOUT_V1
+    validation: CONFIRM_PRESELECTED_CONFIGURATION
+    validation_can_choose_substitute: false
+    validation_used_for_selection: false
+  selection_rule_id: NB04_TUNING_QA_CONFIG_HASH_ORDER_HOLDOUT_V1
+  selection_rule_status: PROJECT_RATIFIED_AND_INDEPENDENT_AUDIT_COMPLETED
+  source_document_sha256: 617438b9bf5a0a4dd2e80fc832af288432060899e5f615384df3e306bb919c68
+  tolerance_parameter_role: QA_ACCEPTANCE_CRITERION
+  warning_policy: RELEVANT_WARNING_BLOCKS_QA_G_UNKNOWN_RELEVANCE_PENDING
+canonical_k:
+- 19
+- 21
+canonical_k_role: FORMAL_SEARCH_SPACE_PROJECT_CONVENTION
+complementary_contract_id: NB04_CP0_COMPLEMENTARY_CONTRACT_V1
+complementary_contract_sha256: 3a89cbbebc9a207e776d2225748bf703a26ab02de56cb4df5f1c31a1cb23e818
+cp3_sensitivity_arms: []
+decision_policy:
+  canonical_evidence_grain: QUERY_X_ORGANISM_X_RESOURCE_X_CANONICAL_MODALITY
+  concern: B5_R05_INDIVIDUALIZED_DOCUMENTED_RNA_RECOGNITION_HYPOTHESIS_AND_VALID_HUMAN_REVIEW
+  cp3_absence: B4_SEVEN_CONDITIONS_CONJUNCTION_RUN_COMPLETE_ALONE_INSUFFICIENT
+  homology: COMPUTATIONAL_EVIDENCE_WITHOUT_AUTOMATIC_BIOLOGICAL_IMPLICATION
+  no_sensitivity_substitution_for_canonical: true
+  plant_track: SEPARATE_PLANT_CONTEXT_AND_DOSSIER_CLOSURE_B_B5_R09
+  qualified_negative_disposition: B5_R16_ONLY_WITH_ASSESSED_SCOPE_AND_NO_BLOCKING_PENDING_MATTER
+  review_grain: QUERY_X_CORE_ORGANISM
+  salience_model: NO_SALIENCE_MODEL
+  scientific_disposition_assignment: HUMAN_ONLY
+  scientific_dispositions:
+  - POTENTIAL_SPECIFICITY_CONCERN
+  - DETECTED_HOMOLOGY_WITHOUT_RESOLVED_BIOLOGICAL_IMPLICATION
+  - NO_SEQUENCE_SPECIFICITY_CONCERN_IDENTIFIED_WITHIN_ASSESSED_SCOPE
+  - UNRESOLVED
+  sensitivity_summary_grain: QUERY_X_ORGANISM_X_RESOURCE_X_MODALITY_X_ANALYSIS_ARM_ID
+  sensitivity_usability: PER_ROW_AND_SCOPE_RUN_COMPLETE_AND_COMPLETE_WITHIN_DECLARED_FORMAL_SPACE
+documentary_inputs_sha256: 657861b2007251b0fe0ec53aa6b0b8f3099c8d4cbdeab523063dc786f1af34bb
+fallback_policy: A_SELECTED_PRE_G0
+formal_search_spaces:
+- alphabet: ACGT
+  ambiguity_policy: EXCLUDE_NON_ACGT_WINDOWS_WITH_DENOMINATORS
+  biological_decision_role: false
+  complexity_filter: NONE
+  difference_positions: ALL_POSITIONS_LITERAL_UNIT_COST
+  exact_difference_count: 0
+  formal_search_space_id: NB04_EXACT_K19_K21_BOTH_ACGT_V1
+  g_u_discount: false
+  indels: false
+  k:
+  - 19
+  - 21
+  occurrence_cap: null
+  orientation: PLUS_AND_REVERSE_COMPLEMENT
+  palindrome_rule: COLLAPSE_IDENTICAL_ORIENTED_WORDS_PRESERVE_MAPPING
+  parameter_role: SEARCH_PARAMETER
+  record_boundaries: NEVER_CROSSED
+  seed_model: NOT_APPLICABLE
+  subject_normalization: UPPERCASE_U_TO_T_ON_DERIVED_ONLY
+- alphabet: ACGT
+  ambiguity_policy: EXCLUDE_NON_ACGT_WINDOWS_WITH_DENOMINATORS
+  biological_decision_role: false
+  complexity_filter: NONE
+  difference_positions: ALL_POSITIONS_LITERAL_UNIT_COST
+  exact_difference_count: 1
+  formal_search_space_id: NB04_NEAR_K21_H1_BOTH_ACGT_V1
+  g_u_discount: false
+  indels: false
+  k:
+  - 21
+  occurrence_cap: null
+  orientation: PLUS_AND_REVERSE_COMPLEMENT
+  palindrome_rule: COLLAPSE_IDENTICAL_ORIENTED_WORDS_PRESERVE_MAPPING
+  parameter_role: SEARCH_PARAMETER
+  record_boundaries: NEVER_CROSSED
+  seed_model: NOT_APPLICABLE
+  subject_normalization: UPPERCASE_U_TO_T_ON_DERIVED_ONLY
+- alphabet: ACGT
+  ambiguity_policy: EXCLUDE_NON_ACGT_WINDOWS_WITH_DENOMINATORS
+  biological_decision_role: false
+  complexity_filter: NONE
+  difference_positions: ALL_POSITIONS_LITERAL_UNIT_COST
+  exact_difference_count: 2
+  formal_search_space_id: NB04_NEAR_K21_H2_BOTH_ACGT_V1
+  g_u_discount: false
+  indels: false
+  k:
+  - 21
+  occurrence_cap: null
+  orientation: PLUS_AND_REVERSE_COMPLEMENT
+  palindrome_rule: COLLAPSE_IDENTICAL_ORIENTED_WORDS_PRESERVE_MAPPING
+  parameter_role: SEARCH_PARAMETER
+  record_boundaries: NEVER_CROSSED
+  seed_model: NOT_APPLICABLE
+  subject_normalization: UPPERCASE_U_TO_T_ON_DERIVED_ONLY
+- alphabet: ACGT
+  ambiguity_policy: EXCLUDE_NON_ACGT_WINDOWS_WITH_DENOMINATORS
+  biological_decision_role: false
+  complexity_filter: NONE
+  difference_positions: ALL_POSITIONS_LITERAL_UNIT_COST
+  exact_difference_count: 0
+  formal_search_space_id: NB04_EXACT_K16_BOTH_ACGT_V1
+  g_u_discount: false
+  indels: false
+  k:
+  - 16
+  occurrence_cap: null
+  orientation: PLUS_AND_REVERSE_COMPLEMENT
+  palindrome_rule: COLLAPSE_IDENTICAL_ORIENTED_WORDS_PRESERVE_MAPPING
+  parameter_role: SEARCH_PARAMETER
+  record_boundaries: NEVER_CROSSED
+  seed_model: NOT_APPLICABLE
+  subject_normalization: UPPERCASE_U_TO_T_ON_DERIVED_ONLY
+governance:
+  G0_external_qualified_distinct_human_review: REQUIRED_BEFORE_CERTIFICATION
+  contract: B6_GOVERNANCE_AMENDMENT_A1
+  preassigned_staffing_for_cp0: false
+is_ranking: false
+l9a_gap_contract:
+  allowed_organism_ids:
+  - ANAGRUS_BREVIPHRAGMA
+  - EXITIANUS_OBSCURINERVIS
+  - GONATOPUS_FLAVIPES
+  - PARACENTROBIA_SUBFLAVA
+  - PEREGRINUS_MAIDIS
+  - PSEUDOLIGOSITA_LONGIFRANGIATA
+  - PYROPHAGUS_TIGRINUS
+  - SOGATELLA_KOLOPHON
+  - TETRAGONISCA_ANGUSTULA
+  - TRIGONA_SPINIPES
+  assessed_source: L9a_METADATA
+  contract_id: NB04_L9A_NAMED_RECEPTOR_GAP_CONTRACT_V1
+  core_organism_ids:
+  - EXITIANUS_OBSCURINERVIS
+  - PARACENTROBIA_SUBFLAVA
+  empty_tsv_and_null_json_mean_unassessed: true
+  final_assessment: CP1_G1_SEPARATE_ARTIFACT_PRESERVING_G0_PANEL
+  gap_source: L9a_SCOPE_GAP_REGISTER
+  gap_status: L9A_METADATA_NOT_ASSESSED
+  gap_type: L9A_METADATA_NOT_ASSESSED
+  genus_resource_or_taxid_does_not_resolve_species: true
+  scientific_value_vocabulary:
+  - ASSESSABLE
+  - PARTIALLY_ASSESSABLE
+  - UNASSESSABLE
+  species_taxonomy_required_before_resource_use_and_freeze: true
+near_match_methodological_finding: NEAR_MATCH_PARAMETERIZATION_NOT_JUSTIFIED
+pairing_model:
+  biological_validation: NOT_ESTABLISHED
+  pairing_model_id: NB04_LITERAL_HAMMING_UNGAPPED_V1
+  scope: LITERAL_HAMMING_UNGAPPED_UNIT_COST
+parameters:
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_canonical_k
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: 19,21
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_canonical_exact_difference
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: '0'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_near_canonical_requirement
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: NOT_REQUIRED_BY_FROZEN_POLICY
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_near_sensitivity_k
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: '21'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_near_difference_shells
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: H1 = exactly 1 literal difference. H2 = exactly 2 literal differences.
+    Estratos disjuntos
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_difference_positions
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Todas as posições 1 a 21
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_difference_types
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Desigualdade literal com custo unitário
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_seed_model
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: NOT_APPLICABLE
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_central_region_rule
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Nenhuma exclusão ou peso
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_g_u_weight
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Sem desconto. Desigualdade literal conta 1
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_transition_transversion
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Custo literal igual, bases registradas
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_consecutive_differences
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Permitidas e preservadas
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_short_exact_k
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: '16'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_indels
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Excluídos em todos os braços CP2 propostos
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_orientation
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: PLUS e MINUS por complemento reverso
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_query_alphabet
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: ACGT, outro símbolo invalida entrada
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_subject_normalization
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Uppercase e U para T somente em derivado
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_subject_ambiguity
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Janela não ACGT excluída, sem expansão
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_record_boundaries
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Nenhuma janela atravessa registros
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_occurrence_cap
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Nenhum cap ou primeira ocorrência
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_complexity_filter
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Nenhum em CP2
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_palindrome_rule
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Colapsar igualdade das duas palavras orientadas, preservar mapeamento
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_zero_assessable_windows
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: assessable_windows = 0 em recurso × k implica NO_ASSESSABLE_WINDOWS_FOR_DECLARED_K
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_counting
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Cinco métricas separadas por query e k
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_formal_validation
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Oráculo independente e integridade da enumeração executada
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_sensitivity_usability
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: RUN_COMPLETE e COMPLETE_WITHIN_DECLARED_FORMAL_SPACE para o escopo
+    específico citado
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_sensitivity_terminal_role
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: OPTIONAL. execution_required_for_completion = false
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_receptor_scope
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Todos os recursos nucleotídicos elegíveis, interpretação por receptor_class
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_resource_budget
+  parameter_role: RESOURCE_CONSTRAINT
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: Sem valor proposto
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_canonical_k_role
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: FORMAL_SEARCH_SPACE_PROJECT_CONVENTION
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_fallback_policy
+  parameter_role: SEARCH_PARAMETER
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: A_SELECTED_PRE_G0
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_contract_proposal_status
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: METHODOLOGICAL_CONTRACT_APPROVAL_DECLARED
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_sensitivity_pre_g0_registration
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: 'NEAR_MATCH_K21_H1, NEAR_MATCH_K21_H2, EXACT_K16_SENSITIVITY: DECLARED_PRE_G0
+    e FULLY_PARAMETERIZED_PRE_G0'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_policy_change_after_g0
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: A→B exige POLICY_AMENDMENT
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B3_resource_rollup_eligibility
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 04_parameter_classification_v2.tsv
+  value_or_rule: RESOURCE_UNASSESSABLE exige que nenhuma componente CANÔNICA obrigatória
+    possa ser avaliada sob o contrato pertinente
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P01
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: blastn
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P02
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: blastn; blastn-short; dc-megablast
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P03
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: design space to be declared pre-G1 as a set of candidate values;
+    no value selected here
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P04
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: design space to be declared pre-G1; no value selected here
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P05
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: default; or an explicit declared pair with P06
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P06
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: default; or an explicit declared pair with P05
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P07
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: default; or explicit declared value
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P08
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: default; or explicit declared value
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P09
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: 'no'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P10
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: true; false
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P11
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: 'false'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P12
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: both
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P13
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: 'an explicitly declared value PLUS an empirical invariance demonstration.
+    Omitting the flag is NOT a no-cap option: it selects the engine default'
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P14
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: unset (preferred); or a declared value with an invariance demonstration
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P15
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P16
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P17
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P18
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P19
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P20
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P21
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: defaults, recorded explicitly
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P22
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: default, recorded explicitly
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P23
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET in production (preferred); SANCTIONED AS A QA-ONLY NORMALIZATION
+    TECHNIQUE for QA-F2, where the effective search space must be held constant across
+    partitionings for a set-equality comparison to be meaningful
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P24
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: NOT_SET
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P25
+  parameter_role: COMPUTATIONAL_REPORTING_LIMIT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: default, recorded explicitly
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P26
+  parameter_role: DISPLAY_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: the NB01-NB03 field set, extended with the fields PLAN G.8 requires
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P27
+  parameter_role: RESOURCE_CONSTRAINT
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: 1 (preferred); or >1 with a demonstrated determinism invariance
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P28
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: dbtype nucl; parse_seqids declared explicitly
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P29
+  parameter_role: SEARCH_PARAMETER
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: declared explicitly; volume count recorded per resource
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P30
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: a declared canonical record order, hashed
+- biological_decision_role: false
+  historical_record_preserved: true
+  parameter_id: B4_P31
+  parameter_role: QA_ACCEPTANCE_CRITERION
+  source_document: 08_b4_calibration_parameter_matrix_v2_1.tsv
+  value_or_rule: reuse, with an added saturation and completeness check
+policy_id: NB04_NTO_SEQUENCE_SPECIFICITY_POLICY_V1
+reference_use_geography: Paraná, Brasil — sistemas de cultivo comercial de milho (Zea
+  mays)
+resource_policy:
+  barcode_only: INADEQUATE_FOR_TARGET_RELEVANT_ABSENCE
+  ecological_tier_independent_of_resource_availability: true
+  eligibility_order:
+  - TRANSCRIPT_TIER
+  - ANNOTATED_CDS
+  - GENOME_COMPLEMENT_WITH_LIMITATIONS
+  final_assessability_stage: CP1_G1_SEPARATE_ARTIFACT
+  landscape: METADATA_ONLY_NOT_SELECTED_NOT_FROZEN
+  missing_metadata: NULL_WITH_EXPLICIT_GAP
+schema_version: 1
+serialization:
+  counts: INTEGER
+  display_order_classification: CANONICAL_DISPLAY_ORDER_ONLY
+  line_endings: LF
+  multivalue: N18_LITERAL_UNICODE_SORT_PIPE_NONE_EMPTY_UNKNOWN_ONLY_AUTHORIZED_AND_ALONE
+  ratios: INTEGER_NUMERATOR_AND_DENOMINATOR
+  volatile_metadata: execution_metadata.json
+states:
+  CP1: NOT_STARTED
+  G0_PASS: NOT_DECLARED
+  METHODOLOGICAL_CONTRACT_APPROVAL: DECLARED
+  informative_calibration: NOT_EXECUTED
+upstream_provenance_sha256: 2ea6f2b771ca58e6b660a214162c93f05706b5ba981114c56e4ae139b3f9bedd
+version: 1.1.0
