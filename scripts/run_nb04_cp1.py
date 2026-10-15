@@ -157,6 +157,14 @@ def acquire() -> dict:
                              "limitations": sorted(set(limitations)), "acquisition_receipts": receipts, "artifacts_sha256": artifacts,
                              "g0_certificate_sha256": r.digest(ROOT / r.G0_PATH)})
             r.write_json(processing, resource)
+        consistency = r.annotation_consistency(ROOT, resource, selection)
+        resource["annotation_consistency"] = consistency
+        resource["quality"]["annotation_consistency_status"] = consistency["status"]
+        resource["quality"]["annotation_coordinate_anomaly_count"] = consistency["coordinate_anomaly_count"]
+        if consistency["status"] != "PASS":
+            resource["limitations"] = sorted(set(resource["limitations"]) | {"SOURCE_ANNOTATION_COMPLEX_FEATURE_REVIEW_REQUIRED_NO_AUTOMATIC_LOCUS_PROMOTION"})
+        # Preserve the original processing receipt as a distinct execution object.
+        resource["artifacts_sha256"][str(processing.relative_to(ROOT))] = r.digest(processing)
         resources.append(resource)
         print(json.dumps({"resource_id": rid, "records": resource["quality"]["record_count"], "bases": resource["quality"]["total_bases"]}), flush=True)
     summary = r.materialize(ROOT, inventory, resources)

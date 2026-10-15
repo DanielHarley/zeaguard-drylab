@@ -1,0 +1,975 @@
+{
+  "G1": "NOT_DECLARED",
+  "alignment_selection_rule_id": "NB04_TUNING_QA_CONFIG_HASH_ORDER_HOLDOUT_V1",
+  "database_architecture": "ONE_DATABASE_PER_SPECIES_RESOURCE_SEQUENCE_TYPE_VERSION",
+  "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+  "g0_certified_artifacts": {
+    ".gitattributes": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "dfbab2023800ad959e64874707bc55ba5b130ed1c60449282ffd039392ef8223"
+    },
+    "artifacts/validation/nb04_cp0/20261015_consolidation/published_materialization/results/bioinformatics/nb04/cp0/cp0_summary.json": {
+      "hash_mode": "RAW",
+      "sha256": "c3233415bc55a7880e21ebdcece927ba6bc5bd350ea4c82d7e7cb8bfce1a5ed4"
+    },
+    "config/nb04_exposure_scenarios.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "09fcdb662a3063328fa308fd39f13cec9446def1ae7c7fa3642b6c01fd757439"
+    },
+    "config/nb04_nto_panel.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "b2d56caef0cb06421330714db6f81ea0cbde414b9a9a9c6b1dd61effd5b29b17"
+    },
+    "config/nb04_nto_policy.schema.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "924da2decd30a77c93c963597de64d337092ff00aaa2145ad198986a9e571781"
+    },
+    "config/nb04_nto_policy.yaml": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "375ed7715e9012111af5acffa40f5bac8a5fd88b4ca257af9cc008c790b95882"
+    },
+    "config/nb04_receptor_exposure.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "3fbc6edce1c229aff5aef3e871582bb16d6d51fec625aa31240bceb0383f354c"
+    },
+    "config/repro.schema.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "494e5eceb60fd004f377ad0c6570da1ecda62a04e02e30440b911575050952d8"
+    },
+    "config/repro.yaml": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "34a61b904af932f68d5e8f2de6267ed03d56d3c542d10781049335041aaccbee"
+    },
+    "data/reference/nb04_cp0_complementary_contract.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "3a89cbbebc9a207e776d2225748bf703a26ab02de56cb4df5f1c31a1cb23e818"
+    },
+    "data/reference/nb04_cp0_documentary_inputs.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "657861b2007251b0fe0ec53aa6b0b8f3099c8d4cbdeab523063dc786f1af34bb"
+    },
+    "data/reference/nb04_nto_queries.fasta": {
+      "hash_mode": "RAW",
+      "sha256": "486adee671664db73a2e8ef3dea84650638ce749b835cbd33c97c36a5874a234"
+    },
+    "data/reference/nb04_nto_queries.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "b952466940c776032ad2ad2361668fc118cec7baa7328b01a5d1998e6bdf6007"
+    },
+    "data/reference/nb04_upstream_provenance.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "2ea6f2b771ca58e6b660a214162c93f05706b5ba981114c56e4ae139b3f9bedd"
+    },
+    "results/bioinformatics/nb04/cp0/coverage_gaps.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "80b90adc21f8b2b75e9e83a07581ef23f410e205b1b051ea79c69ff847799a28"
+    },
+    "results/bioinformatics/nb04/cp0/literature_register.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "e23b4411fefd80157d80945ff5a3dd2acbaf620f83b12fe89a8c0950c6f3b8a8"
+    },
+    "results/bioinformatics/nb04/cp0/query_overlap.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "725b2d56216e13a7a052677e013d602c313451ea921855462e17f8e854a00446"
+    },
+    "results/bioinformatics/nb04/cp0/resource_landscape.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "1dc0da08c14037b80131041405dd6a64c78166f4e81c4ed4bbd1e001ea6c0aa2"
+    },
+    "scripts/prepare_nb04_cp0_inputs.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "74fbf6383baed48d8966e0aef08a5a759d7bbaa762608031dd1194c4b2f6b6e2"
+    },
+    "scripts/validate_nb04_cp0.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "cef3c281606d30c62326e5eb65fe7a8262f308fa61d4b05dff381c4be528c2b4"
+    },
+    "src/workstreams/bioinformatics/decisions/0007-nb04-nto-sequence-specificity-policy.md": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "e7bced188ffc5787edc1b77e59b3b1ba62ae99d1957372eefb362a076a16527c"
+    },
+    "src/zeaguard/nb04_complement.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "2001079dae8a87f58cec01fcf7f15308b931a7f4c9379536160408e528d41557"
+    },
+    "src/zeaguard/nb04_cp0.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "c8c20122f36e6de1e58f43f04f6f5ee762f8c414c94000d5e1bc41a1bea1408a"
+    },
+    "src/zeaguard/nb04_policy.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "aa40309474b58a0940d9c6deb33c6c6d73db2494e41500945242be9b2d7c6fce"
+    },
+    "src/zeaguard/nb04_serialization.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "74e5360ba458b9240a29dd7a952753736e22e3a884c06c65935b0a29f6e6bd25"
+    },
+    "tests/test_nb04_cp0.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "8659136db3e20522641cfee88b798597c86999e78f0a5e7618e7e0b49b1a5308"
+    }
+  },
+  "informative_calibration": "NOT_EXECUTED",
+  "inventory_sha256": "f11ab874762ccd2b23fe8cbff0bdd2eaa4ead64d416893dcf4a6601aae13c027",
+  "real_nto_searches": "NOT_EXECUTED",
+  "resources": [
+    {
+      "accession_version": "GCF_003254395.2",
+      "acquired_utc": "2026-10-15T08:05:36.345542+00:00",
+      "acquisition_receipts": {
+        "annotation": {
+          "bytes": 6756366,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "6756366",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:05:36 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:05:36 GMT",
+            "Last-Modified": "Fri, 30 Sep 2022 20:59:16 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "1131d4a4996935cbee56f86fc94c185f",
+          "retrieved_utc": "2026-10-15T08:05:40.685488+00:00",
+          "sha256": "79dc8b0cf1af584179887d9daa600be8c10e874f2f2f68b822af3a44b8ad4ba3",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/254/395/GCF_003254395.2_Amel_HAv3.1/GCF_003254395.2_Amel_HAv3.1_genomic.gff.gz"
+        },
+        "assembly_report": {
+          "bytes": 20884,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "20884",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Date": "Thu, 15 Oct 2026 08:05:41 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:05:41 GMT",
+            "Last-Modified": "Tue, 28 Apr 2026 17:34:15 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+            "Vary": "Accept-Encoding"
+          },
+          "md5": "ebc3236492f6ec345b18855ba035d2e7",
+          "retrieved_utc": "2026-10-15T08:05:41.306810+00:00",
+          "sha256": "324862052396012e2d5f3947856f0ab2deb8b61a660d04e97936eb204004c31c",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/254/395/GCF_003254395.2_Amel_HAv3.1/GCF_003254395.2_Amel_HAv3.1_assembly_report.txt"
+        },
+        "sequence": {
+          "bytes": 19465229,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "19465229",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:05:28 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:05:28 GMT",
+            "Last-Modified": "Fri, 30 Sep 2022 20:59:17 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "5630586536b037fc4c904d13a98c81c8",
+          "retrieved_utc": "2026-10-15T08:05:36.345542+00:00",
+          "sha256": "f03df1564920b6fa61f73afaa49bf1e27949a4ca5f056eee09c0aa91548a6e34",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/254/395/GCF_003254395.2_Amel_HAv3.1/GCF_003254395.2_Amel_HAv3.1_rna.fna.gz"
+        }
+      },
+      "adequate_annotated_transcript_set": true,
+      "annotation_consistency": {
+        "all_gff_contigs_in_assembly_report": true,
+        "annotation_identifier_coverage": "ALL_MATCHED",
+        "annotation_sha256": "79dc8b0cf1af584179887d9daa600be8c10e874f2f2f68b822af3a44b8ad4ba3",
+        "coordinate_anomalies": [],
+        "coordinate_anomaly_count": 0,
+        "fasta_records": 27887,
+        "gff_contigs": 177,
+        "gff_features": 537057,
+        "status": "PASS"
+      },
+      "annotation_status": "ANNOTATED",
+      "artifacts_sha256": {
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.ndb": "60c0a3d722b88b50bae35e2430b164e1868b14f51fb5c2fe2787596a58102718",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.nhr": "01534af2ec9ac1e5dec5f2924d4ef0c7556133823164a80f586e9fe69672ea13",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.nin": "6a32a83d21ebd3245e0b9cd4e3762a3f476083783dc6e10337eb65d67fa8c082",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.njs": "1b5145f0beae911bbb01759b12146a9ab2becc577f2d4f133014ccf835aef639",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.nog": "bbd974139a662bf134d8677771b01c38a61f5342f2fd214945d1473a8d8d401c",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.nos": "d50bbed140a0b3104c07b797d995440e6a7b09ac7001784b28a39843f94f841f",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.not": "9d4cbda57edbbbf652662ace9e94045c085464f43695e9e99e9a91cdb38195ea",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.nsq": "cce97abb5ced2e71954b923f56245e077cd5a6dc7ff5d996eb2897750c39a787",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.ntf": "9016a86144b066409f482fc63ab09c254788dca340cf23b9619cdcb1aa6a862e",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences.nto": "e0ccee238c8fd5504a976118bfcea3e2b1f974e26fd8b9f46e4956db00ca17d1",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/database_build.json": "0879dbf2a903deb34304fd642f61c7c89498af7b9e35977c8853bc4846ed9839",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/identifier_map.tsv": "4b05c02ac2c97676e9b1e4efe722a584a3a6dd040556d21ec136d04cd299e07f",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/normalized.fasta": "8d02f5524887e5a873ecf6991185219f67e97b60c7e65800d61e14c2c6db515c",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/original/GCF_003254395.2_Amel_HAv3.1_assembly_report.txt": "324862052396012e2d5f3947856f0ab2deb8b61a660d04e97936eb204004c31c",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/original/GCF_003254395.2_Amel_HAv3.1_assembly_report.txt.receipt.json": "3a646db8b9c967c4b726a392ffcc34a083332202c494cce8457f15971b5dec9f",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/original/GCF_003254395.2_Amel_HAv3.1_genomic.gff.gz": "79dc8b0cf1af584179887d9daa600be8c10e874f2f2f68b822af3a44b8ad4ba3",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/original/GCF_003254395.2_Amel_HAv3.1_genomic.gff.gz.receipt.json": "26f64b774091db5ff486072af453b131c9ad1262e67be76c21f92ae52c49ed4e",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/original/GCF_003254395.2_Amel_HAv3.1_rna.fna.gz": "f03df1564920b6fa61f73afaa49bf1e27949a4ca5f056eee09c0aa91548a6e34",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/original/GCF_003254395.2_Amel_HAv3.1_rna.fna.gz.receipt.json": "18c4e23a069c03fbff551fae9a2e0b1954b9f031abcae0e1866a8e5b613ce898",
+        "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/processing_record.json": "9fbd51eaa79261aad88d592b7c48f1e36bd9f8d4b2d325bea604856b8e5e9959"
+      },
+      "database_prefix": "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/blastdb/sequences",
+      "fasta_path": "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/normalized.fasta",
+      "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+      "identifier_map_path": "data/external/nto/cp1_20261015/AM_GCF003254395_2_RNA/identifier_map.tsv",
+      "limitations": [
+        "ANNOTATION_IS_NOT_EXPRESSION_EVIDENCE",
+        "CONTAMINATION_NOT_EXCLUDED",
+        "INTRASPECIFIC_DIVERSITY_NOT_REPRESENTED",
+        "LIFE_STAGE_TISSUE_EXPRESSION_COVERAGE_UNRESOLVED",
+        "MIXED_CURATED_AND_PREDICTED_RNA",
+        "NO_FUNCTIONAL_EFFECT_INFERENCE_FROM_SEQUENCE"
+      ],
+      "organism_id": "APIS_MELLIFERA",
+      "quality": {
+        "ambiguous_bases": 127,
+        "annotation_consistency_status": "PASS",
+        "annotation_coordinate_anomaly_count": 0,
+        "fasta_sha256": "8d02f5524887e5a873ecf6991185219f67e97b60c7e65800d61e14c2c6db515c",
+        "identifier_map_sha256": "4b05c02ac2c97676e9b1e4efe722a584a3a6dd040556d21ec136d04cd299e07f",
+        "lowercase_bases_in_source": 0,
+        "maximum_length": 76350,
+        "median_length_denominator": 2,
+        "median_length_numerator": 5082,
+        "minimum_length": 62,
+        "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+        "record_count": 27887,
+        "source_sha256": "f03df1564920b6fa61f73afaa49bf1e27949a4ca5f056eee09c0aa91548a6e34",
+        "total_bases": 98645700
+      },
+      "record_type_notes": "Full assembly RNA mixes curated, predicted and noncoding RNA. Per-record accession retained in identifier map.",
+      "release": "NCBI Apis mellifera Annotation Release 104",
+      "release_date": "2018-09-13",
+      "resource_id": "AM_GCF003254395_2_RNA",
+      "resource_record_type": "OTHER",
+      "resource_tier": "TRANSCRIPT_TIER",
+      "scientific_name": "Apis mellifera",
+      "selection_basis": "PLAN F.1 annotated assembly linked full RNA preferred",
+      "selection_sha256": "f57dd5a9cb808f00e969cfaa46dec8a626a8825f95e4b459ceae005a2493be7e",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/254/395/GCF_003254395.2_Amel_HAv3.1/GCF_003254395.2_Amel_HAv3.1_rna.fna.gz",
+      "taxid": 7460
+    },
+    {
+      "accession_version": "GCYL00000000.1",
+      "acquired_utc": "2026-10-15T08:05:59.675610+00:00",
+      "acquisition_receipts": {
+        "annotation": {
+          "bytes": 12110787,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Allow": "GET, HEAD, OPTIONS",
+            "Connection": "close",
+            "Content-Length": "12110787",
+            "Content-Security-Policy": "upgrade-insecure-requests",
+            "Content-Type": "application/octet-stream",
+            "Date": "Thu, 15 Oct 2026 08:06:00 GMT",
+            "Last-Modified": "Fri, 30 Nov 2018 14:26:23 GMT",
+            "Referrer-Policy": "origin-when-cross-origin",
+            "Server": "nginx",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "66e65ef51f4040d5d305e894bfa5b949",
+          "retrieved_utc": "2026-10-15T08:06:06.321182+00:00",
+          "sha256": "a57c30c9b23a01d3bc1ffa85ad15e34a23894676d57107bc96abec2590ebe365",
+          "url": "https://sra-download.ncbi.nlm.nih.gov/traces/wgs03/wgs_aux/GC/YL/GCYL01/GCYL01.1.gbff.gz"
+        },
+        "sequence": {
+          "bytes": 7677035,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Allow": "GET, HEAD, OPTIONS",
+            "Connection": "close",
+            "Content-Length": "7677035",
+            "Content-Security-Policy": "upgrade-insecure-requests",
+            "Content-Type": "application/octet-stream",
+            "Date": "Thu, 15 Oct 2026 08:05:54 GMT",
+            "Last-Modified": "Fri, 30 Nov 2018 14:26:24 GMT",
+            "Referrer-Policy": "origin-when-cross-origin",
+            "Server": "nginx",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "16e03f22448d7d0a8dce57f24d8e0743",
+          "retrieved_utc": "2026-10-15T08:05:59.675610+00:00",
+          "sha256": "ca4b9eb8ec6764b4dddbd17516a275c385d1a44306bc0d213fb4aabec5f9a4e1",
+          "url": "https://sra-download.ncbi.nlm.nih.gov/traces/wgs03/wgs_aux/GC/YL/GCYL01/GCYL01.1.fsa_nt.gz"
+        }
+      },
+      "adequate_annotated_transcript_set": false,
+      "annotation_consistency": {
+        "annotation_records": 25913,
+        "annotation_sha256": "a57c30c9b23a01d3bc1ffa85ad15e34a23894676d57107bc96abec2590ebe365",
+        "coordinate_anomaly_count": 0,
+        "exact_accession_set_equality": true,
+        "fasta_records": 25913,
+        "status": "PASS",
+        "taxids": [
+          83647
+        ]
+      },
+      "annotation_status": "UNCHARACTERIZED",
+      "artifacts_sha256": {
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.ndb": "7a5833884b1efffdcc88b11d6b7215a91014d4850b26ba9f3e995a3d74a5387e",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.nhr": "fdaf749d679017b7365e35d84e67c612b9f572c67488cd933ed746617b665e9a",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.nin": "fdd156ea56f1d29b973865d4dde63b3fdb68bfa2349df9ffbd84fc621f5bc8ce",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.njs": "e28ce5c04d8afd783d907ff2e5546cecd2e25d1094109e6ba67b45d74295bd93",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.nog": "76fb5e2a35eeda8e8513b10c90d35c1ddc3df62e2018d768a88ebc3b984972c3",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.nos": "9d0e23dd1c322b0aab9e7113c80ea92f94f4905f562fb1684b966556631c097c",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.not": "7d194684e77e948d34321d3355fa266b2fd4e5aa248aca98928dbfcd13792476",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.nsq": "a4fb55ab8c756585a1a44a38af8b64b42767d6d09a56574158c6771ef014142f",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.ntf": "cea6d23cc3bfdef315d544b8d71f7d422579fac3c4baf808100320b745cccf3b",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences.nto": "e434340cf1724beb541e357e5609784de112750e136c9493cd2807d176fd95ad",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/database_build.json": "0cb78eae52af56c5075ca93df00cbf9c5fb77c837a07397e4fe096b2fb8207ba",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/identifier_map.tsv": "62fd603669cf745319e9dc4e232cc525e8faf59d12a02b064f3b75a82442b385",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/normalized.fasta": "b9775828bf71623342876c4be13011c0de98b22d3ebc8ffce6a41614825bbc3a",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/original/GCYL01.1.fsa_nt.gz": "ca4b9eb8ec6764b4dddbd17516a275c385d1a44306bc0d213fb4aabec5f9a4e1",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/original/GCYL01.1.fsa_nt.gz.receipt.json": "28bf42f3a0f695eac59dbc6bd41846b511f4db68b335cde39de7f3c6e33eef1a",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/original/GCYL01.1.gbff.gz": "a57c30c9b23a01d3bc1ffa85ad15e34a23894676d57107bc96abec2590ebe365",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/original/GCYL01.1.gbff.gz.receipt.json": "99cd38bd84df98d79b78f33151bb76522908596bc6d318ab32fec6492827ef61",
+        "data/external/nto/cp1_20261015/OI_GCYL01_TSA/processing_record.json": "e167634f39bc4ddd868fb925b58818215b9f1ccb27ab010fe7d6d5cf560ccdba"
+      },
+      "database_prefix": "data/external/nto/cp1_20261015/OI_GCYL01_TSA/blastdb/sequences",
+      "fasta_path": "data/external/nto/cp1_20261015/OI_GCYL01_TSA/normalized.fasta",
+      "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+      "identifier_map_path": "data/external/nto/cp1_20261015/OI_GCYL01_TSA/identifier_map.tsv",
+      "limitations": [
+        "CONTAMINATION_NOT_EXCLUDED",
+        "GENE_ASSIGNMENT_UNAVAILABLE",
+        "INTRASPECIFIC_DIVERSITY_NOT_REPRESENTED",
+        "LIFE_STAGE_TISSUE_EXPRESSION_COVERAGE_UNRESOLVED",
+        "NO_FUNCTIONAL_EFFECT_INFERENCE_FROM_SEQUENCE",
+        "TSA_FRAGMENTATION_REDUNDANCY_ORIENTATION_UNCERTAINTY"
+      ],
+      "organism_id": "ORIUS_INSIDIOSUS",
+      "quality": {
+        "ambiguous_bases": 512091,
+        "annotation_consistency_status": "PASS",
+        "annotation_coordinate_anomaly_count": 0,
+        "fasta_sha256": "b9775828bf71623342876c4be13011c0de98b22d3ebc8ffce6a41614825bbc3a",
+        "identifier_map_sha256": "62fd603669cf745319e9dc4e232cc525e8faf59d12a02b064f3b75a82442b385",
+        "lowercase_bases_in_source": 0,
+        "maximum_length": 25544,
+        "median_length_denominator": 2,
+        "median_length_numerator": 1190,
+        "minimum_length": 200,
+        "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+        "record_count": 25913,
+        "source_sha256": "ca4b9eb8ec6764b4dddbd17516a275c385d1a44306bc0d213fb4aabec5f9a4e1",
+        "total_bases": 26926668
+      },
+      "record_type_notes": "Whole TSA project",
+      "release": "GCYL01",
+      "release_date": "2018/11/30",
+      "resource_id": "OI_GCYL01_TSA",
+      "resource_record_type": "TSA_FRAGMENT",
+      "resource_tier": "TRANSCRIPT_TIER",
+      "scientific_name": "Orius insidiosus",
+      "selection_basis": "PLAN F.1 whole species TSA as a fragmented transcript resource, with explicit orientation, redundancy and contamination limits.",
+      "selection_sha256": "7051224be93d5e837331031c3ad708e719f5d9eea14f639976e68b3cb34b029e",
+      "source_url": "https://sra-download.ncbi.nlm.nih.gov/traces/wgs03/wgs_aux/GC/YL/GCYL01/GCYL01.1.fsa_nt.gz",
+      "taxid": 83647
+    },
+    {
+      "accession_version": "GKDL00000000.1",
+      "acquired_utc": "2026-10-15T08:06:16.749988+00:00",
+      "acquisition_receipts": {
+        "annotation": {
+          "bytes": 25435295,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Allow": "GET, HEAD, OPTIONS",
+            "Connection": "close",
+            "Content-Length": "25435295",
+            "Content-Security-Policy": "upgrade-insecure-requests",
+            "Content-Type": "application/octet-stream",
+            "Date": "Thu, 15 Oct 2026 08:06:17 GMT",
+            "Last-Modified": "Tue, 29 Aug 2023 15:25:30 GMT",
+            "Referrer-Policy": "origin-when-cross-origin",
+            "Server": "nginx",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "44e7d2426cf0a48c001838daebb05859",
+          "retrieved_utc": "2026-10-15T08:06:29.579353+00:00",
+          "sha256": "815cc0302a754c12fa8870f9821f32ff37d82bb052ec1040f5823d771cf1e3a5",
+          "url": "https://sra-download.ncbi.nlm.nih.gov/traces/wgs01/wgs_aux/GK/DL/GKDL01/GKDL01.1.gbff.gz"
+        },
+        "sequence": {
+          "bytes": 17477464,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Allow": "GET, HEAD, OPTIONS",
+            "Connection": "close",
+            "Content-Length": "17477464",
+            "Content-Security-Policy": "upgrade-insecure-requests",
+            "Content-Type": "application/octet-stream",
+            "Date": "Thu, 15 Oct 2026 08:06:11 GMT",
+            "Last-Modified": "Tue, 29 Aug 2023 15:25:30 GMT",
+            "Referrer-Policy": "origin-when-cross-origin",
+            "Server": "nginx",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "c45dafb4dd4eae2f0bf463eb18bcc085",
+          "retrieved_utc": "2026-10-15T08:06:16.749988+00:00",
+          "sha256": "acc3d1dc4b39cb6a908bc7f52edf858497ff1fca66e347e53bee1abb2f042d69",
+          "url": "https://sra-download.ncbi.nlm.nih.gov/traces/wgs01/wgs_aux/GK/DL/GKDL01/GKDL01.1.fsa_nt.gz"
+        }
+      },
+      "adequate_annotated_transcript_set": false,
+      "annotation_consistency": {
+        "annotation_records": 23687,
+        "annotation_sha256": "815cc0302a754c12fa8870f9821f32ff37d82bb052ec1040f5823d771cf1e3a5",
+        "coordinate_anomaly_count": 0,
+        "exact_accession_set_equality": true,
+        "fasta_records": 23687,
+        "status": "PASS",
+        "taxids": [
+          222432
+        ]
+      },
+      "annotation_status": "UNCHARACTERIZED",
+      "artifacts_sha256": {
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.ndb": "46d21ef580b342f969cdade30f142702224fde5c33adfe7cc1d01139dca82f38",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.nhr": "14a2426c18587679de13ad90914a1a87278d9fc1a5ee8983d52f827b6d28a686",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.nin": "1c8425ce11100c658999389b47862d4ff6a6e6b6efa7dd72ff64367b9c65abc6",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.njs": "e6e695f0dc9652984d6e8ed24424c25871e78bbbb0969088c12b6d9376a0fcc0",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.nog": "cbd9e863eebbe8e7f700d0720b3a7d71e4a2aaeab2249bcaa856acab8218ff38",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.nos": "ebd618e970cba6a15e29644e08d3b7dad80329b72502452d4ddacefe4bac746c",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.not": "07b597d9e6dd3377e51469c95897d49b591feb151eb197fe3791c97606d8d2ef",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.nsq": "a44aeb4a60c10503af9682e0b9cf53552f062b09cb8f14e446dce6c3291149b0",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.ntf": "10fb71a84d19be52e58c562feb469cee90656825a3de2f28b0c51d24c4434094",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences.nto": "85053faa77d42ba3e0e5fdf00c87058c96aecde8e93a21cbb9a5ba86e66f5699",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/database_build.json": "af5d568618f2b6bae37f83816b7695bd593ecea79f92ba697083e25364933b02",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/identifier_map.tsv": "c20489dac0cb592c87c8680f4cada266f91e91a824b15ee4108471f9b6b96c1c",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/normalized.fasta": "17b084765d5615f37707d82efd5d6c98f4916c2277ae15633830e33d7a4e9c96",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/original/GKDL01.1.fsa_nt.gz": "acc3d1dc4b39cb6a908bc7f52edf858497ff1fca66e347e53bee1abb2f042d69",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/original/GKDL01.1.fsa_nt.gz.receipt.json": "380f0d268bcdc5a4a47b9fa51ef214b8a1488bb5cfc05a9435377f63b31b6c2a",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/original/GKDL01.1.gbff.gz": "815cc0302a754c12fa8870f9821f32ff37d82bb052ec1040f5823d771cf1e3a5",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/original/GKDL01.1.gbff.gz.receipt.json": "4c23e2c0d4dce60d5a715f76c41e1cd90e8550a185d0e80934250c6f0df1b129",
+        "data/external/nto/cp1_20261015/PM_GKDL01_TSA/processing_record.json": "aa13ad31aeb8aa773dd8012b3c4472d9e84fad81b4b140af129b73a3aad71678"
+      },
+      "database_prefix": "data/external/nto/cp1_20261015/PM_GKDL01_TSA/blastdb/sequences",
+      "fasta_path": "data/external/nto/cp1_20261015/PM_GKDL01_TSA/normalized.fasta",
+      "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+      "identifier_map_path": "data/external/nto/cp1_20261015/PM_GKDL01_TSA/identifier_map.tsv",
+      "limitations": [
+        "CONTAMINATION_NOT_EXCLUDED",
+        "GENE_ASSIGNMENT_UNAVAILABLE",
+        "INTRASPECIFIC_DIVERSITY_NOT_REPRESENTED",
+        "LIFE_STAGE_TISSUE_EXPRESSION_COVERAGE_UNRESOLVED",
+        "NO_FUNCTIONAL_EFFECT_INFERENCE_FROM_SEQUENCE",
+        "TSA_FRAGMENTATION_REDUNDANCY_ORIENTATION_UNCERTAINTY"
+      ],
+      "organism_id": "PEREGRINUS_MAIDIS",
+      "quality": {
+        "ambiguous_bases": 9787,
+        "annotation_consistency_status": "PASS",
+        "annotation_coordinate_anomaly_count": 0,
+        "fasta_sha256": "17b084765d5615f37707d82efd5d6c98f4916c2277ae15633830e33d7a4e9c96",
+        "identifier_map_sha256": "c20489dac0cb592c87c8680f4cada266f91e91a824b15ee4108471f9b6b96c1c",
+        "lowercase_bases_in_source": 0,
+        "maximum_length": 18567,
+        "median_length_denominator": 2,
+        "median_length_numerator": 3906,
+        "minimum_length": 282,
+        "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+        "record_count": 23687,
+        "source_sha256": "acc3d1dc4b39cb6a908bc7f52edf858497ff1fca66e347e53bee1abb2f042d69",
+        "total_bases": 57025928
+      },
+      "record_type_notes": "Whole TSA project",
+      "release": "GKDL01",
+      "release_date": "2023/08/29",
+      "resource_id": "PM_GKDL01_TSA",
+      "resource_record_type": "TSA_FRAGMENT",
+      "resource_tier": "TRANSCRIPT_TIER",
+      "scientific_name": "Peregrinus maidis",
+      "selection_basis": "PLAN F.1 whole species TSA as a fragmented transcript resource, with explicit orientation, redundancy and contamination limits.",
+      "selection_sha256": "930d1d00a72fef045fb969b065f2aec14cdb0ab288ba9ca9803424535b6744d3",
+      "source_url": "https://sra-download.ncbi.nlm.nih.gov/traces/wgs01/wgs_aux/GK/DL/GKDL01/GKDL01.1.fsa_nt.gz",
+      "taxid": 222432
+    },
+    {
+      "accession_version": "GCF_003676215.2",
+      "acquired_utc": "2026-10-15T08:06:43.924337+00:00",
+      "acquisition_receipts": {
+        "annotation": {
+          "bytes": 5368103,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "5368103",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:06:44 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:06:44 GMT",
+            "Last-Modified": "Mon, 24 Jun 2019 17:11:01 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "054b06b4910f71bba6ac20ad3d790f34",
+          "retrieved_utc": "2026-10-15T08:06:48.741503+00:00",
+          "sha256": "3c4927fcf2fece60a98fd17bc3e67385901e5bc5cc6d4e2c4356f69b41034483",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/676/215/GCF_003676215.2_ASM367621v3/GCF_003676215.2_ASM367621v3_genomic.gff.gz"
+        },
+        "assembly_report": {
+          "bytes": 21979,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "21979",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Date": "Thu, 15 Oct 2026 08:06:49 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:06:49 GMT",
+            "Last-Modified": "Mon, 21 Oct 2024 22:37:32 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+            "Vary": "Accept-Encoding"
+          },
+          "md5": "45f7bddb09d58c66655dbb2a7995c413",
+          "retrieved_utc": "2026-10-15T08:06:49.390428+00:00",
+          "sha256": "74394ffd3844d36ead417043f1405c4c100564f4bca7c7554cc5cb418888fc9d",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/676/215/GCF_003676215.2_ASM367621v3/GCF_003676215.2_ASM367621v3_assembly_report.txt"
+        },
+        "sequence": {
+          "bytes": 10291896,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "10291896",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:06:37 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:06:37 GMT",
+            "Last-Modified": "Mon, 24 Jun 2019 17:11:02 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "fe6d6353790f0547f5287322a008fd64",
+          "retrieved_utc": "2026-10-15T08:06:43.924337+00:00",
+          "sha256": "1a9c36c4580512ccdaeb8cffad7a375f29782b6b25ddbf446547695139139dde",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/676/215/GCF_003676215.2_ASM367621v3/GCF_003676215.2_ASM367621v3_rna.fna.gz"
+        }
+      },
+      "adequate_annotated_transcript_set": true,
+      "annotation_consistency": {
+        "all_gff_contigs_in_assembly_report": true,
+        "annotation_identifier_coverage": "ALL_MATCHED",
+        "annotation_sha256": "3c4927fcf2fece60a98fd17bc3e67385901e5bc5cc6d4e2c4356f69b41034483",
+        "coordinate_anomalies": [],
+        "coordinate_anomaly_count": 0,
+        "fasta_records": 20783,
+        "gff_contigs": 220,
+        "gff_features": 414216,
+        "status": "PASS"
+      },
+      "annotation_status": "ANNOTATED",
+      "artifacts_sha256": {
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.ndb": "03aa191d86776efe650889bfba5dc3e596bd565854a66e22e268ec54361f73d3",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.nhr": "2c93128091af628275f7ae05660625ff50768a8dca28c861879c37f98d2c0418",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.nin": "66f4cf863a1b1343220d51207703c22b5eae896221b7fb54cc7675a026ccba89",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.njs": "ea94dee724911d975e2febbdf9840548994fcaad935c42ca2d0be28e357bd9c0",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.nog": "acd27f1670d88963b39894a82174594b6e154075d136aa3c5a2ddfb49cc83930",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.nos": "011f2fa6e8335b335ac9069576d6766f9c1a59a4cc5f31c0d5feda15a734ac29",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.not": "0ff2878b77e1d9a5440a56ba736c6a71ce1051ae8fec4fd1d6ab3ad182580c7e",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.nsq": "685d1fa5e5824a447ae5b5c8c8946ac4fea547087394cbc0577dcef620eacc09",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.ntf": "61ee69fbc72981b6e648dee64a35edd1e3ded2b1fcc09aebd8cd31a3c1c27b7d",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences.nto": "1d8b413f99e82ea517e229a35a980d25fb64dd8436b9e453793738cbdaa7ffbb",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/database_build.json": "303901b30e9c93ce7e05a14f71e67c609018829247bccaf5a62b7d075114a379",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/identifier_map.tsv": "c3f89b49ebc5a9690de9dcac71a2fb033d0b8b9ac413c50f2b9dbe8b035f0562",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/normalized.fasta": "05c7a785901ff0ba6ed4e0bf128ab61d41ed608bef0c888f147fce1fd2e8ece3",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/original/GCF_003676215.2_ASM367621v3_assembly_report.txt": "74394ffd3844d36ead417043f1405c4c100564f4bca7c7554cc5cb418888fc9d",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/original/GCF_003676215.2_ASM367621v3_assembly_report.txt.receipt.json": "3c9cde2c1695a8a0201b8d4d695405997b43edec50e3f47c7735358262bf010f",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/original/GCF_003676215.2_ASM367621v3_genomic.gff.gz": "3c4927fcf2fece60a98fd17bc3e67385901e5bc5cc6d4e2c4356f69b41034483",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/original/GCF_003676215.2_ASM367621v3_genomic.gff.gz.receipt.json": "def26501da44a307adbc12487eaf6ecc39b132097f716851c5b2c5c1cc9fe7d8",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/original/GCF_003676215.2_ASM367621v3_rna.fna.gz": "1a9c36c4580512ccdaeb8cffad7a375f29782b6b25ddbf446547695139139dde",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/original/GCF_003676215.2_ASM367621v3_rna.fna.gz.receipt.json": "5e68d060f9e795adcbee6c6c2b6b5d3156c6844e5e023da1167351fab18a8155",
+        "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/processing_record.json": "44425ef4ca72fca3bc967524c96309e9b3729064e76751cce8820d55247be1ab"
+      },
+      "database_prefix": "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/blastdb/sequences",
+      "fasta_path": "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/normalized.fasta",
+      "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+      "identifier_map_path": "data/external/nto/cp1_20261015/RM_GCF003676215_2_RNA/identifier_map.tsv",
+      "limitations": [
+        "ANNOTATION_IS_NOT_EXPRESSION_EVIDENCE",
+        "CONTAMINATION_NOT_EXCLUDED",
+        "INTRASPECIFIC_DIVERSITY_NOT_REPRESENTED",
+        "LIFE_STAGE_TISSUE_EXPRESSION_COVERAGE_UNRESOLVED",
+        "MIXED_CURATED_AND_PREDICTED_RNA",
+        "NO_FUNCTIONAL_EFFECT_INFERENCE_FROM_SEQUENCE"
+      ],
+      "organism_id": "RHOPALOSIPHUM_MAIDIS",
+      "quality": {
+        "ambiguous_bases": 294,
+        "annotation_consistency_status": "PASS",
+        "annotation_coordinate_anomaly_count": 0,
+        "fasta_sha256": "05c7a785901ff0ba6ed4e0bf128ab61d41ed608bef0c888f147fce1fd2e8ece3",
+        "identifier_map_sha256": "c3f89b49ebc5a9690de9dcac71a2fb033d0b8b9ac413c50f2b9dbe8b035f0562",
+        "lowercase_bases_in_source": 0,
+        "maximum_length": 59317,
+        "median_length_denominator": 2,
+        "median_length_numerator": 3768,
+        "minimum_length": 64,
+        "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+        "record_count": 20783,
+        "source_sha256": "1a9c36c4580512ccdaeb8cffad7a375f29782b6b25ddbf446547695139139dde",
+        "total_bases": 48930188
+      },
+      "record_type_notes": "Full assembly RNA mixes curated, predicted and noncoding RNA. Per-record accession retained in identifier map.",
+      "release": "NCBI Rhopalosiphum maidis Annotation Release 101",
+      "release_date": "2019-02-14",
+      "resource_id": "RM_GCF003676215_2_RNA",
+      "resource_record_type": "OTHER",
+      "resource_tier": "TRANSCRIPT_TIER",
+      "scientific_name": "Rhopalosiphum maidis",
+      "selection_basis": "PLAN F.1 annotated assembly linked full RNA preferred",
+      "selection_sha256": "ab496c2cfc315d7dd82eccb8cab7b388504e5a41f6d5808f608e2ceb176447ae",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/676/215/GCF_003676215.2_ASM367621v3/GCF_003676215.2_ASM367621v3_rna.fna.gz",
+      "taxid": 43146
+    },
+    {
+      "accession_version": "GCA_036937485.2",
+      "acquired_utc": "2026-10-15T08:07:02.309234+00:00",
+      "acquisition_receipts": {
+        "annotation": {
+          "bytes": 3342362,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "3342362",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:07:03 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:07:03 GMT",
+            "Last-Modified": "Wed, 22 May 2024 22:47:51 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "76a5b15ca83a939f5edbdcac6e654405",
+          "retrieved_utc": "2026-10-15T08:07:06.452566+00:00",
+          "sha256": "5ece41ab63c7b2b67e05d746aa2514f254e6b4cd6da4e17bcc444a90d111fcaf",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/937/485/GCA_036937485.2_jatai_v2/GCA_036937485.2_jatai_v2_genomic.gff.gz"
+        },
+        "assembly_report": {
+          "bytes": 68112,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "68112",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Date": "Thu, 15 Oct 2026 08:07:06 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:07:06 GMT",
+            "Last-Modified": "Sun, 27 Oct 2024 22:56:04 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+            "Vary": "Accept-Encoding"
+          },
+          "md5": "1d4587e1e3bf513f6ef33d6d04eb2338",
+          "retrieved_utc": "2026-10-15T08:07:07.092537+00:00",
+          "sha256": "f3ab021ba0c27e2006c83e74af2a37393e2b64080eb2ec50a66401f3a2ccd7ae",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/937/485/GCA_036937485.2_jatai_v2/GCA_036937485.2_jatai_v2_assembly_report.txt"
+        },
+        "sequence": {
+          "bytes": 7663899,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "7663899",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:06:56 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:06:56 GMT",
+            "Last-Modified": "Wed, 22 May 2024 22:47:50 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "a2676cfed6bbb188a4001419ee101739",
+          "retrieved_utc": "2026-10-15T08:07:02.309234+00:00",
+          "sha256": "61ca681551fbcaaf571beb48095c303296c4e2ccdd0c82367f06633020f34c99",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/937/485/GCA_036937485.2_jatai_v2/GCA_036937485.2_jatai_v2_cds_from_genomic.fna.gz"
+        }
+      },
+      "adequate_annotated_transcript_set": false,
+      "annotation_consistency": {
+        "all_gff_contigs_in_assembly_report": true,
+        "annotation_identifier_coverage": "ALL_MATCHED",
+        "annotation_sha256": "5ece41ab63c7b2b67e05d746aa2514f254e6b4cd6da4e17bcc444a90d111fcaf",
+        "coordinate_anomalies": [],
+        "coordinate_anomaly_count": 0,
+        "fasta_records": 17458,
+        "gff_contigs": 683,
+        "gff_features": 298521,
+        "status": "PASS"
+      },
+      "annotation_status": "ANNOTATED",
+      "artifacts_sha256": {
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.ndb": "f385a2433195c6d78bf40dd645a4f80e4cec9cfd2be379fbe7b14c19b470c9a4",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.nhr": "a2459e4b5bb16c561bc10d9a2dc609d4d591dc62ad08f1fa38ae065f6dea4b44",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.nin": "025d4b54300b5ec65ad2d0328ecb9171e49b9377b0b12fdce1b1f87ba89dac37",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.njs": "f68f58e0fe1919539337c3d38702b5f8bee767f9aad9fc3a8befbed6de34329d",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.nog": "471c8af35c6a96917dd31329a675252e3425684ca61a608a4b680ac142338f7d",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.nos": "b90e0e1c9f0047532307726c48a87c900bd7c54fa36d0cb32bfaf258cfd2367e",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.not": "36c62b880c0f8b4cd01e0edadebc94807b2968cf55468cb86f2e69b986e3ac8c",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.nsq": "1d56417779d185a060dac99d238201e255229f9eba8e189af3a4218bedd787bf",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.ntf": "81780708c96adbbf98141c89471c83d5871dc05377df1f4dacbab4ebc27133b7",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences.nto": "cec8de8c8d8f2c784ec060bd4874e22d3ba089477ab6c1dcbf9baf9f500ad14c",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/database_build.json": "3f4494c01baaec59fe18fac60aaf339340af4f2c65ada25701f05eab9f93661b",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/identifier_map.tsv": "7be52e462cb978bb74ae1cb06cea14ce2cf0fa651d3d2eb67edbc6b5dcb9e4d5",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/normalized.fasta": "30cc04b91c568d11fc7f270bc425b0fd1995694c5e81ac5a5277e7697f313de1",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/original/GCA_036937485.2_jatai_v2_assembly_report.txt": "f3ab021ba0c27e2006c83e74af2a37393e2b64080eb2ec50a66401f3a2ccd7ae",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/original/GCA_036937485.2_jatai_v2_assembly_report.txt.receipt.json": "2800ccddb8c9c4000a495ef808d92582858527e8426e994854642b91a70cb29b",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/original/GCA_036937485.2_jatai_v2_cds_from_genomic.fna.gz": "61ca681551fbcaaf571beb48095c303296c4e2ccdd0c82367f06633020f34c99",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/original/GCA_036937485.2_jatai_v2_cds_from_genomic.fna.gz.receipt.json": "69f5f939bf46c658b1b58eded7115764d87bb7a79974f2874e188e864c5b4fb7",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/original/GCA_036937485.2_jatai_v2_genomic.gff.gz": "5ece41ab63c7b2b67e05d746aa2514f254e6b4cd6da4e17bcc444a90d111fcaf",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/original/GCA_036937485.2_jatai_v2_genomic.gff.gz.receipt.json": "1471ad87cde5314605b31a1ed347e9f0884e9c5878a0f4ee1f69838121845fdf",
+        "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/processing_record.json": "56c0824e7468ce9822c5574b8a0cb9ed0ebee3d0a4891b5596657724480f1416"
+      },
+      "database_prefix": "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/blastdb/sequences",
+      "fasta_path": "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/normalized.fasta",
+      "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+      "identifier_map_path": "data/external/nto/cp1_20261015/TA_GCA036937485_2_CDS/identifier_map.tsv",
+      "limitations": [
+        "CDS_ONLY_UTRS_AND_NONCODING_TRANSCRIPTS_NOT_REPRESENTED",
+        "CONTAMINATION_NOT_EXCLUDED",
+        "INTRASPECIFIC_DIVERSITY_NOT_REPRESENTED",
+        "LIFE_STAGE_TISSUE_EXPRESSION_COVERAGE_UNRESOLVED",
+        "NO_FUNCTIONAL_EFFECT_INFERENCE_FROM_SEQUENCE"
+      ],
+      "organism_id": "TETRAGONISCA_ANGUSTULA",
+      "quality": {
+        "ambiguous_bases": 0,
+        "annotation_consistency_status": "PASS",
+        "annotation_coordinate_anomaly_count": 0,
+        "fasta_sha256": "30cc04b91c568d11fc7f270bc425b0fd1995694c5e81ac5a5277e7697f313de1",
+        "identifier_map_sha256": "7be52e462cb978bb74ae1cb06cea14ce2cf0fa651d3d2eb67edbc6b5dcb9e4d5",
+        "lowercase_bases_in_source": 0,
+        "maximum_length": 55671,
+        "median_length_denominator": 2,
+        "median_length_numerator": 2730,
+        "minimum_length": 24,
+        "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+        "record_count": 17458,
+        "source_sha256": "61ca681551fbcaaf571beb48095c303296c4e2ccdd0c82367f06633020f34c99",
+        "total_bases": 33940605
+      },
+      "record_type_notes": "CDS subset",
+      "release": "Annotation submitted by UFSB - Universidade Federal do Sul da Bahia",
+      "release_date": "2024-05-22",
+      "resource_id": "TA_GCA036937485_2_CDS",
+      "resource_record_type": "PREDICTED_TRANSCRIPT",
+      "resource_tier": "TRANSCRIPT_TIER",
+      "scientific_name": "Tetragonisca angustula",
+      "selection_basis": "PLAN F.1 annotated CDS fallback. Official assembly directory has no full RNA FASTA.",
+      "selection_sha256": "99f89c51325217d08cfa9ebbf425f3731ee7f1329f08149f43819e25f57a4e3d",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/937/485/GCA_036937485.2_jatai_v2/GCA_036937485.2_jatai_v2_cds_from_genomic.fna.gz",
+      "taxid": 166442
+    },
+    {
+      "accession_version": "GCF_902167145.1",
+      "acquired_utc": "2026-10-15T08:07:29.729424+00:00",
+      "acquisition_receipts": {
+        "annotation": {
+          "bytes": 16151440,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "16151440",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:07:30 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:07:30 GMT",
+            "Last-Modified": "Thu, 20 Feb 2025 17:47:18 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "d29888159bd6df944e622b825ac658fd",
+          "retrieved_utc": "2026-10-15T08:07:40.239539+00:00",
+          "sha256": "c346640f06bfed314e00173a4fb8dc2ca85952ef9f6c82dfa3c23b3c08fe4675",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/902/167/145/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_genomic.gff.gz"
+        },
+        "assembly_report": {
+          "bytes": 64450,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "64450",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Date": "Thu, 15 Oct 2026 08:07:40 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:07:40 GMT",
+            "Last-Modified": "Fri, 11 Apr 2025 02:05:23 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+            "Vary": "Accept-Encoding"
+          },
+          "md5": "dc73b1beab18282f55a953185a17cb6d",
+          "retrieved_utc": "2026-10-15T08:07:40.987271+00:00",
+          "sha256": "6d47626289fd8a25b484fbd9fc94dec3d677220d3a0e847c1116c795fb017ed4",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/902/167/145/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_assembly_report.txt"
+        },
+        "sequence": {
+          "bytes": 37775861,
+          "http_headers": {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Headers": "RANGE, Cache-control, If-None-Match, Content-Type",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Type",
+            "Cache-Control": "public, max-age=86400",
+            "Connection": "close",
+            "Content-Length": "37775861",
+            "Content-Type": "application/x-gzip",
+            "Date": "Thu, 15 Oct 2026 08:07:12 GMT",
+            "Expires": "Thu, 22 Oct 2026 08:07:12 GMT",
+            "Last-Modified": "Thu, 20 Feb 2025 17:47:19 GMT",
+            "Server": "Apache",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+          },
+          "md5": "7ba838e582dee1b2ff8ad1668230bf50",
+          "retrieved_utc": "2026-10-15T08:07:29.729424+00:00",
+          "sha256": "98dd49c562bd1132868fceca95bed0e0550eb424fcc7e7742fad9b589f8dca72",
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/902/167/145/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_rna.fna.gz"
+        }
+      },
+      "adequate_annotated_transcript_set": true,
+      "annotation_consistency": {
+        "all_gff_contigs_in_assembly_report": true,
+        "annotation_identifier_coverage": "ALL_MATCHED",
+        "annotation_sha256": "c346640f06bfed314e00173a4fb8dc2ca85952ef9f6c82dfa3c23b3c08fe4675",
+        "coordinate_anomalies": [
+          "NC_007982.1\tRefSeq\tmRNA\t691776\t267232\t.\t?\t.\tID=rna-ZeamMp017;Parent=gene-ZeamMp017;Dbxref=GeneID:37545003;exception=trans-splicing%2C RNA editing;gbkey=mRNA;gene=nad1;locus_tag=ZeamMp017"
+        ],
+        "coordinate_anomaly_count": 1,
+        "fasta_records": 76549,
+        "gff_contigs": 687,
+        "gff_features": 990782,
+        "status": "SOURCE_ANNOTATION_REVIEW_REQUIRED"
+      },
+      "annotation_status": "ANNOTATED",
+      "artifacts_sha256": {
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.ndb": "c7551a5bda40d4a3a925cd370cfe4649a873dd0bcdf175ee9c204fd223a061e5",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.nhr": "ab011b4d4d9dff0f4bcba5db1672b011d1e1235b0d18cd210c37e5dc27528621",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.nin": "b9d98f34af3115458528d37577f851308c5c61b4f6fa99c54f7cc7c7670ddba1",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.njs": "aa6422249ee686139e39df1058a973007b92e90920afa1b2b9635134392197f8",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.nog": "f84a7cf50b1d8dc9f0d344af467266e7c8ce4d4043d350f6b23351c2ffefac83",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.nos": "275ef7022a2b7bbd8312e7133065e9e4f6268c7bc91f2a1aa073c3ba9b3aa507",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.not": "c5c6a7ea7e882a54ff957e5d4b6c5de29994a73d4934239c845e488a5f110de6",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.nsq": "bc009cbe1ca924af4eaf4033d2556eb3812d8f7e4a80313d9633b6b7e5d4cd08",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.ntf": "c516ca018b53c9e63ac2ba250b1d0f0a31fee4c9977b7c4db869768dd8a9b17e",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences.nto": "217a7c4ec5a555bb6a41d7b89f7192fec6df61a576445fc1c7b8c1b3335dabc6",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/database_build.json": "97fba1046c080f67f8766c8b5fc79f10e269783fa893bce1573910705d71accb",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/identifier_map.tsv": "0b1ea5fec4e7bdc7eaba50f470ad95b3dc91737816f60108ef573166e3139e3f",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/normalized.fasta": "cb2a632363d19d2ce63b25ed951308dfbd0e823fb07abec84652850df1b4af21",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/original/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_assembly_report.txt": "6d47626289fd8a25b484fbd9fc94dec3d677220d3a0e847c1116c795fb017ed4",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/original/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_assembly_report.txt.receipt.json": "95c50699fccbb1d79ac1888d42ae4a2495e69bfabd4888a5104a7262216be995",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/original/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_genomic.gff.gz": "c346640f06bfed314e00173a4fb8dc2ca85952ef9f6c82dfa3c23b3c08fe4675",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/original/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_genomic.gff.gz.receipt.json": "72fbecb9004d7d2c935fd1be570c3d3fc0ea5baa6c275ff4d46454efd2b97010",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/original/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_rna.fna.gz": "98dd49c562bd1132868fceca95bed0e0550eb424fcc7e7742fad9b589f8dca72",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/original/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_rna.fna.gz.receipt.json": "24794f94309e11412e05a787192c146ec6401d933147ff114b361f9733f8fa8f",
+        "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/processing_record.json": "b59a8cf34569524dd8535146ae675536b0cc8e6ff9097bfcda2131af092b50aa"
+      },
+      "database_prefix": "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/blastdb/sequences",
+      "fasta_path": "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/normalized.fasta",
+      "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+      "identifier_map_path": "data/external/nto/cp1_20261015/ZM_GCF902167145_1_RNA/identifier_map.tsv",
+      "limitations": [
+        "ANNOTATION_IS_NOT_EXPRESSION_EVIDENCE",
+        "B73_REFERENCE_DOES_NOT_REPRESENT_PARANA_COMMERCIAL_HYBRIDS",
+        "CONTAMINATION_NOT_EXCLUDED",
+        "INTRASPECIFIC_DIVERSITY_NOT_REPRESENTED",
+        "LIFE_STAGE_TISSUE_EXPRESSION_COVERAGE_UNRESOLVED",
+        "MIXED_CURATED_AND_PREDICTED_RNA",
+        "NO_FUNCTIONAL_EFFECT_INFERENCE_FROM_SEQUENCE",
+        "SOURCE_ANNOTATION_COMPLEX_FEATURE_REVIEW_REQUIRED_NO_AUTOMATIC_LOCUS_PROMOTION"
+      ],
+      "organism_id": "ZEA_MAYS",
+      "quality": {
+        "ambiguous_bases": 363,
+        "annotation_consistency_status": "SOURCE_ANNOTATION_REVIEW_REQUIRED",
+        "annotation_coordinate_anomaly_count": 1,
+        "fasta_sha256": "cb2a632363d19d2ce63b25ed951308dfbd0e823fb07abec84652850df1b4af21",
+        "identifier_map_sha256": "0b1ea5fec4e7bdc7eaba50f470ad95b3dc91737816f60108ef573166e3139e3f",
+        "lowercase_bases_in_source": 0,
+        "maximum_length": 71388,
+        "median_length_denominator": 2,
+        "median_length_numerator": 3522,
+        "minimum_length": 58,
+        "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+        "record_count": 76549,
+        "source_sha256": "98dd49c562bd1132868fceca95bed0e0550eb424fcc7e7742fad9b589f8dca72",
+        "total_bases": 162712215
+      },
+      "record_type_notes": "Full assembly RNA mixes curated, predicted and noncoding RNA. Per-record accession retained in identifier map.",
+      "release": "GCF_902167145.1-RS_2025_02",
+      "release_date": "2025-02-14",
+      "resource_id": "ZM_GCF902167145_1_RNA",
+      "resource_record_type": "OTHER",
+      "resource_tier": "TRANSCRIPT_TIER",
+      "scientific_name": "Zea mays",
+      "selection_basis": "PLAN F.1 annotated assembly linked full RNA preferred",
+      "selection_sha256": "5cfda80eb838fb6b3fdb7f3516801a1c88a84f1e2bf03eeea02dacd0c489498b",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/902/167/145/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0/GCF_902167145.1_Zm-B73-REFERENCE-NAM-5.0_rna.fna.gz",
+      "taxid": 4577
+    }
+  ],
+  "schema_version": 1,
+  "search_calibration": null,
+  "search_configuration": null,
+  "stage": "NB04_CP1_RESOURCE_INVENTORY_AND_FREEZE",
+  "status": "RESOURCE_LAYER_MATERIALIZED_G1_PENDING"
+}

@@ -160,3 +160,73 @@ def test_db_failure_does_not_publish_directory(tmp_path, monkeypatch):
     with pytest.raises(r.ResourceContractError, match="makeblastdb"):
         r.build_database(put(tmp_path / "in.fa", b">A\nACGT\n"), tmp_path / "db", "R", 1)
     assert not (tmp_path / "db").exists()
+
+
+@pytest.mark.parametrize("mutation,pattern", [
+    ("unselected", "outside frozen"), ("binding", "binding mismatch"),
+    ("identity", "identity differs"), ("date", "before G0"),
+    ("artifact", "outside nto"),
+])
+def test_materialization_requires_frozen_selection_and_post_g0_acquisition(tmp_path, monkeypatch, mutation, pattern):
+    certificate = {"registered_utc": "2026-10-15T07:00:00+00:00"}
+    monkeypatch.setattr(r, "verify_g0", lambda root: certificate)
+    put(tmp_path / r.G0_PATH, b"certificate")
+    put(tmp_path / "config/nb04_nto_panel.tsv", b"organism_id\nSPECIES\n")
+    choice = {"resource_id": "R1", "organism_id": "SPECIES", "scientific_name": "Species alpha", "taxid": 12, "accession_version": "GCF_000000012.1", "release": "release 1"}
+    inventory = {"g0_certificate_sha256": r.digest(tmp_path / r.G0_PATH),
+                 "organisms": [{"organism_id": "SPECIES", "taxonomy_status": "EXACT_SPECIES_RESOLVED", "taxid": 12, "ecological_panel_tier": "CORE"}],
+                 "selected_resources": [choice]}
+    r.write_json(tmp_path / r.INVENTORY, inventory)
+    resource = dict(choice, selection_sha256=hashlib.sha256(r.json_bytes(choice)).hexdigest(),
+                    acquired_utc="2026-10-15T08:00:00+00:00", fasta_path="data/external/nto/input.fasta", artifacts_sha256={})
+    if mutation == "unselected":
+        resource["resource_id"] = "OTHER"
+    elif mutation == "binding":
+        resource["selection_sha256"] = "0" * 64
+    elif mutation == "identity":
+        resource["accession_version"] = "GCF_000000012.2"
+    elif mutation == "date":
+        resource["acquired_utc"] = "2026-10-15T06:00:00+00:00"
+    else:
+        resource["artifacts_sha256"] = {"src/unrelated.py": "0" * 64}
+    with pytest.raises(r.ResourceContractError, match=pattern):
+        r.materialize(tmp_path, inventory, [resource])
+    assert not (tmp_path / r.MANIFEST).exists()
+
+
+@pytest.mark.parametrize("anomaly,missing", [(False, False), (True, False), (False, True)])
+def test_gff_source_consistency_preserves_exceptions_without_locus_promotion(tmp_path, anomaly, missing):
+    folder = tmp_path / "resource"
+    ids = put(folder / "identifiers.tsv", b"source_id\tsource_header\nXM_1.1\tXM_1.1 source\n")
+    put(folder / "original/assembly_report.txt", b"chr1\trole\t1\ttype\tGB.1\t=\tRS.1\tunit\t100\n")
+    line = b"RS.1\tRefSeq\tmRNA\t1\t4\t.\t+\t.\ttranscript_id=XM_1.1\n"
+    if anomaly:
+        line += b"RS.1\tRefSeq\tmRNA\t90\t20\t.\t?\t.\tID=complex;exception=trans-splicing\n"
+    if missing:
+        line = line.replace(b"XM_1.1", b"XM_2.1")
+    put(folder / "original/annotation.gz", gzip.compress(line))
+    resource = {"fasta_path": "resource/normalized.fasta", "identifier_map_path": "resource/identifiers.tsv", "quality": {"record_count": 1}}
+    selection = {"kind": "RNA", "files": [{"role": "annotation", "name": "annotation.gz"}, {"role": "assembly_report", "name": "assembly_report.txt"}]}
+    if missing:
+        with pytest.raises(r.ResourceContractError, match="identifier missing"):
+            r.annotation_consistency(tmp_path, resource, selection)
+    else:
+        before = (folder / "original/annotation.gz").read_bytes()
+        result = r.annotation_consistency(tmp_path, resource, selection)
+        assert result["coordinate_anomaly_count"] == int(anomaly)
+        assert result["status"] == ("SOURCE_ANNOTATION_REVIEW_REQUIRED" if anomaly else "PASS")
+        assert (folder / "original/annotation.gz").read_bytes() == before
+
+
+@pytest.mark.parametrize("accession,taxid", [("ABCD01000001.1", 12), ("ABCD01000002.1", 12), ("ABCD01000001.1", 13)])
+def test_tsa_checks_exact_accessions_and_source_taxonomy(tmp_path, accession, taxid):
+    folder = tmp_path / "resource"
+    put(folder / "ids.tsv", b"source_id\nABCD01000001.1\n")
+    put(folder / "original/annotation.gz", gzip.compress(f'VERSION     {accession}\n                     /db_xref="taxon:{taxid}"\n'.encode()))
+    resource = {"fasta_path": "resource/normalized.fasta", "identifier_map_path": "resource/ids.tsv", "quality": {"record_count": 1}}
+    selection = {"kind": "TSA", "taxid": 12, "files": [{"role": "annotation", "name": "annotation.gz"}]}
+    if accession != "ABCD01000001.1" or taxid != 12:
+        with pytest.raises(r.ResourceContractError):
+            r.annotation_consistency(tmp_path, resource, selection)
+    else:
+        assert r.annotation_consistency(tmp_path, resource, selection)["exact_accession_set_equality"] is True

@@ -248,6 +248,74 @@ def assessment_change(preliminary: str | None, final: str) -> str:
     return "UNCHANGED" if preliminary == final else "UPGRADED" if states.index(final) > states.index(preliminary) else "DOWNGRADED"
 
 
+def annotation_consistency(root: Path, resource: dict, selection: dict) -> dict:
+    """Check source identifiers and preserve complex annotation limitations.
+
+    This verifies the resource's own annotation, not biological contamination,
+    expression, transcript identity or functional effect. Exceptional GFF rows
+    are retained explicitly and must not support automatic locus promotion.
+    """
+    folder = (root / resource["fasta_path"]).parent
+    with (root / resource["identifier_map_path"]).open(encoding="utf-8", newline="") as stream:
+        identifiers = list(csv.DictReader(stream, delimiter="\t"))
+    require(len(identifiers) == resource["quality"]["record_count"], "identifier map count mismatch")
+    annotation = folder / "original" / next(f["name"] for f in selection["files"] if f["role"] == "annotation")
+    result = {"annotation_sha256": digest(annotation), "fasta_records": len(identifiers)}
+    if selection["kind"] == "TSA":
+        accessions, taxids = [], set()
+        with gzip.open(annotation, "rt", encoding="utf-8") as stream:
+            for line in stream:
+                if line.startswith("VERSION "):
+                    accessions.append(line.split()[1])
+                taxon = re.search(r'/db_xref="taxon:(\d+)"', line)
+                if taxon:
+                    taxids.add(int(taxon[1]))
+        source_ids = set()
+        for row in identifiers:
+            accession = re.search(r"[A-Z]{4}\d{8}\.\d+", row["source_id"])
+            require(accession is not None, "TSA versioned source accession absent")
+            source_ids.add(accession[0])
+        require(len(accessions) == len(set(accessions)) == len(identifiers) and set(accessions) == source_ids, "TSA FASTA and annotation accession sets differ")
+        require(taxids == {selection["taxid"]}, "TSA annotation taxonomy mismatch")
+        return result | {"annotation_records": len(accessions), "exact_accession_set_equality": True, "taxids": sorted(taxids), "status": "PASS", "coordinate_anomaly_count": 0}
+    report = folder / "original" / next(f["name"] for f in selection["files"] if f["role"] == "assembly_report")
+    contigs = set()
+    for line in report.read_text("utf-8").splitlines():
+        if line and not line.startswith("#"):
+            columns = line.split("\t")
+            require(len(columns) >= 9, "malformed assembly report")
+            contigs.update(value for value in [columns[0], columns[4], columns[6]] if value != "na")
+    transcripts, proteins, feature_contigs = set(), set(), set()
+    anomalies, count = [], 0
+    with gzip.open(annotation, "rt", encoding="utf-8") as stream:
+        for line in stream:
+            if line.startswith("#") or not line.strip():
+                continue
+            columns = line.rstrip("\n").split("\t")
+            require(len(columns) == 9, "malformed GFF row")
+            start, end = int(columns[3]), int(columns[4])
+            if not 1 <= start <= end:
+                anomalies.append(line.rstrip("\n"))
+            feature_contigs.add(columns[0])
+            transcripts.update(re.findall(r"(?:^|;)transcript_id=([^;]+)", columns[8]))
+            proteins.update(re.findall(r"(?:^|;)protein_id=([^;]+)", columns[8]))
+            count += 1
+    require(feature_contigs <= contigs, "GFF contig not in own assembly report")
+    if selection["kind"] == "RNA":
+        missing = {row["source_id"] for row in identifiers} - transcripts
+    else:
+        source_proteins = set()
+        for row in identifiers:
+            protein = re.search(r"\[protein_id=([^]]+)\]", row["source_header"])
+            require(protein is not None, "CDS source protein identifier absent")
+            source_proteins.add(protein[1])
+        missing = source_proteins - proteins
+    require(not missing, "FASTA identifier missing from own annotation")
+    return result | {"gff_features": count, "gff_contigs": len(feature_contigs), "all_gff_contigs_in_assembly_report": True,
+                     "annotation_identifier_coverage": "ALL_MATCHED", "coordinate_anomaly_count": len(anomalies), "coordinate_anomalies": anomalies,
+                     "status": "SOURCE_ANNOTATION_REVIEW_REQUIRED" if anomalies else "PASS"}
+
+
 def write_tsv(path: Path, rows: list[dict], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as stream:
@@ -271,13 +339,22 @@ def materialize(root: Path, inventory: dict, resources: list[dict]) -> dict:
     require(set(taxa) == {r["organism_id"] for r in panel}, "inventory/panel identity mismatch")
     require(len(taxa) == len(inventory["organisms"]), "duplicate inventory organism")
     require(len({r["resource_id"] for r in resources}) == len(resources), "duplicate resource_id")
+    selected = {r["resource_id"]: r for r in inventory["selected_resources"]}
+    require(len(selected) == len(inventory["selected_resources"]), "duplicate selected resource")
     for resource in resources:
+        require(resource["resource_id"] in selected, "resource outside frozen inventory selection")
+        choice = selected[resource["resource_id"]]
+        require(resource["selection_sha256"] == hashlib.sha256(json_bytes(choice)).hexdigest(), "resource selection binding mismatch")
+        for key in ["organism_id", "scientific_name", "taxid", "accession_version", "release"]:
+            require(resource[key] == choice[key], "resource identity differs from frozen selection: " + key)
+        require(datetime.fromisoformat(resource["acquired_utc"]) > datetime.fromisoformat(certificate["registered_utc"]), "resource acquired before G0")
         oid = resource["organism_id"]
         require(oid in taxa and taxa[oid]["taxonomy_status"] == "EXACT_SPECIES_RESOLVED", "resource taxonomy unresolved")
         require(int(resource["taxid"]) == taxa[oid]["taxid"], "resource taxonomy incompatible")
         require(taxa[oid]["ecological_panel_tier"] in {"CORE", "EXTENDED"}, "unadopted conditional or excluded resource")
         require(relative_path(root, resource["fasta_path"]).is_relative_to((root / "data/external/nto").resolve()), "resource payload outside nto directory")
         for relative, expected in resource["artifacts_sha256"].items():
+            require(relative_path(root, relative).is_relative_to((root / "data/external/nto").resolve()), "resource artifact outside nto directory")
             require(digest(relative_path(root, relative)) == expected, "resource artifact mismatch: " + relative)
     manifest = {"schema_version": 1, "stage": "NB04_CP1_RESOURCE_INVENTORY_AND_FREEZE", "status": "RESOURCE_LAYER_MATERIALIZED_G1_PENDING",
                 "g0_certificate_sha256": digest(root / G0_PATH), "g0_certified_artifacts": certificate["certified_artifacts"],
