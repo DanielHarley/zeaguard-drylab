@@ -61,7 +61,20 @@ def test_find_project_root_rejects_unmarked_tree(tmp_path):
 
 def test_load_real_configuration():
     cfg = repro.load_repro_config()
-    assert cfg.schema_version == 1
+    assert cfg.schema_version == 2
+    assert cfg.raw["checkpoint_required_paths"] == {
+        "nb04_cp0": [
+            "config/nb04_nto_policy.yaml",
+            "config/nb04_nto_panel.tsv",
+            "config/nb04_exposure_scenarios.tsv",
+            "config/nb04_receptor_exposure.tsv",
+            "data/reference/nb04_nto_queries.tsv",
+            "data/reference/nb04_nto_queries.fasta",
+            "results/bioinformatics/nb04/cp0/resource_landscape.tsv",
+            "data/reference/nb04_cp0_complementary_contract.json",
+            "src/workstreams/bioinformatics/runs/2026-10-14_nb04-cp0-complementary-contract-patch.md",
+        ],
+    }
     assert cfg.snapshot_dir == "artifacts/reproducibility"
     assert cfg.supporting_configs == ["config/project.yaml"]
 

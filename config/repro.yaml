@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 
 platform:
   allowed_systems: ["Linux"]
@@ -59,3 +59,15 @@ supporting_configs:
   - config/project.yaml
 
 snapshot_dir: artifacts/reproducibility
+
+checkpoint_required_paths:
+  nb04_cp0:
+    - config/nb04_nto_policy.yaml
+    - config/nb04_nto_panel.tsv
+    - config/nb04_exposure_scenarios.tsv
+    - config/nb04_receptor_exposure.tsv
+    - data/reference/nb04_nto_queries.tsv
+    - data/reference/nb04_nto_queries.fasta
+    - results/bioinformatics/nb04/cp0/resource_landscape.tsv
+    - data/reference/nb04_cp0_complementary_contract.json
+    - src/workstreams/bioinformatics/runs/2026-10-14_nb04-cp0-complementary-contract-patch.md

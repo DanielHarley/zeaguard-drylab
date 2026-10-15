@@ -1,0 +1,143 @@
+{
+  "artifacts": {
+    "data/reference/nb02_dsrnase2_candidate_regions.fasta": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "a673be55faf1c2c31c9b02d99263d2ab1670e2d711a2be7350faca93dde8ef2e"
+    },
+    "data/reference/nb02_dsrnase2_candidate_regions.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "341bc9f32cf120a18295d2f4129de81856a5b765a0759d77f62cace541a42939"
+    },
+    "results/bioinformatics/nb02/cp5/run_manifest.json": {
+      "hash_mode": "RAW_BYTES",
+      "sha256": "733fb625c1a96aa52febd199625d248b6904de4e172312c7f28678c2ee869b1a"
+    },
+    "results/bioinformatics/nb03/cp0/benchmark_reconstruction.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "30c29adbe899506b2ae3428d6ea3bd9b16d7523b95289fd7a79236459422a76f"
+    },
+    "results/bioinformatics/nb03/cp0/run_manifest.json": {
+      "hash_mode": "RAW_BYTES",
+      "sha256": "49276e4217d4250b46d2490b2f2ad4b827faea5fb12e887843e30dda08cff876"
+    },
+    "results/bioinformatics/nb03/cp4b/run_manifest.json": {
+      "hash_mode": "RAW_BYTES",
+      "sha256": "938c379675234bcee844cd4dc4685011c0d539ff0801dffeb1bfe65cd87260a9"
+    },
+    "results/bioinformatics/nb03/cp4b/shortlist.fasta": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "5049c9b29ec999cd9bea9606f194fe25b5fd0a5041c1d00a1e007ee06a97be7d"
+    },
+    "results/bioinformatics/nb03/cp4b/shortlist.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "3403c84e65ca099ee834dfb12d82020ed57207f5bc9f7b0f93ebe5ea8f96ae25"
+    }
+  },
+  "manifest_identity_scope": "Observed manifest bytes, output bindings independently checked against the versioned certifying record or blob",
+  "queries": {
+    "BC-BENCH-0215-0587": {
+      "certification_artifact": "data/reference/nb01_bicc_operational_reference.json",
+      "certification_artifact_sha256_lf": "5d4b2b24ec56aebcb55c73f6d23e719bab8d2506cdfa49c225453d93707bd21c",
+      "certification_kind": "VERSIONED_HASH_RECORD",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "",
+      "selection_source_stage": "NOT_APPLICABLE",
+      "sequence_format": "BENCHMARK_JSON",
+      "sequence_source_artifact": "results/bioinformatics/nb03/cp0/benchmark_reconstruction.json",
+      "sequence_source_stage": "NB03_CP0_RECONSTRUCTION_CERTIFIED_BY_CP1_PIN",
+      "source_manifest_artifact": "results/bioinformatics/nb03/cp0/run_manifest.json",
+      "upstream_repository_commit": "099f751780283fecbc63da177c113aec9f6d60d5"
+    },
+    "BC-L400-1253-1652": {
+      "certification_artifact": "src/workstreams/bioinformatics/runs/2026-10-08_nb03-cp4b-manual-review-resolution.md",
+      "certification_artifact_sha256_lf": "4aa30e6d8b7d3e8763ef1e2af9bcecc4ae6b4bbc7b0603f3c900467e814b33f5",
+      "certification_kind": "VERSIONED_HASH_RECORD",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "results/bioinformatics/nb03/cp4b/shortlist.tsv",
+      "selection_source_stage": "NB03_CP4B",
+      "sequence_format": "FASTA",
+      "sequence_source_artifact": "results/bioinformatics/nb03/cp4b/shortlist.fasta",
+      "sequence_source_stage": "NB03_CP4B",
+      "source_manifest_artifact": "results/bioinformatics/nb03/cp4b/run_manifest.json",
+      "upstream_repository_commit": "9ca3e0903e9bee10c0708fde95241b7fa671591a"
+    },
+    "BC-L400-1254-1653": {
+      "certification_artifact": "src/workstreams/bioinformatics/runs/2026-10-08_nb03-cp4b-manual-review-resolution.md",
+      "certification_artifact_sha256_lf": "4aa30e6d8b7d3e8763ef1e2af9bcecc4ae6b4bbc7b0603f3c900467e814b33f5",
+      "certification_kind": "VERSIONED_HASH_RECORD",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "results/bioinformatics/nb03/cp4b/shortlist.tsv",
+      "selection_source_stage": "NB03_CP4B",
+      "sequence_format": "FASTA",
+      "sequence_source_artifact": "results/bioinformatics/nb03/cp4b/shortlist.fasta",
+      "sequence_source_stage": "NB03_CP4B",
+      "source_manifest_artifact": "results/bioinformatics/nb03/cp4b/run_manifest.json",
+      "upstream_repository_commit": "9ca3e0903e9bee10c0708fde95241b7fa671591a"
+    },
+    "BC-L400-1337-1736": {
+      "certification_artifact": "src/workstreams/bioinformatics/runs/2026-10-08_nb03-cp4b-manual-review-resolution.md",
+      "certification_artifact_sha256_lf": "4aa30e6d8b7d3e8763ef1e2af9bcecc4ae6b4bbc7b0603f3c900467e814b33f5",
+      "certification_kind": "VERSIONED_HASH_RECORD",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "results/bioinformatics/nb03/cp4b/shortlist.tsv",
+      "selection_source_stage": "NB03_CP4B",
+      "sequence_format": "FASTA",
+      "sequence_source_artifact": "results/bioinformatics/nb03/cp4b/shortlist.fasta",
+      "sequence_source_stage": "NB03_CP4B",
+      "source_manifest_artifact": "results/bioinformatics/nb03/cp4b/run_manifest.json",
+      "upstream_repository_commit": "9ca3e0903e9bee10c0708fde95241b7fa671591a"
+    },
+    "D2-BENCH-0814-1143": {
+      "certification_artifact": "data/reference/nb02_dsrnase2_candidate_regions.fasta",
+      "certification_artifact_sha256_lf": "a673be55faf1c2c31c9b02d99263d2ab1670e2d711a2be7350faca93dde8ef2e",
+      "certification_kind": "VERSIONED_BLOB",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "",
+      "selection_source_stage": "NOT_APPLICABLE",
+      "sequence_format": "FASTA",
+      "sequence_source_artifact": "data/reference/nb02_dsrnase2_candidate_regions.fasta",
+      "sequence_source_stage": "NB02_CP5",
+      "source_manifest_artifact": "results/bioinformatics/nb02/cp5/run_manifest.json",
+      "upstream_repository_commit": "74b9d6584690b95d4c8175b7d487940f2372bda6"
+    },
+    "D2-L400-0351-0750": {
+      "certification_artifact": "data/reference/nb02_dsrnase2_candidate_regions.fasta",
+      "certification_artifact_sha256_lf": "a673be55faf1c2c31c9b02d99263d2ab1670e2d711a2be7350faca93dde8ef2e",
+      "certification_kind": "VERSIONED_BLOB",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "data/reference/nb02_dsrnase2_candidate_regions.tsv",
+      "selection_source_stage": "NB02_CP5",
+      "sequence_format": "FASTA",
+      "sequence_source_artifact": "data/reference/nb02_dsrnase2_candidate_regions.fasta",
+      "sequence_source_stage": "NB02_CP5",
+      "source_manifest_artifact": "results/bioinformatics/nb02/cp5/run_manifest.json",
+      "upstream_repository_commit": "74b9d6584690b95d4c8175b7d487940f2372bda6"
+    },
+    "D2-L400-0817-1216": {
+      "certification_artifact": "data/reference/nb02_dsrnase2_candidate_regions.fasta",
+      "certification_artifact_sha256_lf": "a673be55faf1c2c31c9b02d99263d2ab1670e2d711a2be7350faca93dde8ef2e",
+      "certification_kind": "VERSIONED_BLOB",
+      "notes": "Certified sequence and selection are separate. Experimental protocol claims remain PROJECT_PROVIDED_NOT_AGENT_VERIFIED. No efficacy or ecological safety inference.",
+      "selection_source_artifact": "data/reference/nb02_dsrnase2_candidate_regions.tsv",
+      "selection_source_stage": "NB02_CP5",
+      "sequence_format": "FASTA",
+      "sequence_source_artifact": "data/reference/nb02_dsrnase2_candidate_regions.fasta",
+      "sequence_source_stage": "NB02_CP5",
+      "source_manifest_artifact": "results/bioinformatics/nb02/cp5/run_manifest.json",
+      "upstream_repository_commit": "74b9d6584690b95d4c8175b7d487940f2372bda6"
+    }
+  },
+  "reference_pins": {
+    "BICC": {
+      "artifact": "data/reference/nb01_bicc_operational_reference.json",
+      "certifying_commit": "099f751780283fecbc63da177c113aec9f6d60d5",
+      "sha256_lf": "5d4b2b24ec56aebcb55c73f6d23e719bab8d2506cdfa49c225453d93707bd21c"
+    },
+    "DSRNASE2": {
+      "artifact": "data/reference/nb01_dsrnase2_operational_reference.json",
+      "certifying_commit": "74b9d6584690b95d4c8175b7d487940f2372bda6",
+      "sha256_lf": "4ea481fb747f91ca22fc55fda2ab684884952650ad1cfa31cf3fe268011c9edb"
+    }
+  },
+  "schema_version": 1
+}

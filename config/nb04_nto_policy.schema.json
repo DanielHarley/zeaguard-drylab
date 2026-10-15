@@ -1,0 +1,821 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zeaguard:nb04:cp0-policy:1",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "policy_id": {
+      "const": "NB04_NTO_SEQUENCE_SPECIFICITY_POLICY_V1"
+    },
+    "version": {
+      "const": "1.1.0"
+    },
+    "states": {
+      "type": "object",
+      "properties": {
+        "METHODOLOGICAL_CONTRACT_APPROVAL": {
+          "const": "DECLARED"
+        },
+        "G0_PASS": {
+          "const": "NOT_DECLARED"
+        },
+        "CP1": {
+          "const": "NOT_STARTED"
+        },
+        "informative_calibration": {
+          "const": "NOT_EXECUTED"
+        }
+      },
+      "required": [
+        "METHODOLOGICAL_CONTRACT_APPROVAL",
+        "G0_PASS",
+        "CP1",
+        "informative_calibration"
+      ],
+      "additionalProperties": false
+    },
+    "documentary_inputs_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "upstream_provenance_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reference_use_geography": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_k": {
+      "const": [
+        19,
+        21
+      ]
+    },
+    "canonical_k_role": {
+      "const": "FORMAL_SEARCH_SPACE_PROJECT_CONVENTION"
+    },
+    "fallback_policy": {
+      "const": "A_SELECTED_PRE_G0"
+    },
+    "near_match_methodological_finding": {
+      "const": "NEAR_MATCH_PARAMETERIZATION_NOT_JUSTIFIED"
+    },
+    "pairing_model": {
+      "type": "object",
+      "properties": {
+        "pairing_model_id": {
+          "const": "NB04_LITERAL_HAMMING_UNGAPPED_V1"
+        },
+        "biological_validation": {
+          "const": "NOT_ESTABLISHED"
+        },
+        "scope": {
+          "const": "LITERAL_HAMMING_UNGAPPED_UNIT_COST"
+        }
+      },
+      "required": [
+        "pairing_model_id",
+        "biological_validation",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "analysis_arms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "analysis_arm_id": {
+            "enum": [
+              "EXACT_CANONICAL",
+              "NEAR_MATCH_CANONICAL",
+              "LOCAL_ALIGNMENT_CANONICAL",
+              "NEAR_MATCH_K21_H1",
+              "NEAR_MATCH_K21_H2",
+              "EXACT_K16_SENSITIVITY"
+            ]
+          },
+          "modality": {
+            "enum": [
+              "EXACT",
+              "NEAR_MATCH",
+              "LOCAL_ALIGNMENT"
+            ]
+          },
+          "analysis_role": {
+            "enum": [
+              "CANONICAL",
+              "SENSITIVITY"
+            ]
+          },
+          "modality_requirement_status": {
+            "enum": [
+              "REQUIRED",
+              "NOT_REQUIRED_BY_FROZEN_POLICY"
+            ]
+          },
+          "formal_search_space_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pairing_model_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "search_configuration_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "search_calibration_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "execution": {
+            "enum": [
+              "OPTIONAL",
+              "NOT_REQUIRED",
+              "REQUIRED_AFTER_APPLICABLE_GATES"
+            ]
+          },
+          "execution_required_for_completion": {
+            "type": "boolean"
+          },
+          "technical_state": {
+            "const": "NOT_RUN"
+          },
+          "evidence_state": {
+            "const": "NOT_EVALUATED"
+          },
+          "biological_decision_role": {
+            "const": false
+          },
+          "purpose": {
+            "enum": [
+              "DESCRIPTIVE_SENSITIVITY",
+              "CANONICAL_SEQUENCE_EVIDENCE"
+            ]
+          },
+          "declaration_requirement": {
+            "const": "DECLARED_PRE_G0"
+          },
+          "parameterization_requirement": {
+            "enum": [
+              "G1_AFTER_CALIBRATION",
+              "FULLY_PARAMETERIZED_PRE_G0",
+              "NOT_APPLICABLE"
+            ]
+          },
+          "selection_rule_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "validation_requirement": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "analysis_arm_id",
+          "modality",
+          "analysis_role",
+          "modality_requirement_status",
+          "formal_search_space_id",
+          "pairing_model_id",
+          "search_configuration_id",
+          "search_calibration_id",
+          "execution",
+          "execution_required_for_completion",
+          "technical_state",
+          "evidence_state",
+          "biological_decision_role",
+          "purpose",
+          "declaration_requirement",
+          "parameterization_requirement",
+          "selection_rule_id",
+          "validation_requirement"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "formal_search_spaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "formal_search_space_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "k": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "exact_difference_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "orientation": {
+            "const": "PLUS_AND_REVERSE_COMPLEMENT"
+          },
+          "alphabet": {
+            "const": "ACGT"
+          },
+          "indels": {
+            "const": false
+          },
+          "difference_positions": {
+            "type": "string",
+            "minLength": 1
+          },
+          "seed_model": {
+            "const": "NOT_APPLICABLE"
+          },
+          "g_u_discount": {
+            "const": false
+          },
+          "subject_normalization": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ambiguity_policy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "record_boundaries": {
+            "type": "string",
+            "minLength": 1
+          },
+          "complexity_filter": {
+            "const": "NONE"
+          },
+          "occurrence_cap": {
+            "type": "null"
+          },
+          "palindrome_rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "biological_decision_role": {
+            "const": false
+          },
+          "parameter_role": {
+            "const": "SEARCH_PARAMETER"
+          }
+        },
+        "required": [
+          "formal_search_space_id",
+          "k",
+          "exact_difference_count",
+          "orientation",
+          "alphabet",
+          "indels",
+          "difference_positions",
+          "seed_model",
+          "g_u_discount",
+          "subject_normalization",
+          "ambiguity_policy",
+          "record_boundaries",
+          "complexity_filter",
+          "occurrence_cap",
+          "palindrome_rule",
+          "biological_decision_role",
+          "parameter_role"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "cp3_sensitivity_arms": {
+      "const": []
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "parameter_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value_or_rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parameter_role": {
+            "enum": [
+              "SEARCH_PARAMETER",
+              "COMPUTATIONAL_REPORTING_LIMIT",
+              "QA_ACCEPTANCE_CRITERION",
+              "RESOURCE_CONSTRAINT",
+              "DISPLAY_PARAMETER"
+            ]
+          },
+          "biological_decision_role": {
+            "const": false
+          },
+          "source_document": {
+            "type": "string",
+            "minLength": 1
+          },
+          "historical_record_preserved": {
+            "const": true
+          }
+        },
+        "required": [
+          "parameter_id",
+          "value_or_rule",
+          "parameter_role",
+          "biological_decision_role",
+          "source_document",
+          "historical_record_preserved"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "calibration": {
+      "type": "object",
+      "properties": {
+        "design": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selection_rule_id": {
+          "const": "NB04_TUNING_QA_CONFIG_HASH_ORDER_HOLDOUT_V1"
+        },
+        "selection_rule_status": {
+          "const": "PROJECT_RATIFIED_AND_INDEPENDENT_AUDIT_COMPLETED"
+        },
+        "calibration_inconclusive_definition": {
+          "const": {
+            "result_vocabulary": [
+              "CHARACTERIZED",
+              "CALIBRATION_INCONCLUSIVE",
+              "FAILED"
+            ],
+            "characterized": "Interpretable completed evidence with obligations applicable to role and scope satisfied, required characterizations recorded, and provenance to declared configuration/domain/fixtures. TUNING does not grant final QA-P or G1.",
+            "failed": "Demonstrated blocking QA failure or invalid necessary execution, localized to configuration and scope. Non-recovery of CHARACTERIZED_NOT_ASSERTED alone is not failure.",
+            "inconclusive": "Informative execution occurred but necessary evidence is incomplete, insufficient or unresolved, without a demonstrated blocking failure that already determines FAILED for that same result. No PASS, absence or G1 freeze follows.",
+            "not_executed": "EXECUTION_OR_QA_STATE_ONLY_WITH_NO_FABRICATED_CALIBRATION_RESULT",
+            "not_tested_added_to_result_vocabulary": false,
+            "same_result_precedence": "DEMONSTRATED_BLOCKING_FAILURE_BEFORE_RESIDUAL_INSUFFICIENCY",
+            "no_executions": "NO_CALIBRATION_RESULT",
+            "all_tuning_candidates_demonstrably_failed": "FAILED",
+            "partially_evaluated_tuning_campaign": "CALIBRATION_INCONCLUSIVE",
+            "multiple_tuning_eligible": "SELECT_FIRST_FROZEN_ORDER_NOT_INCONCLUSIVE",
+            "selected_validation_failure": "FAILED_ATTEMPT_NO_SUBSTITUTE_FROM_SAME_VALIDATION",
+            "selected_validation_insufficient": "CALIBRATION_INCONCLUSIVE",
+            "selected_validation_complete": "CHARACTERIZED_PENDING_EXISTING_G1_REVIEW_REQUIREMENTS"
+          }
+        },
+        "complementary_record_requirement": {
+          "type": "string"
+        },
+        "selection_rule": {
+          "const": {
+            "selection_rule_id": "NB04_TUNING_QA_CONFIG_HASH_ORDER_HOLDOUT_V1",
+            "selection_inputs": "TUNING_ONLY",
+            "candidate_set": "FINITE_COMPLETE_FROZEN_BEFORE_FIRST_INFORMATIVE_TUNING",
+            "candidate_order": "LEX_ASCENDING_SHA256_CANONICAL_EFFECTIVE_TECHNICAL_PAYLOAD_PRE_TUNING",
+            "order_excludes": [
+              "free_name",
+              "candidate_configuration_id",
+              "notes",
+              "timestamps",
+              "local_paths",
+              "discovery_order",
+              "results",
+              "observed_metrics"
+            ],
+            "order_may_change_after_results": false,
+            "selection": "FIRST_TUNING_ELIGIBLE_IN_FROZEN_ORDER",
+            "validation": "CONFIRM_PRESELECTED_CONFIGURATION",
+            "validation_used_for_selection": false,
+            "validation_can_choose_substitute": false,
+            "later_campaign_requires_unused_validation": true,
+            "blocking_qa": [
+              "QA-A",
+              "QA-B",
+              "QA-C",
+              "QA-D",
+              "QA-E",
+              "QA-F1",
+              "QA-F2",
+              "QA-G",
+              "QA-I",
+              "QA-J",
+              "QA-K",
+              "QA-L",
+              "QA-M",
+              "QA-N",
+              "QA-P",
+              "QA-Q"
+            ],
+            "characterization_qa": [
+              "QA-H",
+              "QA-O",
+              "QA-R"
+            ],
+            "characterization_used_as_new_threshold_or_weight": false,
+            "qa_p_timing": "STRUCTURAL_DISJOINTNESS_PRE_SELECTION_AND_FINAL_VALIDATION_EVIDENCE_PRE_G1",
+            "biological_decision_role": false,
+            "performance_threshold": null,
+            "numeric_parameter_selection_stage": "AUTHORIZED_CP1_G1_AFTER_G0"
+          }
+        },
+        "tolerance_parameter_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "envelope_geometry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qa_e_recipe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qa_f_partition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qa_f1": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qa_f2_normalization": {
+          "type": "string",
+          "minLength": 1
+        },
+        "production_dbsize_searchsp": {
+          "type": "string",
+          "minLength": 1
+        },
+        "warning_policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipe_pc02_pc03_pc06": {
+          "type": "string",
+          "minLength": 1
+        },
+        "B4_8": {
+          "type": "string",
+          "minLength": 1
+        },
+        "B4_9": {
+          "type": "string",
+          "minLength": 1
+        },
+        "numeric_coordinate_tolerances": {
+          "type": "null"
+        },
+        "informative_execution_requires_prior_complete_freeze": {
+          "const": true
+        },
+        "freeze_fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 17
+        },
+        "QA_B_blocks_configuration_freeze": {
+          "const": true
+        },
+        "QA_H_blocks_configuration_freeze": {
+          "const": false
+        },
+        "PC03_detection_class": {
+          "const": "CHARACTERIZED_NOT_ASSERTED"
+        },
+        "PC06_detection_class": {
+          "const": "CHARACTERIZED_NOT_ASSERTED"
+        },
+        "biological_decision_role": {
+          "const": false
+        },
+        "envelope_extrapolation_margin_bases": {
+          "const": 0
+        },
+        "envelope_extrapolation_margin_records": {
+          "const": 0
+        },
+        "qa_e_additional_permutations": {
+          "const": 1
+        },
+        "qa_f_shards": {
+          "const": 2
+        },
+        "execution_preference": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "fixture_status": {
+          "const": "NOT_MATERIALIZED"
+        },
+        "qa_status": {
+          "const": "NOT_TESTED"
+        },
+        "source_document_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "design",
+        "selection_rule_id",
+        "selection_rule",
+        "tolerance_parameter_role",
+        "envelope_geometry",
+        "qa_e_recipe",
+        "qa_f_partition",
+        "qa_f1",
+        "qa_f2_normalization",
+        "production_dbsize_searchsp",
+        "warning_policy",
+        "recipe_pc02_pc03_pc06",
+        "B4_8",
+        "B4_9",
+        "numeric_coordinate_tolerances",
+        "informative_execution_requires_prior_complete_freeze",
+        "freeze_fields",
+        "QA_B_blocks_configuration_freeze",
+        "QA_H_blocks_configuration_freeze",
+        "PC03_detection_class",
+        "PC06_detection_class",
+        "biological_decision_role",
+        "envelope_extrapolation_margin_bases",
+        "envelope_extrapolation_margin_records",
+        "qa_e_additional_permutations",
+        "qa_f_shards",
+        "execution_preference",
+        "fixture_status",
+        "qa_status",
+        "selection_rule_status",
+        "calibration_inconclusive_definition",
+        "complementary_record_requirement",
+        "source_document_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "resource_policy": {
+      "type": "object",
+      "properties": {
+        "landscape": {
+          "const": "METADATA_ONLY_NOT_SELECTED_NOT_FROZEN"
+        },
+        "eligibility_order": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "barcode_only": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_assessability_stage": {
+          "const": "CP1_G1_SEPARATE_ARTIFACT"
+        },
+        "missing_metadata": {
+          "const": "NULL_WITH_EXPLICIT_GAP"
+        },
+        "ecological_tier_independent_of_resource_availability": {
+          "const": true
+        }
+      },
+      "required": [
+        "landscape",
+        "eligibility_order",
+        "barcode_only",
+        "final_assessability_stage",
+        "missing_metadata",
+        "ecological_tier_independent_of_resource_availability"
+      ],
+      "additionalProperties": false
+    },
+    "decision_policy": {
+      "type": "object",
+      "properties": {
+        "scientific_disposition_assignment": {
+          "const": "HUMAN_ONLY"
+        },
+        "review_grain": {
+          "const": "QUERY_X_CORE_ORGANISM"
+        },
+        "canonical_evidence_grain": {
+          "const": "QUERY_X_ORGANISM_X_RESOURCE_X_CANONICAL_MODALITY"
+        },
+        "sensitivity_summary_grain": {
+          "const": "QUERY_X_ORGANISM_X_RESOURCE_X_MODALITY_X_ANALYSIS_ARM_ID"
+        },
+        "sensitivity_usability": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plant_track": {
+          "type": "string",
+          "minLength": 1
+        },
+        "concern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualified_negative_disposition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "no_sensitivity_substitution_for_canonical": {
+          "const": true
+        },
+        "salience_model": {
+          "const": "NO_SALIENCE_MODEL"
+        },
+        "homology": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cp3_absence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scientific_dispositions": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "enum": [
+              "POTENTIAL_SPECIFICITY_CONCERN",
+              "DETECTED_HOMOLOGY_WITHOUT_RESOLVED_BIOLOGICAL_IMPLICATION",
+              "NO_SEQUENCE_SPECIFICITY_CONCERN_IDENTIFIED_WITHIN_ASSESSED_SCOPE",
+              "UNRESOLVED"
+            ]
+          }
+        }
+      },
+      "required": [
+        "scientific_disposition_assignment",
+        "review_grain",
+        "canonical_evidence_grain",
+        "sensitivity_summary_grain",
+        "sensitivity_usability",
+        "plant_track",
+        "concern",
+        "qualified_negative_disposition",
+        "no_sensitivity_substitution_for_canonical",
+        "salience_model",
+        "homology",
+        "cp3_absence",
+        "scientific_dispositions"
+      ],
+      "additionalProperties": false
+    },
+    "governance": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "const": "B6_GOVERNANCE_AMENDMENT_A1"
+        },
+        "G0_external_qualified_distinct_human_review": {
+          "const": "REQUIRED_BEFORE_CERTIFICATION"
+        },
+        "preassigned_staffing_for_cp0": {
+          "const": false
+        }
+      },
+      "required": [
+        "contract",
+        "G0_external_qualified_distinct_human_review",
+        "preassigned_staffing_for_cp0"
+      ],
+      "additionalProperties": false
+    },
+    "serialization": {
+      "type": "object",
+      "properties": {
+        "multivalue": {
+          "const": "N18_LITERAL_UNICODE_SORT_PIPE_NONE_EMPTY_UNKNOWN_ONLY_AUTHORIZED_AND_ALONE"
+        },
+        "line_endings": {
+          "const": "LF"
+        },
+        "counts": {
+          "const": "INTEGER"
+        },
+        "ratios": {
+          "const": "INTEGER_NUMERATOR_AND_DENOMINATOR"
+        },
+        "volatile_metadata": {
+          "const": "execution_metadata.json"
+        },
+        "display_order_classification": {
+          "const": "CANONICAL_DISPLAY_ORDER_ONLY"
+        }
+      },
+      "required": [
+        "multivalue",
+        "line_endings",
+        "counts",
+        "ratios",
+        "volatile_metadata",
+        "display_order_classification"
+      ],
+      "additionalProperties": false
+    },
+    "is_ranking": {
+      "const": false
+    },
+    "complementary_contract_id": {
+      "const": "NB04_CP0_COMPLEMENTARY_CONTRACT_V1"
+    },
+    "complementary_contract_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "l9a_gap_contract": {
+      "const": {
+        "contract_id": "NB04_L9A_NAMED_RECEPTOR_GAP_CONTRACT_V1",
+        "allowed_organism_ids": [
+          "ANAGRUS_BREVIPHRAGMA",
+          "EXITIANUS_OBSCURINERVIS",
+          "GONATOPUS_FLAVIPES",
+          "PARACENTROBIA_SUBFLAVA",
+          "PEREGRINUS_MAIDIS",
+          "PSEUDOLIGOSITA_LONGIFRANGIATA",
+          "PYROPHAGUS_TIGRINUS",
+          "SOGATELLA_KOLOPHON",
+          "TETRAGONISCA_ANGUSTULA",
+          "TRIGONA_SPINIPES"
+        ],
+        "core_organism_ids": [
+          "EXITIANUS_OBSCURINERVIS",
+          "PARACENTROBIA_SUBFLAVA"
+        ],
+        "scientific_value_vocabulary": [
+          "ASSESSABLE",
+          "PARTIALLY_ASSESSABLE",
+          "UNASSESSABLE"
+        ],
+        "gap_source": "L9a_SCOPE_GAP_REGISTER",
+        "assessed_source": "L9a_METADATA",
+        "gap_status": "L9A_METADATA_NOT_ASSESSED",
+        "gap_type": "L9A_METADATA_NOT_ASSESSED",
+        "empty_tsv_and_null_json_mean_unassessed": true,
+        "final_assessment": "CP1_G1_SEPARATE_ARTIFACT_PRESERVING_G0_PANEL",
+        "species_taxonomy_required_before_resource_use_and_freeze": true,
+        "genus_resource_or_taxid_does_not_resolve_species": true
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "policy_id",
+    "version",
+    "states",
+    "documentary_inputs_sha256",
+    "upstream_provenance_sha256",
+    "reference_use_geography",
+    "canonical_k",
+    "canonical_k_role",
+    "fallback_policy",
+    "near_match_methodological_finding",
+    "pairing_model",
+    "analysis_arms",
+    "formal_search_spaces",
+    "cp3_sensitivity_arms",
+    "parameters",
+    "calibration",
+    "resource_policy",
+    "decision_policy",
+    "governance",
+    "serialization",
+    "is_ranking",
+    "complementary_contract_id",
+    "complementary_contract_sha256",
+    "l9a_gap_contract"
+  ],
+  "additionalProperties": false
+}
