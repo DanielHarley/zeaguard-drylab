@@ -1,0 +1,242 @@
+{
+  "accepted_limitations": [
+    "Preliminary assessability only. CP1 final assessability is a separate artifact.",
+    "Ten named L9a scope gaps and ten unresolved species taxids remain documented. Resolve identity before resource use or freeze.",
+    "Soil or residue category is closed by a documented gap, without a fabricated receptor.",
+    "Published BicC benchmark length inconsistency remains explicit.",
+    "Exposure route, formulation, calendar and internal dose remain UNKNOWN where required.",
+    "Homology, biological identity, functional effect and concern are distinct. No ecological safety or functional off-target conclusion is certified."
+  ],
+  "approval": {
+    "author_role": "RESPONSAVEL_PRINCIPAL",
+    "declaration": "Eu revisei o material apresentado e aprovo o pacote CP0.",
+    "review_nature": "PRINCIPAL_OWNER_REVIEW",
+    "review_timestamp": null,
+    "scope": "CP0 package integrated in PR 14 at 30a132ff8d9d60c2dd9244027244b103117c500d",
+    "source": "DIRECT_USER_INSTRUCTION_IN_CURRENT_PROJECT_CONVERSATION",
+    "timestamp_limitation": "Registration time is known. No independent timestamp for the owner's prior review is asserted."
+  },
+  "certification_id": "NB04_G0_20261015_OWNER_EXCEPTION_V1",
+  "certified_artifacts": {
+    ".gitattributes": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "dfbab2023800ad959e64874707bc55ba5b130ed1c60449282ffd039392ef8223"
+    },
+    "artifacts/validation/nb04_cp0/20261015_consolidation/published_materialization/results/bioinformatics/nb04/cp0/cp0_summary.json": {
+      "hash_mode": "RAW",
+      "sha256": "c3233415bc55a7880e21ebdcece927ba6bc5bd350ea4c82d7e7cb8bfce1a5ed4"
+    },
+    "config/nb04_exposure_scenarios.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "09fcdb662a3063328fa308fd39f13cec9446def1ae7c7fa3642b6c01fd757439"
+    },
+    "config/nb04_nto_panel.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "b2d56caef0cb06421330714db6f81ea0cbde414b9a9a9c6b1dd61effd5b29b17"
+    },
+    "config/nb04_nto_policy.schema.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "924da2decd30a77c93c963597de64d337092ff00aaa2145ad198986a9e571781"
+    },
+    "config/nb04_nto_policy.yaml": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "375ed7715e9012111af5acffa40f5bac8a5fd88b4ca257af9cc008c790b95882"
+    },
+    "config/nb04_receptor_exposure.tsv": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "3fbc6edce1c229aff5aef3e871582bb16d6d51fec625aa31240bceb0383f354c"
+    },
+    "config/repro.schema.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "494e5eceb60fd004f377ad0c6570da1ecda62a04e02e30440b911575050952d8"
+    },
+    "config/repro.yaml": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "34a61b904af932f68d5e8f2de6267ed03d56d3c542d10781049335041aaccbee"
+    },
+    "data/reference/nb04_cp0_complementary_contract.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "3a89cbbebc9a207e776d2225748bf703a26ab02de56cb4df5f1c31a1cb23e818"
+    },
+    "data/reference/nb04_cp0_documentary_inputs.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "657861b2007251b0fe0ec53aa6b0b8f3099c8d4cbdeab523063dc786f1af34bb"
+    },
+    "data/reference/nb04_nto_queries.fasta": {
+      "hash_mode": "RAW",
+      "sha256": "486adee671664db73a2e8ef3dea84650638ce749b835cbd33c97c36a5874a234"
+    },
+    "data/reference/nb04_nto_queries.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "b952466940c776032ad2ad2361668fc118cec7baa7328b01a5d1998e6bdf6007"
+    },
+    "data/reference/nb04_upstream_provenance.json": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "2ea6f2b771ca58e6b660a214162c93f05706b5ba981114c56e4ae139b3f9bedd"
+    },
+    "results/bioinformatics/nb04/cp0/coverage_gaps.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "80b90adc21f8b2b75e9e83a07581ef23f410e205b1b051ea79c69ff847799a28"
+    },
+    "results/bioinformatics/nb04/cp0/literature_register.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "e23b4411fefd80157d80945ff5a3dd2acbaf620f83b12fe89a8c0950c6f3b8a8"
+    },
+    "results/bioinformatics/nb04/cp0/query_overlap.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "725b2d56216e13a7a052677e013d602c313451ea921855462e17f8e854a00446"
+    },
+    "results/bioinformatics/nb04/cp0/resource_landscape.tsv": {
+      "hash_mode": "RAW",
+      "sha256": "1dc0da08c14037b80131041405dd6a64c78166f4e81c4ed4bbd1e001ea6c0aa2"
+    },
+    "scripts/prepare_nb04_cp0_inputs.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "74fbf6383baed48d8966e0aef08a5a759d7bbaa762608031dd1194c4b2f6b6e2"
+    },
+    "scripts/validate_nb04_cp0.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "cef3c281606d30c62326e5eb65fe7a8262f308fa61d4b05dff381c4be528c2b4"
+    },
+    "src/workstreams/bioinformatics/decisions/0007-nb04-nto-sequence-specificity-policy.md": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "e7bced188ffc5787edc1b77e59b3b1ba62ae99d1957372eefb362a076a16527c"
+    },
+    "src/zeaguard/nb04_complement.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "2001079dae8a87f58cec01fcf7f15308b931a7f4c9379536160408e528d41557"
+    },
+    "src/zeaguard/nb04_cp0.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "c8c20122f36e6de1e58f43f04f6f5ee762f8c414c94000d5e1bc41a1bea1408a"
+    },
+    "src/zeaguard/nb04_policy.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "aa40309474b58a0940d9c6deb33c6c6d73db2494e41500945242be9b2d7c6fce"
+    },
+    "src/zeaguard/nb04_serialization.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "74e5360ba458b9240a29dd7a952753736e22e3a884c06c65935b0a29f6e6bd25"
+    },
+    "tests/test_nb04_cp0.py": {
+      "hash_mode": "LF_NORMALIZED",
+      "sha256": "8659136db3e20522641cfee88b798597c86999e78f0a5e7618e7e0b49b1a5308"
+    }
+  },
+  "cp1_authorization": "EXPLICIT_OWNER_AUTHORIZATION_EFFECTIVE_ONLY_AFTER_THIS_G0_PASS",
+  "environment_snapshot": {
+    "path": "artifacts/reproducibility/20261015T072304603205Z_e37481d6d154/snapshot.json",
+    "sha256": "42bd6c1e1707fee23882f7cf9ed0965aeb1cd794ebcfa293bce24f792391f32b"
+  },
+  "examined_implementation_commit": "30a132ff8d9d60c2dd9244027244b103117c500d",
+  "gate": "G0",
+  "governance_exception": {
+    "authority": "EXPLICIT_PRINCIPAL_OWNER_DECISION",
+    "declaration": "Dispenso exclusivamente para G0 a exigência de revisão humana externa prevista no B6 A1. A certificação deste gate poderá ser concluída pelo responsável principal com apoio das verificações técnicas e da revisão computacional por agente já realizadas.",
+    "external_human_review": "WAIVED_FOR_G0_NOT_PERFORMED",
+    "independence_limitation": "The owner's review is not an external independent human review. Computational verification was performed by an agent and is attributed as such.",
+    "later_gate_requirements": "UNCHANGED",
+    "original_b6_a1_sha256": "9ea167a88359f78e916d753865d7d40a5c37d2ff04d3a09d73c647c3aebaa62b",
+    "original_preserved": true,
+    "scientific_and_technical_requirements": "UNCHANGED",
+    "scope": "G0_ONLY",
+    "superseded_requirement_for_this_gate": "B6 A1 qualified external human review before G0 certification"
+  },
+  "immutability": "Any change to a certified artifact requires the PLAN J.1a applicability, versioning, amendment and recertification procedure.",
+  "nb02_qualifications": {
+    "D2-BENCH-0814-1143": "REFERENCE_SET_NOT_A_SELECTED_CANDIDATE",
+    "D2-L400-0351-0750": "PROVISIONAL_COMPUTATIONAL_REPRESENTATIVE_PENDING_NATIVE_HUMAN_REVIEW",
+    "D2-L400-0817-1216": "HISTORICAL_SELECTED_SEQUENCE_COMPARATOR_NOT_CURRENT_NATIVE_PARETO_PREFERENCE",
+    "GITV01009778.1": "IDENTIDADE_BIOLOGICA_UNRESOLVED",
+    "nb02_native_cp5": "INCOMPLETE_HUMAN_REVIEW_AND_QUANTITY_GATES_MIN_2_MAX_4_UNCHANGED",
+    "nb04_applicability": "KEEP_SEVEN_HISTORICAL_SEQUENCE_SCREENING_INPUTS_WITH_EXPLICIT_QUALIFICATIONS"
+  },
+  "normative_documents": {
+    "01_PLAN_v2.2.5.md": "9b759f71de500f65947bb150db71a5d20029da06971a26f7e20d1c72193dc83a",
+    "02_B3_L4_REVIEW_v2.md": "e8b4c4269a60bcaab97aa58a5b9936ed4d80e03233a41cf217cdd0f91a715ea4",
+    "03_B3_L4_METHOD_DECISION_MEMO_v2.md": "580da72ed08859523ba2d079c249c4a75b59cb282c79e4c768eaffc26fabe70e",
+    "04_parameter_classification_v2.tsv": "8203ca35bf290700c6d7ac541c1e953dfbe6ae33b91ed1c936e1ebbd9d10f45d",
+    "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md": "aa156f77f02b618b878c8f4acac84bf45b36407c86ec9a674e2d5eb82ec3b91a",
+    "06_B4_TRUNCATION_AND_COMPLETENESS_CONTRACT_v2_1.md": "9e559f9f3dac621afafb2dff53f7c392a439a76d1ed13bd031a5eb17ce174851",
+    "07_B4_TECHNICAL_DECISION_MEMO_v2_1_2.md": "8e2ab29a2f08f13bd31076879e965205a732e2929156759c7e29e1b7dfdb5273",
+    "08_b4_calibration_parameter_matrix_v2_1.tsv": "7731fa6bc8f4523f65d37c130e23885bab4358968ea655b2987712db160b8690",
+    "09_b4_calibration_qa_matrix_v2.tsv": "db59d77f44ec6be32962f25cb4da1e3b4f7c58c3c9c1a55348ba4581d57608b0",
+    "10_l1_l2_l3_l8_ecological_evidence_v2.tsv": "a253e6e2a1cde375e19e2457271683412cea7133673e7a3f23b275fe6b48494f",
+    "11_nto_candidate_receptors_precontract_v2.tsv": "870e468d626fef05248e05da76ebb184f2604131fd2162ce0f06c2db8b53d72a",
+    "12_mandatory_category_closure_v2.tsv": "04b3e7773186926942e9b4fecd087615c7a8a47518b20bb3b02746ce045a6505",
+    "13_l9a_pre_g0_resource_landscape_v2.tsv": "68af318ed95fb4bbc808a8b2f249c0ed7ab59d15c0838844e25e67fae9ad0eab",
+    "14_l9a_resource_landscape_metadata_v2.tsv": "c9aa0ceb988e440202c0b5e555ce341d3ffa10a2772170b993ec82d5a97bd7ed",
+    "15_SOURCE_AUDIT_v2.md": "dd0d285366b4e73a4b3c7caad5da6024ecc4c7bae6c9bf7783dff06888d403c9",
+    "16_l4_b3_methodological_evidence_v2.tsv": "9e26cc3b6c386fb5c6bd050f1264f924f66a98e9556d6dd4b83809e4b78ef61c",
+    "17_B4_V2_1_2_CHANGELOG.md": "e99592617674668c4c6b9a00f1f3fc8563057e6fd91ef82fa553773d5a98d9d7",
+    "18_b4_fixture_spec_v2.tsv": "1beb9845b357a279fca11d1ba317d91f79a84d7fdb3501169daa4c9229d6ad2c",
+    "B4_CALIBRATION_AMENDMENT_A1.md": "0c1815be37ca6187639a27429fc0b38adb3f4be762f773f17a159f29b38f0ecc",
+    "B5_CONCERN_CRITERIA_REVIEW.md": "ed7fd88c6ed8655d0c7b320bf21c618ef15ef11c478a60ec375436fcd4e37eb1",
+    "B5_METHOD_DECISION_MEMO.md": "179d262a41608af4759e95a918e702bce7477c88416618381d23d6ca97bcf57a",
+    "B5_SOURCE_AUDIT.md": "ab02e65e2e8383940949bb328984fb49f332f342a7d328a5ed153cbe6d495be8",
+    "B6_GOVERNANCE_AMENDMENT_A1.md": "9ea167a88359f78e916d753865d7d40a5c37d2ff04d3a09d73c647c3aebaa62b",
+    "B6_GOVERNANCE_REVIEW.md": "b239e42bcc8cede524418a4866aadc32ae6f3f081ee89592167156c23e4a0b20",
+    "B6_METHOD_DECISION_MEMO.md": "6488b8cfc9bdab5d870402358f1fe955d050552ef3f586a30b24f69dee49dc00",
+    "B6_SOURCE_AUDIT.md": "591270f9abb8bd90049cbd11b9dcab519c17aba9537dbcd4a4ebb7cbaf0bae60",
+    "NB04_CP0_COMPLEMENTARY_CONTRACT_PROPOSAL.md": "617438b9bf5a0a4dd2e80fc832af288432060899e5f615384df3e306bb919c68",
+    "NB04_CP0_COMPLEMENTARY_INDEPENDENT_AUDIT.md": "277ac250c6f66a0ff0d451682f75b08d325a33bd58d7d476a374ff2c22581572",
+    "NB04_CP0_COMPLEMENTARY_RATIFICATION_RECORD.md": "a0b3d81d2d94351663a758603470509c91d81d2fdf30e9519c3bf2bbc66d9232",
+    "NB04_PREAPPROVAL_CLOSURE.md": "52b54d4fa633b2847818e7382e57fdbf9c1ec73588f662c93fb30f56aa7f618b",
+    "b5_adjudication_matrix.tsv": "cf28f1c388fd8a94de6477bf5afc552a6b2200db4ab06418db24ed8782b145a6",
+    "b5_concern_methodological_evidence.tsv": "2b102d6ccddbe0f3e863e4022f91bdd89d5838395477d20f1b9ffca678558618",
+    "b5_review_trigger_registry.tsv": "1058163a9294f3a114053b3213e418521fa2ccb95a6fece05219bac2cfd28146",
+    "b5_rule_classification.tsv": "1a60e1ad00e201d26d4270a90af83a7f498bc58d4a80075971061352d3453636",
+    "b5_state_machine.tsv": "9737888ce5633e890dfb394d18362167da8f0d3e16a5ddb01339e7593f89b3bb",
+    "b6_amendment_matrix.tsv": "bfae1f4685c5af44f836ba567f823c52fd1d041cfead3002b03eaab732e24f57",
+    "b6_competency_matrix.tsv": "1a6b16410d87a25fed0a2d3d83cc81a0af36356dbf9250196f44d2aea15a1670",
+    "b6_disagreement_resolution.tsv": "c6362ede9b0af46149072a0b2a0821980aca1c3b461ffc22657b0e998554a983",
+    "b6_governance_methodological_evidence.tsv": "2d31e1b6b499d7784e03cd80012a4a36ca4cef786b09dbad744266c724e81ff8",
+    "b6_review_governance_matrix.tsv": "bca35004c5306d3a6eb6b1f639c6fcd608d9cacb3f100b359329a3fbd02993a3",
+    "b6_review_workflow.tsv": "0c955d310013d820997c73a8f3bd44329868fad7b9845344002cf9764be9bb51",
+    "b6_role_registry.tsv": "005309631796d173f2fd747e94b665d4447fafd4d011c55da792c0b1c032d272",
+    "b6_signoff_contract.tsv": "22da08f61ec6daef53fafe4e0dd5da2c6379d41d1b3a0798ea7235b4cfb322df"
+  },
+  "original_cp0_manifest": {
+    "path": "results/bioinformatics/nb04/cp0/run_manifest.json",
+    "sha256": "b5f2bb5acf8a19e2576e9963c612667fe576c38f3450837cd538484d91f03e6c"
+  },
+  "phase_at_certification": {
+    "CP1": "NOT_STARTED",
+    "informative_calibration": "NOT_EXECUTED",
+    "real_nto_searches": "NOT_EXECUTED",
+    "resource_freeze": "NOT_PERFORMED"
+  },
+  "published_cp0_manifest": {
+    "path": "artifacts/validation/nb04_cp0/20261015_consolidation/published_materialization/results/bioinformatics/nb04/cp0/run_manifest.json",
+    "sha256": "adce402466eac6aa0eb43136b50ed447ce5fb692ee3bd6cf33252878b03a4ba4"
+  },
+  "registered_utc": "2026-10-15T07:47:47.501447+00:00",
+  "schema_version": 1,
+  "status": "G0_PASS",
+  "technical_verification": {
+    "author": "COMPUTATIONAL_AGENT",
+    "counts": {
+      "core": 6,
+      "coverage_gaps": 31,
+      "literature_register": 80,
+      "queries": 7,
+      "receptors": 21,
+      "relations": 21,
+      "resource_landscape": 29,
+      "scenarios": 1
+    },
+    "path": "artifacts/validation/nb04_g0_cp1/20261015/g0_verification.json",
+    "result": "PASS",
+    "reused_validation": {
+      "full_suite_passed": 666,
+      "path": "artifacts/validation/nb04_cp0/20261015_consolidation/validation_record.json",
+      "sha256": "ba65225efe209b85bd16e6719e32747522f80b687243d5c1f8d250b3b804eb3d",
+      "targeted_passed": 273
+    },
+    "sha256": "8d246d20348ef9ab05aec357550e3e4e1eccd3fda91ce00334ddb8e328f0519b"
+  },
+  "upstream_qualification_basis": {
+    "path": "src/workstreams/bioinformatics/runs/2026-10-15_nb02-native-correction.md",
+    "sha256": "495c36c8f133902542adf126adbc11c1ea7423416cb7e7af1787cd8b39990c3a"
+  }
+}

@@ -402,3 +402,71 @@ G0_PASS=NOT_DECLARED. CP1 NB04=NOT_STARTED.
 Informative calibration=NOT_EXECUTED. Real NTO searches=NOT_EXECUTED.
 Resource freeze=NOT_PERFORMED. Environment readiness remains distinct from human
 review and scientific certification.
+
+
+## 9. Owner approval, G0 governance exception and certification on 2026/10/15
+
+This section is a later decision and certification. Sections 1 through 8 retain
+their historical states and authorship. The principal owner stated directly:
+
+> Eu revisei o material apresentado e aprovo o pacote CP0.
+
+> Dispenso exclusivamente para G0 a exigência de revisão humana externa prevista
+> no B6 A1. A certificação deste gate poderá ser concluída pelo responsável
+> principal com apoio das verificações técnicas e da revisão computacional por
+> agente já realizadas.
+
+This is an explicit governance amendment limited to the external human review
+requirement of G0. The original B6 A1 remains byte preserved, SHA256
+9ea167a88359f78e916d753865d7d40a5c37d2ff04d3a09d73c647c3aebaa62b.
+Scientific and technical requirements and the review requirements of G1, G2,
+G3, G5 and G6 retain their scope. The owner review is attributed to the principal
+owner. The technical checks and computational review are attributed to the
+agent. External human review was waived for G0 and was not performed. No
+independent human opinion, qualification or conflict declaration is fabricated.
+
+The examined checkout was clean on feat/nb04-cp0 at integrated implementation
+30a132ff8d9d60c2dd9244027244b103117c500d, CP0 PR 14. The renewed examination
+verified all 43 normative identities, ratified complementary authority, seven
+sequence and selection provenance chains, source manifests and certifying Git
+objects, deterministic overlaps and sequence consistency, 21 preliminary panel
+rows, six CORE receptors, one scenario, 21 relations, 80 literature rows, 29
+landscape rows and 31 explicit gaps. Zea mays remains on the PLANT track and
+Apis mellifera represents POLLINATOR. The documented soil or residue gap remains.
+
+The current NB02 analysis was examined before affirming bundle applicability.
+0351 remains a provisional computational representative requiring native human
+review. 0817 remains a historical selected sequence comparator despite leaving
+the native Pareto. The benchmark retains REFERENCE_SET. Their roles, seven
+sequences and historical provenance are preserved. GITV01009778.1 remains
+IDENTIDADE_BIOLOGICA_UNRESOLVED. NB02 native CP5 remains incomplete under its
+actual human review and unchanged minimum two, maximum four recommendation gates.
+
+All 40 environment checks passed again at the examined clean HEAD. The snapshot
+artifacts/reproducibility/20261015T072304603205Z_e37481d6d154/snapshot.json has
+SHA256 42bd6c1e1707fee23882f7cf9ed0965aeb1cd794ebcfa293bce24f792391f32b.
+Canonical runtime remains WSL Ubuntu 24.04, Python 3.12.14, BLAST 2.17.0,
+HMMER 3.4 and dustmasker 1.0.0. Existing 273 targeted and 666 isolated full suite
+passes were reused after verifying unchanged relevant implementation and input
+hashes. They are prior executions, not tests claimed as newly executed today.
+
+G0_PASS is now registered under the owner's approval and G0 only exception.
+The immutable machine readable certification is
+data/reference/nb04_g0_certification.json, SHA256 4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1.
+It binds the 26 examined artifact paths with explicit raw or LF normalized
+hash semantics, both preserved CP0 manifests, normative identities, examined
+implementation commit and snapshot. The published CP0 manifest remains
+adce402466eac6aa0eb43136b50ed447ce5fb692ee3bd6cf33252878b03a4ba4 and the
+original manifest remains
+b5f2bb5acf8a19e2576e9963c612667fe576c38f3450837cd538484d91f03e6c.
+The fresh verification evidence is
+artifacts/validation/nb04_g0_cp1/20261015/g0_verification.json, SHA256
+8d246d20348ef9ab05aec357550e3e4e1eccd3fda91ce00334ddb8e328f0519b.
+
+Frozen CP0 policy and execution metadata retain their pre certification states.
+They are historical artifacts. This later hash bound certification is the
+authoritative operational progression record. CP1 was not started at the time
+of these G0 checks. The owner's conditional authorization now permits CP1 on a
+new branch. Calibration remains unexecuted and requires the prior complete
+B4 A1 freeze, including independently justified numeric tolerances. Later human
+gate reviews remain required. No resource or search parameter is certified by G0.
