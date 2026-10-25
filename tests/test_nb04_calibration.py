@@ -16,6 +16,14 @@ from zeaguard import nb04_calibration as cal
 from zeaguard import nb04_resources as r
 
 
+def _sha256_raw(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _sha256_lf(data: bytes) -> str:
+    return hashlib.sha256(data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")).hexdigest()
+
+
 def _put(path: Path, data: bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -62,14 +70,14 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     synth_norm_spec = {
         "01_PLAN_v2.2.5.md": {
-            "expected_sha256": hashlib.sha256(ext_doc_bytes).hexdigest(),
+            "expected_sha256": _sha256_raw(ext_doc_bytes),
             "hash_mode": "RAW",
             "location_class": "EXTERNAL_LOCAL_CORPUS",
             "corpus_id": "NB04_B5_INPUTS",
             "repository_relative_path": None,
         },
         "B6_GOVERNANCE_AMENDMENT_A1.md": {
-            "expected_sha256": r.digest(b6_path),
+            "expected_sha256": _sha256_raw(b6_bytes),
             "hash_mode": "RAW",
             "location_class": "IN_REPOSITORY",
             "corpus_id": "REPOSITORY_DECISIONS",
@@ -80,28 +88,24 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     # Snapshots
     g0_snap_rel = "artifacts/reproducibility/20261015T072304603205Z_e37481d6d154/snapshot.json"
-    g0_snap_path = _put(
-        root / g0_snap_rel,
-        r.json_bytes({"schema_version": 1, "git": {"branch": "feat/nb04-cp0", "commit": head, "dirty": False}}),
-    )
+    g0_snap_bytes = r.json_bytes({"schema_version": 1, "git": {"branch": "feat/nb04-cp0", "commit": head, "dirty": False}})
+    g0_snap_path = _put(root / g0_snap_rel, g0_snap_bytes)
     cp1_snap_rel = cal.EXPECTED_CP1_SNAPSHOT_PATH
-    cp1_snap_path = _put(
-        root / cp1_snap_rel,
-        r.json_bytes({"schema_version": 1, "git": {"branch": "feat/nb04-cp1", "commit": head, "dirty": False}}),
-    )
-    latest_path = _put(
-        root / cal.EXPECTED_LATEST_POINTER_PATH,
-        r.json_bytes({
-            "snapshot_file": "20261015T082821773339Z_e37481d6d154/snapshot.json",
-            "snapshot_sha256": r.digest(cp1_snap_path),
-        }),
-    )
-    monkeypatch.setattr(cal, "EXPECTED_LATEST_POINTER_SHA256", r.digest(latest_path))
-    monkeypatch.setattr(cal, "EXPECTED_CP1_SNAPSHOT_SHA256", r.digest(cp1_snap_path))
+    cp1_snap_bytes = r.json_bytes({"schema_version": 1, "git": {"branch": "feat/nb04-cp1", "commit": head, "dirty": False}})
+    cp1_snap_path = _put(root / cp1_snap_rel, cp1_snap_bytes)
+    latest_bytes = r.json_bytes({
+        "snapshot_file": "20261015T082821773339Z_e37481d6d154/snapshot.json",
+        "snapshot_sha256": _sha256_raw(cp1_snap_bytes),
+    })
+    latest_path = _put(root / cal.EXPECTED_LATEST_POINTER_PATH, latest_bytes)
+    monkeypatch.setattr(cal, "EXPECTED_LATEST_POINTER_SHA256", _sha256_raw(latest_bytes))
+    monkeypatch.setattr(cal, "EXPECTED_CP1_SNAPSHOT_SHA256", _sha256_raw(cp1_snap_bytes))
 
-    # G0 certified artifacts (one LF_NORMALIZED, one RAW)
-    lf_art = _put(root / "config/frozen.tsv", b"col1\tcol2\r\n1\t2\r\n")
-    raw_art = _put(root / "data/reference/queries.fasta", b">Q1\nACGT\n")
+    # G0 certified artifacts (one LF_NORMALIZED with CRLF on disk, one RAW)
+    lf_art_bytes = b"col1\tcol2\r\n1\t2\r\n"
+    raw_art_bytes = b">Q1\nACGT\n"
+    _put(root / "config/frozen.tsv", lf_art_bytes)
+    _put(root / "data/reference/queries.fasta", raw_art_bytes)
     cert = {
         "certification_id": "SYNTH_G0_V1",
         "gate": "G0",
@@ -109,11 +113,11 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "certified_artifacts": {
             "config/frozen.tsv": {
                 "hash_mode": "LF_NORMALIZED",
-                "sha256": r.digest(lf_art, normalized=True),
+                "sha256": _sha256_lf(lf_art_bytes),
             },
             "data/reference/queries.fasta": {
                 "hash_mode": "RAW",
-                "sha256": r.digest(raw_art),
+                "sha256": _sha256_raw(raw_art_bytes),
             },
         },
         "normative_documents": {
@@ -121,11 +125,11 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         },
         "environment_snapshot": {
             "path": g0_snap_rel,
-            "sha256": r.digest(g0_snap_path),
+            "sha256": _sha256_raw(g0_snap_bytes),
         },
     }
     r.write_json(root / r.G0_PATH, cert)
-    g0_sha = r.digest(root / r.G0_PATH)
+    g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
     monkeypatch.setattr(cal, "EXPECTED_G0_CERTIFICATE_SHA256", g0_sha)
 
     # Commit G0 and tracked files so only .gitignore is dirty in git
@@ -138,14 +142,17 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     # Synthetic CP1 resource + blastdb
     res_dir = root / "data/external/nto/cp1_synth/R1_RNA"
-    fasta_path = _put(res_dir / "normalized.fasta", b">R1_RNA__00000001\nACGTACGTACGTACGT\n")
-    idmap_path = _put(
-        res_dir / "identifier_map.tsv",
+    fasta_bytes = b">R1_RNA__00000001\nACGTACGTACGTACGT\n"
+    idmap_bytes = (
         b"analysis_id\tsource_id\tsource_header\tlength_nt\tsequence_sha256\n"
-        b"R1_RNA__00000001\tSRC1.1\tSRC1.1 synthetic\t16\t00\n",
+        b"R1_RNA__00000001\tSRC1.1\tSRC1.1 synthetic\t16\t00\n"
     )
-    nsq_path = _put(res_dir / "blastdb/sequences.nsq", b"NSQ_INDEX_BYTES")
-    nin_path = _put(res_dir / "blastdb/sequences.nin", b"NIN_INDEX")
+    nsq_bytes = b"NSQ_INDEX_BYTES"
+    nin_bytes = b"NIN_INDEX"
+    fasta_path = _put(res_dir / "normalized.fasta", fasta_bytes)
+    idmap_path = _put(res_dir / "identifier_map.tsv", idmap_bytes)
+    nsq_path = _put(res_dir / "blastdb/sequences.nsq", nsq_bytes)
+    nin_path = _put(res_dir / "blastdb/sequences.nin", nin_bytes)
     tool_str = "makeblastdb: 2.17.0+\n Package: blast 2.17.0, build Aug 22 2026 11:52:50"
     db_build_path = res_dir / "database_build.json"
     r.write_json(
@@ -153,8 +160,8 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         {
             "tool": tool_str,
             "index_sha256": {
-                "sequences.nin": r.digest(nin_path),
-                "sequences.nsq": r.digest(nsq_path),
+                "sequences.nin": _sha256_raw(nin_bytes),
+                "sequences.nsq": _sha256_raw(nsq_bytes),
             },
             "searches_executed": False,
         },
@@ -167,7 +174,7 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     inventory_path = root / r.INVENTORY
     r.write_json(inventory_path, {"schema_version": 1, "g0_certificate_sha256": g0_sha})
-    inv_sha = r.digest(inventory_path)
+    inv_sha = _sha256_raw(inventory_path.read_bytes())
 
     manifest_data = {
         "schema_version": 1,
@@ -184,15 +191,15 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 "quality": {
                     "record_count": 1,
                     "total_bases": 16,
-                    "fasta_sha256": r.digest(fasta_path),
-                    "identifier_map_sha256": r.digest(idmap_path),
+                    "fasta_sha256": _sha256_raw(fasta_bytes),
+                    "identifier_map_sha256": _sha256_raw(idmap_bytes),
                 },
                 "artifacts_sha256": {
-                    fasta_rel: r.digest(fasta_path),
-                    idmap_rel: r.digest(idmap_path),
-                    nsq_rel: r.digest(nsq_path),
-                    nin_rel: r.digest(nin_path),
-                    db_build_rel: r.digest(db_build_path),
+                    fasta_rel: _sha256_raw(fasta_bytes),
+                    idmap_rel: _sha256_raw(idmap_bytes),
+                    nsq_rel: _sha256_raw(nsq_bytes),
+                    nin_rel: _sha256_raw(nin_bytes),
+                    db_build_rel: _sha256_raw(db_build_path.read_bytes()),
                 },
             }
         ],
@@ -202,7 +209,7 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _put(root / r.ASSESSABILITY, b"organism_id\nZEA_MAYS\n")
 
     ref_shas = {
-        rel: r.digest(root / rel)
+        rel: _sha256_raw((root / rel).read_bytes())
         for rel in (r.MANIFEST, r.INVENTORY, r.REGISTRY, r.ASSESSABILITY)
     }
     monkeypatch.setattr(cal, "EXPECTED_CP1_REFERENCE_SHA256", ref_shas)
@@ -211,7 +218,7 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "stage": "NB04_CP1",
         "outputs_sha256": dict(ref_shas),
         "implementation_sha256_lf": {
-            rel: r.digest(root / rel, normalized=True)
+            rel: _sha256_lf((root / rel).read_bytes())
             for rel in cal.HISTORICAL_CP1_PROTECTED_CODE_PATHS
         },
     }
@@ -219,7 +226,7 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         cal,
         "EXPECTED_CP1_RUN_MANIFEST_SHA256",
-        r.digest(root / cal.EXPECTED_CP1_RUN_MANIFEST_PATH),
+        _sha256_raw((root / cal.EXPECTED_CP1_RUN_MANIFEST_PATH).read_bytes()),
     )
 
     subprocess.run(
@@ -278,17 +285,39 @@ def synthetic_e01_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def test_gitignore_demonstrated_reduction_and_unexplained_divergence(synthetic_e01_env):
     root = synthetic_e01_env["root"]
+    gi_path = root / ".gitignore"
+    baseline_bytes = gi_path.read_bytes()
+
     state = cal.verify_gitignore_and_git_state(root)
     gi = state["gitignore_preservation"]
     assert gi["verdict"] == "PASS_EXPLAINED_BASELINE_FIXED"
-    assert gi["demonstrated_content_difference"]["reproduces_plan_section_2_expected_raw_sha256"] is True
-    assert gi["demonstrated_content_difference"]["evidence_class"] == "DEMONSTRATED_BY_GIT_DIFF_AND_BYTE_REDUCTION"
+    assert gi["matches_current_e01_baseline_raw_sha256"] is True
+    assert gi["matches_plan_section_2_raw_sha256"] is False
+    demo = gi["demonstrated_content_difference"]
+    assert demo["docs_line_removed"] is True
+    assert demo["reproduces_plan_section_2_expected_raw_sha256"] is True
+    assert demo["reduced_bytes_raw_sha256"] != gi["observed_raw_sha256"]
+    assert demo["diff_vs_head_added_lines"] == [".claude", ".maestri", ".planning", "docs"]
+    assert demo["evidence_class"] == "DEMONSTRATED_BY_GIT_DIFF_AND_BYTE_REDUCTION"
     assert gi["reported_attribution"]["evidence_class"] == "REPORTED_CONTEXT_NOT_DEMONSTRATED_BY_GIT_DIFF"
 
-    # Unexplained modification to .gitignore must fail closed
-    (root / ".gitignore").write_bytes(b"# unexpected edit\n")
+    # U01_F03: Removing 'docs' line (reverting to historical plan_v003.md section 2 hash)
+    # must fail closed in both verify_gitignore_and_git_state and verify_preparation_allowlist
+    # and never fabricate a removal proof statement.
+    gi_path.write_bytes(baseline_bytes.replace(b"\ndocs\n", b"\n", 1))
+    with pytest.raises(r.ResourceContractError, match="observed historical plan_v003.md section 2 hash"):
+        cal.verify_gitignore_and_git_state(root)
+    with pytest.raises(r.ResourceContractError, match="diverges from preserved E01 baseline"):
+        cal.verify_preparation_allowlist(root)
+
+    # Unexplained modification to .gitignore must fail closed in both verifiers
+    gi_path.write_bytes(b"# unexpected edit\n")
     with pytest.raises(r.ResourceContractError, match="unexplained .gitignore"):
         cal.verify_gitignore_and_git_state(root)
+    with pytest.raises(r.ResourceContractError, match="diverges from preserved E01 baseline"):
+        cal.verify_preparation_allowlist(root)
+
+    gi_path.write_bytes(baseline_bytes)
 
 
 def test_hash_divergence_and_missing_files_across_all_categories(synthetic_e01_env):
@@ -382,6 +411,31 @@ def test_unknown_hash_mode_and_path_outside_root_rejected(synthetic_e01_env):
     with pytest.raises(r.ResourceContractError, match="outside project root"):
         cal.write_preservation_inventory(root, {"schema_version": 1}, output_path=root.parent / "outside.json")
 
+    # U01_F01: Protected in-root destinations (certified artifact and historical inventory)
+    # must be rejected before any write, keeping existing bytes identical.
+    frozen_path = root / "config/frozen.tsv"
+    frozen_before = frozen_path.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized E01 output path"):
+        cal.write_execution_scope_artifact(root, destination=frozen_path)
+    assert frozen_path.read_bytes() == frozen_before
+
+    with pytest.raises(r.ResourceContractError, match="outside authorized directory"):
+        cal.write_preservation_inventory(root, {"schema_version": 1}, output_path=frozen_path)
+    assert frozen_path.read_bytes() == frozen_before
+
+    hist_inv = _put(
+        root / "artifacts/validation/nb04_cp1_prefreeze/20261025T075045Z/preservation_inventory.json",
+        b'{"historical_round":1}\n',
+    )
+    hist_before = hist_inv.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized E01 output path"):
+        cal.write_execution_scope_artifact(root, destination=hist_inv)
+    assert hist_inv.read_bytes() == hist_before
+
+    with pytest.raises(r.ResourceContractError, match="never be overwritten"):
+        cal.write_preservation_inventory(root, {"schema_version": 1}, output_path=hist_inv)
+    assert hist_inv.read_bytes() == hist_before
+
 
 def test_allowlist_accepts_authorized_paths_and_rejects_unauthorized_dirty_files(synthetic_e01_env):
     root = synthetic_e01_env["root"]
@@ -405,6 +459,55 @@ def test_allowlist_accepts_authorized_paths_and_rejects_unauthorized_dirty_files
         cal.verify_preparation_allowlist(root)
     rogue.unlink()
     allowed_file.unlink()
+
+    # U01_F02: Renaming a tracked file outside allowlist to an allowed destination
+    # must fail and explicitly identify the unauthorized source path ('tracked.txt').
+    subprocess.run(
+        ["git", "-C", str(root), "mv", "tracked.txt", "src/zeaguard/nb04_calibration.py"],
+        check=True,
+        capture_output=True,
+    )
+    with pytest.raises(r.ResourceContractError, match=r"tracked\.txt"):
+        cal.verify_preparation_allowlist(root)
+    subprocess.run(
+        ["git", "-C", str(root), "mv", "src/zeaguard/nb04_calibration.py", "tracked.txt"],
+        check=True,
+        capture_output=True,
+    )
+
+    # U01_F02: Delimiter/quote/space handling in _parse_porcelain_paths (-z and v1 lines)
+    parsed_z = cal._parse_porcelain_paths(
+        "R  src/zeaguard/nb04_calibration.py\x00tracked with space.txt\x00 M .gitignore\x00"
+    )
+    assert [item["path"] for item in parsed_z] == [
+        "tracked with space.txt",
+        "src/zeaguard/nb04_calibration.py",
+        ".gitignore",
+    ]
+    parsed_v1 = cal._parse_porcelain_paths(
+        'R  "tracked with space.txt" -> "src/zeaguard/nb04_calibration.py"\n'
+    )
+    assert [item["path"] for item in parsed_v1] == [
+        "tracked with space.txt",
+        "src/zeaguard/nb04_calibration.py",
+    ]
+
+    # U01_F02: Rename where both source and destination are inside the allowlist succeeds
+    custom_allowlist = (*cal.CLOSED_PREPARATION_DIRTY_ALLOWLIST, "tracked.txt")
+    subprocess.run(
+        ["git", "-C", str(root), "mv", "tracked.txt", "src/zeaguard/nb04_calibration.py"],
+        check=True,
+        capture_output=True,
+    )
+    allowed_rename = cal.verify_preparation_allowlist(root, allowlist=custom_allowlist)
+    assert allowed_rename["verdict"] == "PASS"
+    assert "tracked.txt" in allowed_rename["dirty_paths_observed"]
+    assert "src/zeaguard/nb04_calibration.py" in allowed_rename["dirty_paths_observed"]
+    subprocess.run(
+        ["git", "-C", str(root), "mv", "src/zeaguard/nb04_calibration.py", "tracked.txt"],
+        check=True,
+        capture_output=True,
+    )
 
 
 def test_blast_tool_build_observation_missing_and_divergent_states(synthetic_e01_env):
@@ -460,10 +563,31 @@ def test_artifact_bytes_are_deterministic_and_inventory_never_overwrites(synthet
     root = synthetic_e01_env["root"]
     corpus_dirs = synthetic_e01_env["corpus_dirs"]
 
-    scope_a = r.json_bytes(cal.build_execution_scope_artifact(root))
+    scope_obj = cal.build_execution_scope_artifact(root)
+    scope_a = r.json_bytes(scope_obj)
     scope_b = r.json_bytes(cal.build_execution_scope_artifact(root))
     assert scope_a == scope_b
     assert b"external_corpora" not in scope_a
+
+    # Independent semantic checks on execution scope payload
+    assert scope_obj["artifact_id"] == "NB04_CALIBRATION_EXECUTION_SCOPE_V1"
+    assert scope_obj["normative_corpus_declaration"]["total_documents"] == 2
+    assert scope_obj["normative_corpus_declaration"]["personal_paths_omitted"] is True
+    # 24 index bytes (15 + 9) / 35 FASTA bytes = 0.685714
+    assert scope_obj["index_to_fasta_size_ratio"]["per_resource"]["R1_RNA"]["index_to_fasta_byte_ratio"] == 0.685714
+
+    # Scope writer refuses to overwrite an existing file with divergent content
+    scope_target = root / cal.EXECUTION_SCOPE_PATH
+    divergent_bytes = b'{"divergent":true}\n'
+    _put(scope_target, divergent_bytes)
+    with pytest.raises(r.ResourceContractError, match="divergent content and must not be overwritten"):
+        cal.write_execution_scope_artifact(root)
+    assert scope_target.read_bytes() == divergent_bytes
+    scope_target.unlink()
+
+    written_scope, _ = cal.write_execution_scope_artifact(root)
+    assert written_scope == scope_target
+    assert scope_target.read_bytes() == scope_a
 
     inv_a = r.json_bytes(
         cal.build_preservation_inventory(
@@ -523,6 +647,36 @@ def test_prepare_nb04_calibration_cli_e01(synthetic_e01_env, monkeypatch, capsys
         ),
     )
 
+    # U01_F01: Passing a certified artifact or historical inventory as scope_output
+    # must fail before any write and leave the target bytes intact.
+    frozen_victim = root / "config/frozen.tsv"
+    frozen_before = frozen_victim.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized E01 output path"):
+        module.run_e01(root, synthetic_e01_env["corpus_dirs"], scope_output=frozen_victim)
+    assert frozen_victim.read_bytes() == frozen_before
+
+    hist_inv = _put(
+        root / "artifacts/validation/nb04_cp1_prefreeze/20261025T075045Z/preservation_inventory.json",
+        b'{"historical_round":1}\n',
+    )
+    hist_before = hist_inv.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized E01 output path"):
+        module.run_e01(root, synthetic_e01_env["corpus_dirs"], scope_output=hist_inv)
+    assert hist_inv.read_bytes() == hist_before
+
+    # U01_F01: Failure in inventory destination or downstream verification must not leave
+    # a newly written execution scope file on disk.
+    scope_default = root / cal.EXECUTION_SCOPE_PATH
+    assert not scope_default.exists()
+    with pytest.raises(r.ResourceContractError, match="never be overwritten"):
+        module.run_e01(root, synthetic_e01_env["corpus_dirs"], inventory_output=hist_inv)
+    assert not scope_default.exists()
+    assert hist_inv.read_bytes() == hist_before
+
+    with pytest.raises(r.ResourceContractError, match="NORMATIVE_DOCUMENT_INACCESSIBLE"):
+        module.run_e01(root, {})
+    assert not scope_default.exists()
+
     rc = module.main(
         [
             "e01",
@@ -541,4 +695,51 @@ def test_prepare_nb04_calibration_cli_e01(synthetic_e01_env, monkeypatch, capsys
     assert stdout_json["blast_tool_builds_status"] == "OBSERVED_MATCHES_HISTORICAL_RECEIPTS"
     assert (root / stdout_json["execution_scope_path"]).is_file()
     assert (root / stdout_json["preservation_inventory_path"]).is_file()
+
+
+def test_reviewer_round_001_adversarial_counterexamples(synthetic_e01_env):
+    """Directly exercise the three adversarial counterexamples from review.md Round 001."""
+    import importlib.util
+
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "prepare_nb04_calibration.py"
+    spec = importlib.util.spec_from_file_location("prepare_nb04_calibration", script_path)
+    cli = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(cli)
+
+    root = synthetic_e01_env["root"]
+
+    # Counterexample 1 (U01_F01): scope_output targeting a certified artifact inside root
+    victim = root / "config/frozen.tsv"
+    before = victim.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized E01 output path"):
+        cli.run_e01(root, synthetic_e01_env["corpus_dirs"], scope_output=victim)
+    assert victim.read_bytes() == before
+
+    # Counterexample 2 (U01_F02): git mv from forbidden source ('tracked.txt') to allowed destination
+    subprocess.run(
+        ["git", "-C", str(root), "mv", "tracked.txt", "src/zeaguard/nb04_calibration.py"],
+        check=True,
+        capture_output=True,
+    )
+    assert not (root / "tracked.txt").exists()
+    with pytest.raises(r.ResourceContractError, match=r"tracked\.txt"):
+        cal.verify_preparation_allowlist(root)
+    subprocess.run(
+        ["git", "-C", str(root), "mv", "src/zeaguard/nb04_calibration.py", "tracked.txt"],
+        check=True,
+        capture_output=True,
+    )
+
+    # Counterexample 3 (U01_F03): removing 'docs' line from .gitignore (reversion to historical plan hash)
+    gi = root / ".gitignore"
+    orig_gi = gi.read_bytes()
+    gi.write_bytes(orig_gi.replace(b"\ndocs\n", b"\n", 1))
+    assert b"docs\n" not in gi.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="observed historical plan_v003.md section 2 hash"):
+        cal.verify_gitignore_and_git_state(root)
+    with pytest.raises(r.ResourceContractError, match="diverges from preserved E01 baseline"):
+        cal.verify_preparation_allowlist(root)
+    gi.write_bytes(orig_gi)
+
 

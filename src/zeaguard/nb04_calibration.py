@@ -446,18 +446,59 @@ def _git_output(root: Path, *args: str) -> str:
     return completed.stdout
 
 
+def _unquote_git_path(path_text: str) -> str:
+    if len(path_text) >= 2 and path_text.startswith('"') and path_text.endswith('"'):
+        inner = path_text[1:-1]
+        return bytes(inner, "utf-8").decode("unicode_escape").encode("latin1").decode("utf-8", errors="replace")
+    return path_text
+
+
 def _parse_porcelain_paths(porcelain_output: str) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
+    if "\x00" in porcelain_output:
+        tokens = porcelain_output.split("\x00")
+        if tokens and tokens[-1] == "":
+            tokens.pop()
+        idx = 0
+        while idx < len(tokens):
+            token = tokens[idx]
+            idx += 1
+            if not token:
+                continue
+            require(
+                len(token) >= 4 and token[2] == " ",
+                f"malformed git status -z entry: {token!r}",
+            )
+            status_code = token[:2]
+            path_part = token[3:]
+            if "R" in status_code or "C" in status_code:
+                require(
+                    idx < len(tokens) and bool(tokens[idx]),
+                    f"missing source path in git status -z rename/copy entry: {token!r}",
+                )
+                orig_path = tokens[idx]
+                idx += 1
+                entries.append({"status": status_code, "path": orig_path})
+                entries.append({"status": status_code, "path": path_part})
+            else:
+                entries.append({"status": status_code, "path": path_part})
+        return entries
+
     for raw_line in porcelain_output.splitlines():
         if not raw_line:
             continue
+        require(
+            len(raw_line) >= 4 and raw_line[2] == " ",
+            f"malformed git status porcelain line: {raw_line!r}",
+        )
         status_code = raw_line[:2]
         path_part = raw_line[3:].strip()
-        if " -> " in path_part:
-            path_part = path_part.split(" -> ", 1)[1].strip()
-        if path_part.startswith('"') and path_part.endswith('"'):
-            path_part = path_part[1:-1]
-        entries.append({"status": status_code, "path": path_part})
+        if ("R" in status_code or "C" in status_code) and " -> " in path_part:
+            orig_part, dest_part = path_part.split(" -> ", 1)
+            entries.append({"status": status_code, "path": _unquote_git_path(orig_part.strip())})
+            entries.append({"status": status_code, "path": _unquote_git_path(dest_part.strip())})
+        else:
+            entries.append({"status": status_code, "path": _unquote_git_path(path_part)})
     return entries
 
 
@@ -609,20 +650,37 @@ def verify_gitignore_and_git_state(
     observed_raw = hashlib.sha256(raw_bytes).hexdigest()
     observed_lf = digest(gitignore_path, normalized=True)
 
-    reduced_bytes = raw_bytes.replace(b"\ndocs\n", b"\n", 1)
-    if reduced_bytes == raw_bytes:
+    if b"\ndocs\n" in raw_bytes:
+        reduced_bytes = raw_bytes.replace(b"\ndocs\n", b"\n", 1)
+    elif b"\r\ndocs\r\n" in raw_bytes:
         reduced_bytes = raw_bytes.replace(b"\r\ndocs\r\n", b"\r\n", 1)
-    reduced_raw_sha256 = hashlib.sha256(reduced_bytes).hexdigest()
-    reproduces_plan_hash = reduced_raw_sha256 == expected_plan_raw_sha256
+    elif raw_bytes.startswith(b"docs\n"):
+        reduced_bytes = raw_bytes[len(b"docs\n") :]
+    elif raw_bytes.startswith(b"docs\r\n"):
+        reduced_bytes = raw_bytes[len(b"docs\r\n") :]
+    else:
+        reduced_bytes = raw_bytes
+
+    docs_line_removed = reduced_bytes != raw_bytes
+    reduced_raw_sha256 = hashlib.sha256(reduced_bytes).hexdigest() if docs_line_removed else None
+    reproduces_plan_hash = bool(
+        docs_line_removed
+        and reduced_raw_sha256 is not None
+        and reduced_raw_sha256 != observed_raw
+        and reduced_raw_sha256 == expected_plan_raw_sha256
+    )
 
     if observed_raw == expected_baseline_raw_sha256:
         require(
             reproduces_plan_hash,
-            ".gitignore matches E01 baseline hash but single-line 'docs' reduction did not reproduce plan section 2 hash",
+            ".gitignore matches E01 baseline hash but single-line 'docs' removal did not produce a distinct byte sequence matching plan section 2 hash",
         )
         verdict = "PASS_EXPLAINED_BASELINE_FIXED"
     elif observed_raw == expected_plan_raw_sha256:
-        verdict = "PASS_MATCHES_PLAN_SECTION_2"
+        raise ResourceContractError(
+            f".gitignore preservation divergence: observed historical plan_v003.md section 2 hash "
+            f"({observed_raw}) without preserved 'docs' line; E01 baseline requires {expected_baseline_raw_sha256}"
+        )
     else:
         raise ResourceContractError(
             f"unexplained .gitignore RAW SHA256 divergence: observed={observed_raw}, "
@@ -633,10 +691,11 @@ def verify_gitignore_and_git_state(
     head = _git_output(root, "rev-parse", "HEAD").strip()
     require(bool(re.fullmatch(r"[0-9a-f]{40}", head)), f"invalid Git HEAD SHA: {head}")
     porcelain_raw = _git_output(root, "status", "--porcelain=v1", "-uall")
-    porcelain_entries = _parse_porcelain_paths(porcelain_raw)
+    porcelain_z = _git_output(root, "status", "--porcelain=v1", "-z", "-uall")
+    porcelain_entries = _parse_porcelain_paths(porcelain_z)
 
     modified_tracked = sorted(
-        entry["path"] for entry in porcelain_entries if entry["status"] != "??"
+        {entry["path"] for entry in porcelain_entries if entry["status"] != "??"}
     )
     tracked_diffs: dict[str, dict[str, str]] = {}
     for rel_path in modified_tracked:
@@ -647,6 +706,15 @@ def verify_gitignore_and_git_state(
             "observed_raw_sha256": digest(file_path) if file_path.is_file() else "DELETED",
             "observed_lf_sha256": digest(file_path, normalized=True) if file_path.is_file() else "DELETED",
         }
+
+    gitignore_diff_text = tracked_diffs.get(".gitignore", {}).get("diff_from_head") or _git_output(
+        root, "diff", "HEAD", "--", ".gitignore"
+    )
+    observed_diff_added_lines = [
+        line[1:].rstrip("\r")
+        for line in gitignore_diff_text.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    ]
 
     return {
         "project_root_name": root.name,
@@ -666,15 +734,16 @@ def verify_gitignore_and_git_state(
             "matches_current_e01_baseline_raw_sha256": observed_raw == expected_baseline_raw_sha256,
             "demonstrated_content_difference": {
                 "evidence_class": "DEMONSTRATED_BY_GIT_DIFF_AND_BYTE_REDUCTION",
-                "diff_vs_head_added_lines": [".claude", ".maestri", ".planning", "docs"],
+                "diff_vs_head_added_lines": observed_diff_added_lines,
                 "reduction_operation": "REMOVE_SINGLE_LINE_DOCS",
                 "removed_line_literal": "docs",
+                "docs_line_removed": docs_line_removed,
                 "reduced_bytes_raw_sha256": reduced_raw_sha256,
                 "reproduces_plan_section_2_expected_raw_sha256": reproduces_plan_hash,
                 "statement": (
                     "Removing exclusively the single line 'docs' from the observed .gitignore bytes "
-                    f"({observed_raw}) yields RAW SHA256 {reduced_raw_sha256}, which equals the exact "
-                    f"plan_v003.md section 2 hash ({expected_plan_raw_sha256})."
+                    f"({observed_raw}) yields distinct RAW SHA256 {reduced_raw_sha256}, which equals "
+                    f"the exact plan_v003.md section 2 hash ({expected_plan_raw_sha256})."
                 ),
             },
             "reported_attribution": {
@@ -708,8 +777,8 @@ def verify_preparation_allowlist(
     require(bool(allowlist), "closed preparation allowlist cannot be empty")
     allowed_set = set(allowlist)
 
-    porcelain_raw = _git_output(root, "status", "--porcelain=v1", "-uall")
-    porcelain_entries = _parse_porcelain_paths(porcelain_raw)
+    porcelain_z = _git_output(root, "status", "--porcelain=v1", "-z", "-uall")
+    porcelain_entries = _parse_porcelain_paths(porcelain_z)
     dirty_paths = sorted({entry["path"] for entry in porcelain_entries})
     unauthorized = [path for path in dirty_paths if path not in allowed_set]
 
@@ -733,17 +802,18 @@ def verify_preparation_allowlist(
                 "lf_sha256": None,
             }
 
+    gitignore_file = relative_path(root, ".gitignore")
+    require(gitignore_file.is_file(), ".gitignore missing from repository root")
+    gitignore_observed_raw = digest(gitignore_file)
+    require(
+        gitignore_observed_raw == expected_gitignore_baseline_sha256,
+        f".gitignore RAW SHA256 diverges from preserved E01 baseline: observed={gitignore_observed_raw} expected={expected_gitignore_baseline_sha256}",
+    )
+
     require(
         not unauthorized,
         f"dirty working-tree files outside closed preparation allowlist: {unauthorized}",
     )
-
-    if ".gitignore" in dirty_file_hashes:
-        gitignore_raw = dirty_file_hashes[".gitignore"]["raw_sha256"]
-        require(
-            gitignore_raw in {expected_gitignore_baseline_sha256, expected_gitignore_plan_sha256},
-            f".gitignore modified to unauthorized RAW SHA256: {gitignore_raw}",
-        )
 
     for protected in HISTORICAL_CP1_PROTECTED_CODE_PATHS:
         require(
@@ -1527,14 +1597,75 @@ def build_execution_scope_artifact(root: Path) -> dict[str, Any]:
     }
 
 
+def validate_e01_scope_destination(
+    root: Path,
+    destination: Path | None = None,
+) -> Path:
+    """Validate that the execution scope destination is strictly the authorized E01 scope path."""
+    root = root.resolve()
+    expected_target = relative_path(root, EXECUTION_SCOPE_PATH)
+    if destination is None:
+        target = expected_target
+    else:
+        raw_dest = Path(destination)
+        target = (root / raw_dest).resolve() if not raw_dest.is_absolute() else raw_dest.resolve()
+    require(target.is_relative_to(root), f"execution scope path outside project root: {target}")
+    rel = target.relative_to(root).as_posix()
+    require(
+        target == expected_target and rel == EXECUTION_SCOPE_PATH,
+        f"execution scope destination outside authorized E01 output path ({EXECUTION_SCOPE_PATH}): {rel}",
+    )
+    require(not target.is_dir(), f"execution scope destination cannot be a directory: {rel}")
+    return target
+
+
+def validate_e01_inventory_destination(
+    root: Path,
+    output_path: Path | None = None,
+) -> Path:
+    """Validate that the preservation inventory destination is a new file inside the E01 inventory directory."""
+    root = root.resolve()
+    inv_base = relative_path(root, PRESERVATION_INVENTORY_DIR)
+    if output_path is None:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        target = relative_path(
+            root,
+            f"{PRESERVATION_INVENTORY_DIR}/{stamp}/{PRESERVATION_INVENTORY_FILENAME}",
+        )
+    else:
+        raw_dest = Path(output_path)
+        target = (root / raw_dest).resolve() if not raw_dest.is_absolute() else raw_dest.resolve()
+    require(target.is_relative_to(root), f"preservation inventory path outside project root: {target}")
+    rel = target.relative_to(root).as_posix()
+    require(
+        target.is_relative_to(inv_base)
+        and target.parent != inv_base
+        and target.parent.parent == inv_base
+        and target.name == PRESERVATION_INVENTORY_FILENAME,
+        f"preservation inventory destination outside authorized directory ({PRESERVATION_INVENTORY_DIR}/<run_id>/{PRESERVATION_INVENTORY_FILENAME}): {rel}",
+    )
+    require(
+        not target.exists(),
+        f"preservation inventory destination already exists and must never be overwritten: {target}",
+    )
+    return target
+
+
 def write_execution_scope_artifact(
     root: Path,
     destination: Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
-    """Materialize the deterministic execution scope JSON artifact."""
+    """Materialize the deterministic execution scope JSON artifact without corrupting existing files."""
     root = root.resolve()
-    target = relative_path(root, EXECUTION_SCOPE_PATH) if destination is None else destination.resolve()
+    target = validate_e01_scope_destination(root, destination)
     payload = build_execution_scope_artifact(root)
+    encoded = json_bytes(payload)
+    if target.exists():
+        require(
+            target.is_file() and target.read_bytes() == encoded,
+            f"execution scope destination already exists with divergent content and must not be overwritten: {target}",
+        )
+        return target, payload
     write_json(target, payload)
     return target, payload
 
@@ -1595,19 +1726,6 @@ def write_preservation_inventory(
     output_path: Path | None = None,
 ) -> Path:
     """Write the preservation inventory to a new timestamped path without overwriting any prior record."""
-    root = root.resolve()
-    if output_path is None:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        target = relative_path(
-            root,
-            f"{PRESERVATION_INVENTORY_DIR}/{stamp}/{PRESERVATION_INVENTORY_FILENAME}",
-        )
-    else:
-        target = output_path.resolve()
-        require(target.is_relative_to(root), f"preservation inventory path outside project root: {target}")
-    require(
-        not target.exists(),
-        f"preservation inventory destination already exists and must never be overwritten: {target}",
-    )
+    target = validate_e01_inventory_destination(root, output_path)
     write_json(target, dict(inventory))
     return target

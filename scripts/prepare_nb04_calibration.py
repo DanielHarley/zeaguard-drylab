@@ -16,7 +16,7 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from zeaguard import nb04_calibration as cal
-from zeaguard.nb04_resources import ResourceContractError, digest, relative_path, require
+from zeaguard.nb04_resources import ResourceContractError, digest, json_bytes, require
 
 
 def parse_corpus_mappings(items: list[str]) -> dict[str, Path]:
@@ -41,30 +41,24 @@ def run_e01(
     executed_utc: str | None = None,
 ) -> dict[str, object]:
     root = root.resolve()
-    scope_target = (
-        relative_path(root, cal.EXECUTION_SCOPE_PATH)
-        if scope_output is None
-        else relative_path(root, scope_output.as_posix())
-        if not scope_output.is_absolute()
-        else scope_output.resolve()
-    )
-    require(scope_target.is_relative_to(root), "scope output path outside project root")
-    scope_path, _ = cal.write_execution_scope_artifact(root, scope_target)
+    scope_target = cal.validate_e01_scope_destination(root, scope_output)
+    inv_target = cal.validate_e01_inventory_destination(root, inventory_output)
 
-    inv_target: Path | None = None
-    if inventory_output is not None:
-        inv_target = (
-            relative_path(root, inventory_output.as_posix())
-            if not inventory_output.is_absolute()
-            else inventory_output.resolve()
+    scope_payload = cal.build_execution_scope_artifact(root)
+    encoded_scope = json_bytes(scope_payload)
+    if scope_target.exists():
+        require(
+            scope_target.is_file() and scope_target.read_bytes() == encoded_scope,
+            f"execution scope destination already exists with divergent content and must not be overwritten: {scope_target}",
         )
-        require(inv_target.is_relative_to(root), "inventory output path outside project root")
 
     inventory = cal.build_preservation_inventory(
         root,
         corpus_directories,
         executed_utc=executed_utc,
     )
+
+    scope_path, _ = cal.write_execution_scope_artifact(root, scope_target)
     written_inventory_path = cal.write_preservation_inventory(
         root,
         inventory,
