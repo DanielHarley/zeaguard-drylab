@@ -1,10 +1,12 @@
 """Prepare NB04 B4 pre-freeze calibration artifacts without executing any search.
 
-Importing or running this script never invokes blastn, builds indices, or runs
-informative calibration. Subcommand `e01` executes E01 preservation verification
-and materializes the execution scope and preservation inventory artifacts.
-Subcommand `e03` derives the read-only NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1
-records for the six certified CP1 resources.
+Importing or running this script never invokes blastn searches, builds indices,
+or runs informative calibration. Subcommand `e01` executes E01 preservation
+verification and materializes the execution scope and preservation inventory
+artifacts. Subcommand `e03` derives the read-only
+NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 records for the six certified CP1
+resources. Subcommand `e05` executes E05 Part 1 configuration inspection
+(`-version` and `-help` only) and materializes the inspection artifact.
 """
 from __future__ import annotations
 
@@ -96,6 +98,40 @@ def run_e03(
     )
 
 
+def run_e05(
+    root: Path,
+    corpus_directories: dict[str, Path],
+    *,
+    campaign_id: str = cal.DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    output_path: Path | None = None,
+) -> dict[str, object]:
+    root = root.resolve()
+    validated_target = cal.validate_e05_inspection_destination(root, output_path)
+    payload = cal.build_e05_configuration_inspection(
+        root,
+        corpus_directories,
+        campaign_id=campaign_id,
+    )
+    written_path, artifact_sha256 = cal.write_e05_configuration_inspection(
+        root,
+        payload,
+        destination=validated_target,
+    )
+    return {
+        "stage": "NB04_CP1_E05_PART_1",
+        "inspection_artifact_path": written_path.relative_to(root).as_posix(),
+        "inspection_artifact_sha256": artifact_sha256,
+        "tools_overall_status": payload["a_observed_tool_builds"]["overall_status"],
+        "comparison_status": payload["b_build_comparison_with_cp1_receipts_and_derivations"]["comparison_status"],
+        "equivalent_build_reuse_blocked": payload["b_build_comparison_with_cp1_receipts_and_derivations"]["equivalent_build_reuse_blocked"],
+        "total_parameters_inspected": payload["c_parameter_matrix_inspection"]["total_parameters"],
+        "output_integrity_mechanism": payload["d_output_integrity_mechanism"]["selected_mechanism"],
+        "total_qa_criteria_classified": payload["e_configuration_qa_matrix_status"]["total_criteria"],
+        "searches_executed": False,
+        "queries_executed": False,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
@@ -142,6 +178,31 @@ def build_parser() -> argparse.ArgumentParser:
         default=cal.DEFAULT_GEOMETRY_CAMPAIGN_ID,
         help=f"Target campaign identifier under data/external/nto/<campaign_id>/geometry/ (default: {cal.DEFAULT_GEOMETRY_CAMPAIGN_ID}).",
     )
+
+    e05 = subparsers.add_parser(
+        "e05",
+        help="Execute E05 Part 1 read-only tool build and 31-parameter configuration inspection.",
+    )
+    e05.add_argument("--root", type=Path, default=ROOT, help="Repository root path.")
+    e05.add_argument(
+        "--corpus",
+        action="append",
+        default=[],
+        metavar="CORPUS_ID=PATH",
+        help="Runtime directory mapping for an external normative corpus (repeatable).",
+    )
+    e05.add_argument(
+        "--campaign-id",
+        type=str,
+        default=cal.DEFAULT_GEOMETRY_CAMPAIGN_ID,
+        help=f"CP1 campaign identifier for E03 geometry verification (default: {cal.DEFAULT_GEOMETRY_CAMPAIGN_ID}).",
+    )
+    e05.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help=f"Optional output path under {cal.PRESERVATION_INVENTORY_DIR}/ (default: {cal.E05_INSPECTION_DEFAULT_PATH}).",
+    )
     return parser
 
 
@@ -163,6 +224,16 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_e03(
             args.root,
             campaign_id=args.campaign_id,
+        )
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+    if args.subcommand == "e05":
+        corpora = parse_corpus_mappings(args.corpus)
+        summary = run_e05(
+            args.root,
+            corpora,
+            campaign_id=args.campaign_id,
+            output_path=args.output,
         )
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0

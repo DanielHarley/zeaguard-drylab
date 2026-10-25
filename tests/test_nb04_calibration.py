@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 
 import pytest
@@ -1493,5 +1494,570 @@ def test_u02_f01_authoritative_manifest_trust_boundary_and_reviewer_counterexamp
     assert r2_geom_path.read_bytes() == r2_saved_bytes
 
 
+# ======================================================================
+# U03 / E05 Part 1: build inspection, 31-parameter matrix, output integrity,
+#                   19 QA criteria and the P30 / P23 Coordinator decisions
+# ======================================================================
+
+# (parameter_id, tool, parameter, decision_stage, status) exactly as in 08_b4_calibration_parameter_matrix_v2_1.tsv
+_E05_MATRIX_ROWS = (
+    ("P01", "blastn", "program selection (blastn vs megablast vs dc-megablast)", "ARCHITECTURAL_PRE_G1", "PROPOSED_FIXED_BY_ARCHITECTURE"),
+    ("P02", "blastn", "-task", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P03", "blastn", "-word_size", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P04", "blastn", "-evalue (reporting limit)", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P05", "blastn", "-reward", "G1_RECORD_EXPLICITLY", "REQUIRES_EXPLICIT_RECORDING"),
+    ("P06", "blastn", "-penalty", "G1_RECORD_EXPLICITLY", "REQUIRES_EXPLICIT_RECORDING"),
+    ("P07", "blastn", "-gapopen", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P08", "blastn", "-gapextend", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P09", "blastn", "-dust", "ARCHITECTURAL_PRE_G1", "PROPOSED_FIXED_BY_ARCHITECTURE"),
+    ("P10", "blastn", "-soft_masking", "G1_RECORD_EXPLICITLY", "REQUIRES_EXPLICIT_RECORDING"),
+    ("P11", "blastn", "-lcase_masking", "ARCHITECTURAL_PRE_G1", "PROPOSED_FIXED_BY_ARCHITECTURE"),
+    ("P12", "blastn", "-strand", "ARCHITECTURAL_PRE_G1", "PROPOSED_FIXED_BY_ARCHITECTURE"),
+    ("P13", "blastn", "-max_target_seqs", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION_AND_EMPIRICAL_PROOF"),
+    ("P14", "blastn", "-max_hsps", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION_AND_EMPIRICAL_PROOF"),
+    ("P15", "blastn", "-perc_identity", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P16", "blastn", "-qcov_hsp_perc", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P17", "blastn", "-culling_limit", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P18", "blastn", "-best_hit_overhang", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P19", "blastn", "-best_hit_score_edge", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P20", "blastn", "-subject_besthit", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P21", "blastn", "-xdrop_ungap, -xdrop_gap, -xdrop_gap_final", "G1_RECORD_EXPLICITLY", "REQUIRES_EXPLICIT_RECORDING"),
+    ("P22", "blastn", "-window_size (two-hit window)", "G1_RECORD_EXPLICITLY", "REQUIRES_EXPLICIT_RECORDING"),
+    ("P23", "blastn", "-dbsize / -searchsp", "QA_ONLY_PLUS_G1_PRODUCTION_DECISION", "OPEN_DESIGN_QUESTION"),
+    ("P24", "blastn", "-ungapped", "EXCLUDED_BY_ARCHITECTURE", "PROPOSED_EXCLUDED"),
+    ("P25", "blastn", "-sum_stats", "G1_RECORD_EXPLICITLY", "REQUIRES_EXPLICIT_RECORDING"),
+    ("P26", "blastn", "-outfmt and the field set", "ARCHITECTURAL_PRE_G1", "REUSABLE_AS_STARTING_HYPOTHESIS"),
+    ("P27", "blastn", "-num_threads", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P28", "makeblastdb", "-dbtype, -parse_seqids, -title, -out", "ARCHITECTURAL_PRE_G1", "REUSABLE_AS_STARTING_HYPOTHESIS"),
+    ("P29", "makeblastdb", "-max_file_sz and resulting volume count", "G1_AFTER_CALIBRATION", "REQUIRES_CALIBRATION"),
+    ("P30", "pipeline", "deterministic record ordering of the input FASTA", "ARCHITECTURAL_PRE_G1", "REQUIRES_DESIGN"),
+    ("P31", "pipeline", "HSP table parser and BTOP validation", "ARCHITECTURAL_PRE_G1", "REUSABLE_AS_STARTING_HYPOTHESIS"),
+)
+_E05_FIXED_CANDIDATES = {"P01": "blastn", "P09": "no", "P11": "false", "P12": "both"}
+_E05_P26_PRECEDENT = "outfmt 6 with " + " ".join(cal.E05_OUTFMT_6_PRECEDENT) + " (NB01-NB03)"
+_E05_ALL_SPECIFIERS = cal.E05_OUTFMT_6_PRECEDENT + cal.E05_OUTFMT_6_ADDITIONS + cal.E05_OUTFMT_6_AVAILABLE_NOT_ADOPTED
+_E05_EXCLUDED_PASSAGE = (
+    "**`PROPOSED_EXCLUDED`** — recommended not used at all: `-perc_identity`,\n"
+    "`-qcov_hsp_perc`, `-culling_limit`, `-best_hit_overhang`, `-best_hit_score_edge`,\n"
+    "`-subject_besthit`, `-ungapped`. Synthetic passage standing in for design document section 7."
+)
 
 
+def _e05_outfmt_block() -> str:
+    return (
+        " -outfmt <String>\n   alignment view options:\n     6 = Tabular,\n    11 = BLAST archive (ASN.1),\n"
+        + "".join(f"   \t    {s} means {s}\n" for s in _E05_ALL_SPECIFIERS)
+        + "   Default = `0'\n"
+    )
+
+
+_FAKE_BLASTN_HELP = (
+    "USAGE\n  blastn [-h] [-help]\nOPTIONAL ARGUMENTS\n"
+    " -h\n   Print USAGE and DESCRIPTION;  ignore all other parameters\n"
+    " *** Input query options\n"
+    " -strand <String, `both', `minus', `plus'>\n   Query strand(s) to search against database/subject\n   Default = `both'\n"
+    " *** General search options\n"
+    " -task <String, Permissible values: 'blastn' 'blastn-short' 'dc-megablast'\n                'megablast' 'rmblastn' >\n   Task to execute\n   Default = `megablast'\n"
+    " -out <File_Out, file name length < 256>\n   Output file name\n   Default = `-'\n"
+    " -evalue <Real>\n   Expectation value (E) threshold for saving hits. Default = 10 (1000 for\n   blastn-short)\n"
+    " -word_size <Integer, >=4>\n   Word size for wordfinder algorithm (length of best perfect match)\n"
+    " -gapopen <Integer>\n   Cost to open a gap\n"
+    " -gapextend <Integer>\n   Cost to extend a gap\n"
+    " -penalty <Integer, <=0>\n   Penalty for a nucleotide mismatch\n"
+    " -reward <Integer, >=0>\n   Reward for a nucleotide match\n"
+    " *** Formatting options\n" + _e05_outfmt_block() +
+    " *** Query filtering options\n"
+    " -dust <String>\n   Filter query sequence with DUST (Format: 'yes', 'level window linker', or\n   'no' to disable) Default = '20 64 1' ('no' for blastn-short)\n"
+    " -soft_masking <Boolean>\n   Apply filtering locations as soft masks\n   Default = `true'\n"
+    " -lcase_masking\n   Use lower case filtering in query and subject sequence(s)?\n"
+    " *** Restrict search or results\n"
+    " -perc_identity <Real, 0..100>\n   Percent identity\n"
+    " -qcov_hsp_perc <Real, 0..100>\n   Percent query coverage per hsp\n"
+    " -max_hsps <Integer, >=1>\n   Set maximum number of HSPs per subject sequence to save for each query\n"
+    " -culling_limit <Integer, >=0>\n   If the query range of a hit is enveloped by that of at least this many\n   higher-scoring hits, delete the hit\n    * Incompatible with:  best_hit_overhang, best_hit_score_edge\n"
+    " -best_hit_overhang <Real, (>0 and <0.5)>\n   Best Hit algorithm overhang value (recommended value: 0.1)\n    * Incompatible with:  culling_limit\n"
+    " -best_hit_score_edge <Real, (>0 and <0.5)>\n   Best Hit algorithm score edge value (recommended value: 0.1)\n    * Incompatible with:  culling_limit\n"
+    " -subject_besthit\n   Return only the best HSP for each non overlapping query region\n"
+    " -max_target_seqs <Integer, >=1>\n   Maximum number of aligned sequences to keep \n   (value of 5 or more is recommended)\n   Default = `500'\n    * Incompatible with:  num_descriptions, num_alignments\n"
+    " *** Statistical options\n"
+    " -dbsize <Int8>\n   Effective length of the database \n"
+    " -searchsp <Int8, >=0>\n   Effective length of the search space\n"
+    " *** Extension options\n"
+    " -xdrop_ungap <Real>\n   X-dropoff value (in bits) for ungapped extensions\n"
+    " -xdrop_gap <Real>\n   X-dropoff value (in bits) for preliminary gapped extensions\n"
+    " -xdrop_gap_final <Real>\n   X-dropoff value (in bits) for final gapped alignment\n"
+    " -ungapped\n   Perform ungapped alignment only?\n"
+    " -window_size <Integer, >=0>\n   Multiple hits window size, use 0 to specify 1-hit algorithm\n"
+    " -off_diagonal_range <Integer, >=0>\n   Number of off-diagonals to search for the 2nd hit, use 0 to turn off\n   Default = `0'\n"
+    " *** Miscellaneous options\n"
+    " -num_threads <Integer, >=1>\n   Number of threads (CPUs) to use in the BLAST search\n   Default = `1'\n    * Incompatible with:  remote\n"
+)
+
+_FAKE_MAKEBLASTDB_HELP = (
+    "USAGE\n  makeblastdb [-h] [-help]\nREQUIRED ARGUMENTS\n"
+    " -dbtype <String, `nucl', `prot'>\n   Molecule type of target db\n"
+    "OPTIONAL ARGUMENTS\n"
+    " *** Configuration options\n"
+    " -title <String>\n   Title for BLAST database\n   Default = input file name provided to -in argument\n"
+    " -parse_seqids\n   Option to parse seqid for FASTA input if set, for all other input types\n   seqids are parsed automatically\n"
+    " -out <String>\n   Name of BLAST database to be created\n   Default = input file name provided to -in argumentRequired if multiple\n   file(s)/database(s) are provided as input\n"
+    " -blastdb_version <Integer, 4..5>\n   Version of BLAST database to be created\n   Default = `5'\n"
+    " -max_file_sz <String>\n   Maximum file size for BLAST database files\n   Default = `3GB'\n"
+)
+
+_FAKE_BLAST_FORMATTER_HELP = (
+    "USAGE\n  blast_formatter [-h] [-help]\nOPTIONAL ARGUMENTS\n"
+    " *** Input options\n"
+    " -archive <File_In>\n   File containing BLAST Archive format in ASN.1 (i.e.: output format 11)\n    * Incompatible with:  rid\n"
+    " *** Formatting options\n" + _e05_outfmt_block() +
+    " -num_descriptions <Integer, >=0>\n   Number of database sequences to show one-line descriptions for\n   Not applicable for outfmt > 4\n   Default = `500'\n    * Incompatible with:  max_target_seqs\n"
+    " -num_alignments <Integer, >=0>\n   Number of database sequences to show alignments for\n   Default = `250'\n    * Incompatible with:  max_target_seqs\n"
+    " *** Restrict search or results\n"
+    " -max_target_seqs <Integer, >=1>\n   Maximum number of aligned sequences to keep \n   (value of 5 or more is recommended)\n   Default = `500'\n    * Incompatible with:  num_descriptions, num_alignments\n"
+)
+
+_FAKE_BLASTDBCMD_HELP = "USAGE\n  blastdbcmd [-h] [-help]\nOPTIONAL ARGUMENTS\n -entry <String>\n   Comma-delimited search string(s) of sequence identifiers\n"
+_FAKE_DUSTMASKER_HELP = "USAGE\n  dustmasker [-h] [-help]\nOPTIONAL ARGUMENTS\n -window <Integer>\n   DUST window length\n   Default = `64'\n"
+
+
+@pytest.fixture
+def synthetic_e05_env(synthetic_e01_env, monkeypatch: pytest.MonkeyPatch):
+    """Extend synthetic_e01_env with the 5 E05 tools, the 4 NB04_B5_INPUTS documents and an E03 geometry record."""
+    root = synthetic_e01_env["root"]
+    ext_dir = synthetic_e01_env["corpus_dirs"]["NB04_B5_INPUTS"]
+    bin_dir = synthetic_e01_env["bin_dir"]
+
+    for tool in cal.E05_REQUIRED_TOOLS:
+        _put(bin_dir / tool, f"ELF_BINARY_{tool}".encode("ascii"))
+
+    def parameter_row(pid, tool, parameter, stage, status):
+        candidate = _E05_FIXED_CANDIDATES.get(pid, f"design_space_{pid}")
+        precedent = _E05_P26_PRECEDENT if pid == "P26" else f"precedent_{pid}"
+        return "\t".join([
+            pid, tool, parameter, precedent, candidate, "SEARCH_PARAMETER", "false", f"question_{pid}",
+            f"failure_mode_{pid}", "LOW", "LOW", "NONE", stage, status, f"notes_{pid}",
+        ])
+
+    param_bytes = ("\n".join(["\t".join(cal.E05_PARAMETER_MATRIX_HEADER)] + [parameter_row(*row) for row in _E05_MATRIX_ROWS]) + "\n").encode("utf-8")
+    qa_lines = ["\t".join(cal.E05_QA_MATRIX_HEADER)] + [
+        "\t".join([qid, f"CRITERION_{qid}", f"fixtures_{qid}", f"metric_{qid}", f"expected_{qid}", f"failure_{qid}", "YES", "false", "NOT_TESTED"])
+        for qid in sorted(cal.E05_QA_SPEC)
+    ]
+    qa_bytes = ("\n".join(qa_lines) + "\n").encode("utf-8")
+    doc06_bytes = b"# 06 Truncation and Completeness Contract (synthetic)\n"
+    doc05_bytes = (
+        "# 05 Design (synthetic)\n\n" + _E05_EXCLUDED_PASSAGE + "\n\n**`OPEN_DESIGN_QUESTION`** - synthetic.\n"
+    ).encode("utf-8")
+
+    _put(ext_dir / "08_b4_calibration_parameter_matrix_v2_1.tsv", param_bytes)
+    _put(ext_dir / "09_b4_calibration_qa_matrix_v2.tsv", qa_bytes)
+    _put(ext_dir / "06_B4_TRUNCATION_AND_COMPLETENESS_CONTRACT_v2_1.md", doc06_bytes)
+    _put(ext_dir / "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md", doc05_bytes)
+    e05_norm_shas = {
+        "08_b4_calibration_parameter_matrix_v2_1.tsv": _sha256_raw(param_bytes),
+        "09_b4_calibration_qa_matrix_v2.tsv": _sha256_raw(qa_bytes),
+        "06_B4_TRUNCATION_AND_COMPLETENESS_CONTRACT_v2_1.md": _sha256_raw(doc06_bytes),
+        "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md": _sha256_raw(doc05_bytes),
+    }
+    monkeypatch.setattr(cal, "E05_NORMATIVE_DOCUMENTS_SHA256", e05_norm_shas)
+
+    norm_spec = dict(cal.NORMATIVE_DOCUMENTS_SPEC)
+    cert_path = root / r.G0_PATH
+    cert = json.loads(cert_path.read_text("utf-8"))
+    for doc_name, sha in e05_norm_shas.items():
+        norm_spec[doc_name] = {
+            "expected_sha256": sha, "hash_mode": "RAW", "location_class": "EXTERNAL_LOCAL_CORPUS",
+            "corpus_id": "NB04_B5_INPUTS", "repository_relative_path": None,
+        }
+        cert["normative_documents"][doc_name] = sha
+    monkeypatch.setattr(cal, "NORMATIVE_DOCUMENTS_SPEC", norm_spec)
+    r.write_json(cert_path, cert)
+    g0_sha = _sha256_raw(cert_path.read_bytes())
+    monkeypatch.setattr(cal, "EXPECTED_G0_CERTIFICATE_SHA256", g0_sha)
+
+    inv_path = root / r.INVENTORY
+    r.write_json(inv_path, {"schema_version": 1, "g0_certificate_sha256": g0_sha})
+    inv_sha = _sha256_raw(inv_path.read_bytes())
+    manifest_path = root / r.MANIFEST
+    manifest_obj = json.loads(manifest_path.read_text("utf-8"))
+    manifest_obj["g0_certificate_sha256"] = g0_sha
+    manifest_obj["inventory_sha256"] = inv_sha
+    r.write_json(manifest_path, manifest_obj)
+    run_path = root / cal.EXPECTED_CP1_RUN_MANIFEST_PATH
+    run_obj = json.loads(run_path.read_text("utf-8"))
+    run_obj["outputs_sha256"][r.INVENTORY] = inv_sha
+    r.write_json(run_path, run_obj)
+    exp_refs = dict(cal.EXPECTED_CP1_REFERENCE_SHA256)
+    exp_refs[r.INVENTORY] = inv_sha
+    monkeypatch.setattr(cal, "EXPECTED_CP1_REFERENCE_SHA256", exp_refs)
+
+    res1 = _build_synthetic_resource(
+        root, "R1_RNA",
+        [("TX_1", "TX_1 synthetic", "ACGTACGTACGTACGT"), ("TX_2", "TX_2 synthetic", "ACGTRYSW")],
+        g0_sha=g0_sha,
+    )
+    baseline_expectations, baseline_run_sha = _establish_synthetic_cp1_baseline(root, monkeypatch, [res1])
+    monkeypatch.setattr(cal, "EXPECTED_CP1_RESOURCE_IDS", ("R1_RNA",))
+    cal.derive_and_write_all_resources_geometry(
+        root,
+        expected_reference_sha256=baseline_expectations,
+        expected_run_manifest_sha256=baseline_run_sha,
+        expected_resource_count=1,
+        expected_resource_ids=("R1_RNA",),
+    )
+
+    help_map = {
+        "blastn": _FAKE_BLASTN_HELP, "makeblastdb": _FAKE_MAKEBLASTDB_HELP,
+        "blast_formatter": _FAKE_BLAST_FORMATTER_HELP, "blastdbcmd": _FAKE_BLASTDBCMD_HELP,
+        "dustmasker": _FAKE_DUSTMASKER_HELP,
+    }
+
+    def fake_e05_runner(cmd, **kwargs):
+        exe_name, arg = Path(cmd[0]).name, (cmd[1] if len(cmd) > 1 else "")
+        if arg == "-version":
+            ver = "1.0.0" if exe_name == "dustmasker" else "2.17.0+"
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{exe_name}: {ver}\n Package: blast 2.17.0, build Aug 22 2026 11:52:50\n", stderr="")
+        if arg == "-help":
+            return subprocess.CompletedProcess(cmd, 0, stdout=help_map[exe_name], stderr="")
+        raise AssertionError(f"Forbidden tool invocation in E05: {cmd!r}")
+
+    return {**synthetic_e01_env, "e05_norm_shas": e05_norm_shas, "fake_e05_runner": fake_e05_runner, "help_map": help_map}
+
+
+def _e05_inspect(env, **kwargs):
+    kwargs.setdefault("which_resolver", env["fake_which"])
+    kwargs.setdefault("runner", env["fake_e05_runner"])
+    return cal.build_e05_configuration_inspection(env["root"], env["corpus_dirs"], expected_resource_count=1, **kwargs)
+
+
+def test_e05_normative_documents_sha256_and_missing_file_gate(synthetic_e05_env):
+    """Any divergent SHA256, missing file or tampered CP1 manifest blocks reading and inspection."""
+    root = synthetic_e05_env["root"]
+    ext_dir = synthetic_e05_env["corpus_dirs"]["NB04_B5_INPUTS"]
+
+    with pytest.raises(r.ResourceContractError, match="NORMATIVE_DOCUMENT_INACCESSIBLE"):
+        cal.verify_and_read_e05_normative_inputs(root, {})
+
+    for doc_name in cal.E05_NORMATIVE_DOCUMENTS_SHA256:
+        target = ext_dir / doc_name
+        original = target.read_bytes()
+        target.write_bytes(original + b" ")
+        with pytest.raises(r.ResourceContractError, match=rf"E05 normative document SHA256 mismatch before reading {re.escape(doc_name)}"):
+            _e05_inspect(synthetic_e05_env)
+        target.unlink()
+        with pytest.raises(r.ResourceContractError, match=rf"NORMATIVE_DOCUMENT_INACCESSIBLE: {re.escape(doc_name)}"):
+            _e05_inspect(synthetic_e05_env)
+        target.write_bytes(original)
+
+    manifest_path = root / r.MANIFEST
+    original = manifest_path.read_bytes()
+    manifest_path.write_bytes(original + b"\n")
+    with pytest.raises(r.ResourceContractError, match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json"):
+        _e05_inspect(synthetic_e05_env)
+    manifest_path.write_bytes(original)
+
+
+def test_e05_tool_builds_missing_tool_not_applicable_and_divergent_build_blocks_reuse(synthetic_e05_env):
+    """5-tool observation; a missing tool is NOT_APPLICABLE with grounds; divergence blocks reuse without failing."""
+    env = synthetic_e05_env
+    insp = _e05_inspect(env)
+    sec_a = insp["a_observed_tool_builds"]
+    sec_b = insp["b_build_comparison_with_cp1_receipts_and_derivations"]
+    assert sec_a["all_five_tools_observed"] is True
+    assert sec_b["equivalent_build_reuse_blocked"] is False
+    assert sec_b["retrospective_executable_hash_attributed"] is False
+    assert sec_a["tools"]["dustmasker"]["tool_version"] == "1.0.0"
+    assert sec_a["tools"]["dustmasker"]["tool_version_compared_with_receipt"] is False
+    assert sec_a["tools"]["blastn"]["tool_version"] == "2.17.0+"
+    for tool in cal.E05_REQUIRED_TOOLS:
+        assert sec_a["tools"][tool]["package_build"] == "blast 2.17.0, build Aug 22 2026 11:52:50"
+        assert sec_a["tools"][tool]["executable_sha256"] == _sha256_raw(f"ELF_BINARY_{tool}".encode("ascii"))
+    covered = sec_b["receipt_coverage_declaration"]
+    assert any("blastn" in item and "dustmasker" in item for item in covered["not_covered_by_database_build_receipts"])
+
+    missing = _e05_inspect(env, which_resolver=lambda name: None if name == "dustmasker" else env["fake_which"](name))
+    dm = missing["a_observed_tool_builds"]["tools"]["dustmasker"]
+    assert missing["a_observed_tool_builds"]["all_five_tools_observed"] is False
+    assert missing["b_build_comparison_with_cp1_receipts_and_derivations"]["equivalent_build_reuse_blocked"] is True
+    assert (dm["status"], dm["tool_version"], dm["package_build"], dm["executable_sha256"]) == ("NOT_APPLICABLE",) * 4
+    assert "not found in PATH" in dm["applicability_justification"]
+
+    def divergent_runner(cmd, **kwargs):
+        if cmd[1] == "-version":
+            out = f"{Path(cmd[0]).name}: 2.16.0+\n Package: blast 2.16.0, build Jan 10 2025 00:00:00\n"
+            return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
+        return env["fake_e05_runner"](cmd, **kwargs)
+
+    divergent = _e05_inspect(env, runner=divergent_runner)["b_build_comparison_with_cp1_receipts_and_derivations"]
+    assert divergent["comparison_status"] == "BUILD_DIVERGENCE_DETECTED_REUSE_BLOCKED"
+    assert divergent["equivalent_build_reuse_blocked"] is True
+    assert len(divergent["reuse_block_reasons"]) == 5
+
+    # dustmasker is versioned independently: another tool_version under the same package build still matches.
+    def other_dustmasker_version(cmd, **kwargs):
+        if cmd[1] == "-version" and Path(cmd[0]).name == "dustmasker":
+            return subprocess.CompletedProcess(cmd, 0, stdout="dustmasker: 1.2.3\n Package: blast 2.17.0, build Aug 22 2026 11:52:50\n", stderr="")
+        return env["fake_e05_runner"](cmd, **kwargs)
+
+    assert _e05_inspect(env, runner=other_dustmasker_version)["b_build_comparison_with_cp1_receipts_and_derivations"]["equivalent_build_reuse_blocked"] is False
+
+    # A tool whose -help fails is NOT_APPLICABLE, never a pass.
+    def broken_help(cmd, **kwargs):
+        if cmd[1] == "-help" and Path(cmd[0]).name == "blast_formatter":
+            return subprocess.CompletedProcess(cmd, 3, stdout="", stderr="boom")
+        return env["fake_e05_runner"](cmd, **kwargs)
+
+    broken = _e05_inspect(env, runner=broken_help)
+    assert broken["a_observed_tool_builds"]["tools"]["blast_formatter"]["status"] == "NOT_APPLICABLE"
+    assert broken["d_output_integrity_mechanism"]["selected_mechanism"] == "INSUFFICIENT_BUILD_SUPPORT_QA_I_PENDING"
+
+
+def test_e05_parameter_matrix_defaults_pending_values_exclusions_and_coordinator_decisions(synthetic_e05_env):
+    """31 parameters: documented vs undocumented defaults, no value for G1_AFTER_CALIBRATION, verbatim exclusion reasons."""
+    insp = _e05_inspect(synthetic_e05_env)
+    sec_c = insp["c_parameter_matrix_inspection"]
+    params = sec_c["parameters"]
+    assert len(params) == 31 and sec_c["total_parameters"] == 31
+    assert sec_c["counts"]["by_decision_stage"] == {
+        "ARCHITECTURAL_PRE_G1": 8, "EXCLUDED_BY_ARCHITECTURE": 7, "G1_AFTER_CALIBRATION": 9,
+        "G1_RECORD_EXPLICITLY": 6, "QA_ONLY_PLUS_G1_PRODUCTION_DECISION": 1,
+    }
+
+    # Defaults come from the help text, and are NOT_DOCUMENTED_IN_BUILD_HELP otherwise.
+    documented = {
+        "P02": "Default = `megablast'", "P04": "Default = 10 (1000 for blastn-short)",
+        "P09": "Default = '20 64 1' ('no' for blastn-short)", "P10": "Default = `true'", "P12": "Default = `both'",
+        "P13": "Default = `500'", "P26": "Default = `0'", "P27": "Default = `1'", "P29": "Default = `3GB'",
+    }
+    for pid, text in documented.items():
+        assert params[pid]["documented_default_in_build_help"] == text
+    assert params["P28"]["documented_default_in_build_help"].startswith("PARTIAL_BY_FLAG:")
+    assert sec_c["parameters_without_documented_default"] == [
+        "P01", "P03", "P05", "P06", "P07", "P08", "P11", "P14", "P15", "P16", "P17", "P18", "P19", "P20",
+        "P21", "P22", "P23", "P24", "P25", "P30", "P31",
+    ]
+    assert params["P25"]["per_flag_build_help"]["-sum_stats"]["present_in_build_help"] is False
+    task = params["P02"]["task_default_observation"]
+    assert task["documented_default_task"] == "megablast" and task["documented_default_task_is_admitted"] is False
+
+    # A default that the help does not state is never completed from elsewhere.
+    no_default = _e05_inspect(
+        synthetic_e05_env,
+        runner=lambda cmd, **kw: (
+            subprocess.CompletedProcess(cmd, 0, stdout=synthetic_e05_env["help_map"]["blastn"].replace("   Default = `megablast'\n", ""), stderr="")
+            if Path(cmd[0]).name == "blastn" and cmd[1] == "-help" else synthetic_e05_env["fake_e05_runner"](cmd, **kw)
+        ),
+    )
+    assert no_default["c_parameter_matrix_inspection"]["parameters"]["P02"]["documented_default_in_build_help"] == "NOT_DOCUMENTED_IN_BUILD_HELP"
+
+    # G1_AFTER_CALIBRATION: pending, no value, and a value is refused (P13 and P14 included).
+    pending = ("P02", "P03", "P04", "P07", "P08", "P13", "P14", "P27", "P29")
+    for pid in pending:
+        assert (params[pid]["effective_value_state"], params[pid]["effective_value"]) == (cal.STATE_PENDING, None)
+        mutated = json.loads(json.dumps(params))
+        mutated[pid]["effective_value"] = 500
+        with pytest.raises(r.ResourceContractError, match=rf"parameter {pid} is G1_AFTER_CALIBRATION"):
+            cal.validate_e05_parameter_records(mutated)
+    assert "reserved E02 decision" in params["P13"]["reserved_decision_note"]
+    assert "reserved E02 decision" in params["P14"]["reserved_decision_note"]
+
+    # G1_RECORD_EXPLICITLY: recorded, not decided.
+    for pid in ("P05", "P06", "P10", "P21", "P22", "P25"):
+        assert (params[pid]["effective_value_state"], params[pid]["effective_value"]) == (cal.STATE_RECORDED, None)
+        mutated = json.loads(json.dumps(params))
+        mutated[pid]["effective_value"] = 1
+        with pytest.raises(r.ResourceContractError, match=rf"parameter {pid} is G1_RECORD_EXPLICITLY"):
+            cal.validate_e05_parameter_records(mutated)
+
+    # EXCLUDED_BY_ARCHITECTURE: unapplied, with the contractual reason copied verbatim, never one of the Programmer's.
+    for pid in ("P15", "P16", "P17", "P18", "P19", "P20", "P24"):
+        rec = params[pid]
+        assert (rec["effective_value_state"], rec["effective_value"], rec["option_applied"]) == (cal.STATE_EXCLUDED, "OPTION_NOT_APPLIED", False)
+        reason = rec["contractual_exclusion_reason"]
+        assert reason["design_document_passage_verbatim"] == _E05_EXCLUDED_PASSAGE
+        assert reason["matrix_failure_mode_verbatim"] == f"failure_mode_{pid}"
+        assert reason["matrix_notes_verbatim"] == f"notes_{pid}"
+        for broken in ({"contractual_exclusion_reason": None}, {"option_applied": True}, {"effective_value": "x"}):
+            mutated = json.loads(json.dumps(params))
+            mutated[pid].update(broken)
+            with pytest.raises(r.ResourceContractError, match=rf"excluded parameter {pid} requires"):
+                cal.validate_e05_parameter_records(mutated)
+
+    # P30 and P23 apply the Coordinator decisions (coordination.md 20.8 and 20.9) and carry their reference.
+    assert params["P30"]["effective_value"] == "ASCENDING_ASCII_DEFLINE_RECORD_ID_HASHED_WITH_DOWNSTREAM_HSP_TIE_SORT"
+    assert params["P23"]["effective_value"]["primary_candidate_configurations"] == "NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET"
+    assert params["P23"]["effective_value"]["production_policy"] == "PENDING_G1_DECISION"
+    assert params["P23"]["effective_value"]["search_space_policy_token"].startswith("NATURAL_SEARCH_SPACE_IN_PRIMARY_CANDIDATES")
+    for pid, section in (("P30", "20.8"), ("P23", "20.9")):
+        decision = params[pid]["coordinator_decision"]
+        assert (params[pid]["effective_value_state"], decision["decided_by"], decision["decision_section"]) == (cal.STATE_DECIDED, "IMPLEMENTATION_COORDINATOR", section)
+        assert decision["decision_class"] == "ESTABLISHED_BY_CONTRACT_NOT_RESERVED"
+        mutated = json.loads(json.dumps(params))
+        del mutated[pid]["coordinator_decision"]
+        with pytest.raises(r.ResourceContractError, match=rf"parameter {pid} must record the Coordinator decision"):
+            cal.validate_e05_parameter_records(mutated)
+
+    # P26 is a starting hypothesis: precedent + score; nident and qcovhsp available, NOT adopted.
+    p26 = params["P26"]
+    assert p26["effective_value_state"] == cal.STATE_HYPOTHESIS and p26["effective_value"]["field_order_closed"] is False
+    assert p26["effective_value"]["adopted_specifiers_precedent_in_matrix_order"] == list(cal.E05_OUTFMT_6_PRECEDENT)
+    assert p26["effective_value"]["adopted_specifiers_added_from_plan_section_8"] == ["score"]
+    assert p26["effective_value"]["available_not_adopted"] == ["nident", "qcovhsp"]
+
+    # Flags outside the 31-parameter matrix are an observation only.
+    outside = sec_c["build_help_flags_outside_matrix"]
+    assert outside["observation_only"] is True
+    assert outside["flags_with_documented_default_by_tool"]["blastn"]["-off_diagonal_range"] == "Default = `0'"
+    assert "-strand" not in outside["flags_with_documented_default_by_tool"]["blastn"]
+    assert "-blastdb_version" in outside["flags_with_documented_default_by_tool"]["makeblastdb"]
+
+
+def test_e05_matrix_text_is_checked_against_the_specification(synthetic_e05_env, monkeypatch):
+    """A fixed-by-architecture value or the P26 precedent that differs from the matrix is refused."""
+    with monkeypatch.context() as patch:
+        patch.setitem(cal.E05_EFFECTIVE_VALUES, "P12", (cal.STATE_FIXED, "plus"))
+        with pytest.raises(r.ResourceContractError, match="P12 value 'plus' differs from the matrix candidate_design_space"):
+            _e05_inspect(synthetic_e05_env)
+    with monkeypatch.context() as patch:
+        swapped = (cal.E05_OUTFMT_6_PRECEDENT[1], cal.E05_OUTFMT_6_PRECEDENT[0]) + cal.E05_OUTFMT_6_PRECEDENT[2:]
+        patch.setattr(cal, "E05_OUTFMT_6_PRECEDENT", swapped)
+        with pytest.raises(r.ResourceContractError, match="P26 precedent specifiers differ"):
+            _e05_inspect(synthetic_e05_env)
+
+
+def test_e05_output_integrity_export_caps_and_qa_state(synthetic_e05_env):
+    """Archive + blast_formatter mechanism, the export-path default caps, and 19 QA criteria without any metric."""
+    env = synthetic_e05_env
+    insp = _e05_inspect(env)
+    sec_d = insp["d_output_integrity_mechanism"]
+    assert sec_d["selected_mechanism"] == "IDENTIFIED_BLAST_ASN1_ARCHIVE_WITH_VERIFIABLE_BLAST_FORMATTER_TABULAR_EXPORT"
+    assert sec_d["termination_marker_and_query_count_fallback_required"] is False
+    assert sec_d["adopted_tabular_specifiers"] == list(cal.E05_OUTFMT_6_PRECEDENT + cal.E05_OUTFMT_6_ADDITIONS)
+    assert sec_d["available_not_adopted_specifiers"] == {"nident": True, "qcovhsp": True}
+    cap = sec_d["export_path_default_cap_observation"]
+    assert cap["classification"] == "INSPECTION_OBSERVATION_WITH_CONDITION_TO_VERIFY"
+    assert cap["blast_formatter_flags"]["-max_target_seqs"]["documented_default_in_build_help"] == "Default = `500'"
+    assert cap["blast_formatter_flags"]["-num_descriptions"]["documented_default_in_build_help"] == "Default = `500'"
+    assert cap["blast_formatter_flags"]["-num_alignments"]["documented_default_in_build_help"] == "Default = `250'"
+    assert cap["blastn_search_stage_max_target_seqs"]["present_in_build_help"] is True
+    assert "Truncation is not asserted" in cap["not_established"] and cap["destination"] == "E04 and E06"
+    assert len(cap["conditions_to_verify"]) == 2 and "output_integrity_contract_id" in cap["payload_boundary"]
+
+    # Without the archive input or an adopted specifier the mechanism is insufficient and QA-I stays pending.
+    no_archive = _e05_inspect(env, runner=lambda cmd, **kw: (
+        subprocess.CompletedProcess(cmd, 0, stdout=env["help_map"]["blast_formatter"].replace(" -archive <File_In>", " -arch <File_In>"), stderr="")
+        if Path(cmd[0]).name == "blast_formatter" and cmd[1] == "-help" else env["fake_e05_runner"](cmd, **kw)
+    ))["d_output_integrity_mechanism"]
+    assert no_archive["selected_mechanism"] == "INSUFFICIENT_BUILD_SUPPORT_QA_I_PENDING"
+    assert no_archive["qa_i_mechanism_status"] == "QA_I_PENDING_NO_SUFFICIENT_MECHANISM_CONFIRMED"
+    no_score = _e05_inspect(env, runner=lambda cmd, **kw: (
+        subprocess.CompletedProcess(cmd, 0, stdout=env["help_map"]["blastn"].replace("score means score", "scoreless means none"), stderr="")
+        if Path(cmd[0]).name == "blastn" and cmd[1] == "-help" else env["fake_e05_runner"](cmd, **kw)
+    ))["d_output_integrity_mechanism"]
+    assert no_score["blastn_missing_adopted_specifiers"] == ["score"]
+    assert no_score["selected_mechanism"] == "INSUFFICIENT_BUILD_SUPPORT_QA_I_PENDING"
+
+    sec_e = insp["e_configuration_qa_matrix_status"]
+    assert sec_e["total_criteria"] == 19 and sec_e["no_qa_metric_computable_without_search"] is True
+    assert (sec_e["preconditions_inspected_count"], sec_e["preconditions_not_inspectable_count"]) == (11, 8)
+    for qid, item in sec_e["criteria"].items():
+        assert item["metric_computed_in_e05_part1"] is False and item["state_after_e05_part1"] == "NOT_TESTED"
+    assert "verifiable_by_configuration_inspection_without_query" not in sec_e["criteria"]["QA-C"]
+    notes = " ".join(c["precondition_note"] for c in sec_e["criteria"].values())
+    assert not any(token in notes for token in ("Default", "500", "250", "megablast"))  # no build values in static text
+
+
+def test_e05_canonical_record_order_is_computed_not_asserted(synthetic_e05_env):
+    """P30: the ascending ASCII record_id check is computed from each E03 geometry record."""
+    root = synthetic_e05_env["root"]
+    sec_b = _e05_inspect(synthetic_e05_env)["b_build_comparison_with_cp1_receipts_and_derivations"]
+    check = sec_b["current_e03_geometry_derivations"]["R1_RNA"]["canonical_record_order_check"]
+    assert check["strictly_ascending_ascii_record_id"] is True and check["ordered_record_id_count"] == 2
+    assert check["fasta_sha256"]
+    # Out-of-order ids in the geometry record flip the computed check (the record hash is not what is under test).
+    geom_path = root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json"
+    record = json.loads(geom_path.read_text("utf-8"))
+    ids = record["canonical_order"]["ordered_analysis_ids"]
+    record["canonical_order"]["ordered_analysis_ids"] = ids[::-1]
+    geom_path.write_bytes(r.json_bytes(record))
+    flipped = _e05_inspect(synthetic_e05_env)["b_build_comparison_with_cp1_receipts_and_derivations"]
+    assert flipped["current_e03_geometry_derivations"]["R1_RNA"]["canonical_record_order_check"]["strictly_ascending_ascii_record_id"] is False
+
+
+def test_e05_destination_protection_determinism_and_cli(synthetic_e05_env, monkeypatch, capsys):
+    """Protected or pre-existing destinations are refused before any write; bytes are deterministic; CLI works once."""
+    import importlib.util
+
+    env = synthetic_e05_env
+    root, ext_dir = env["root"], env["corpus_dirs"]["NB04_B5_INPUTS"]
+    payload_a, payload_b = _e05_inspect(env), _e05_inspect(env)
+    bytes_a = r.json_bytes(payload_a)
+    assert bytes_a == r.json_bytes(payload_b)
+    for marker in (b"external_corpora", b"fake_bin", b"/home/", b"/mnt/"):
+        assert marker not in bytes_a
+
+    victim = root / "config/frozen.tsv"
+    before = victim.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized directory"):
+        cal.write_e05_configuration_inspection(root, payload_a, destination=victim)
+    assert victim.read_bytes() == before
+    reserved = root / cal.E05_U04_RESERVED_PATH
+    with pytest.raises(r.ResourceContractError, match="reserved for U04"):
+        cal.validate_e05_inspection_destination(root, reserved)
+    assert not reserved.exists()
+    inventory = _put(root / "artifacts/validation/nb04_cp1_prefreeze/20261025T070000Z/preservation_inventory.json", b'{"inventory":true}\n')
+    with pytest.raises(r.ResourceContractError, match="must not target a preservation inventory"):
+        cal.write_e05_configuration_inspection(root, payload_a, destination=inventory)
+    assert inventory.read_bytes() == b'{"inventory":true}\n'
+    with pytest.raises(r.ResourceContractError, match="outside project root"):
+        cal.validate_e05_inspection_destination(root, root.parent / "escape_e05.json")
+    invalid = json.loads(json.dumps(payload_a))
+    invalid["c_parameter_matrix_inspection"]["parameters"]["P13"]["effective_value"] = 500
+    with pytest.raises(r.ResourceContractError, match="parameter P13 is G1_AFTER_CALIBRATION"):
+        cal.write_e05_configuration_inspection(root, invalid)
+    assert not (root / cal.E05_INSPECTION_DEFAULT_PATH).exists()
+
+    spec = importlib.util.spec_from_file_location("prepare_nb04_calibration", Path(__file__).resolve().parents[1] / "scripts" / "prepare_nb04_calibration.py")
+    cli = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(cli)
+    original_build = cal.build_e05_configuration_inspection
+    monkeypatch.setattr(cal, "build_e05_configuration_inspection", lambda rt, cd, **kw: original_build(
+        rt, cd, which_resolver=env["fake_which"], runner=env["fake_e05_runner"], expected_resource_count=1, **kw))
+    argv = ["e05", "--root", str(root), "--corpus", f"NB04_B5_INPUTS={ext_dir}"]
+    assert cli.main(argv) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["stage"] == "NB04_CP1_E05_PART_1" and out["inspection_artifact_path"] == cal.E05_INSPECTION_DEFAULT_PATH
+    assert out["searches_executed"] is False and out["queries_executed"] is False
+    assert (root / cal.E05_INSPECTION_DEFAULT_PATH).read_bytes() == bytes_a
+    with pytest.raises(r.ResourceContractError, match="never be overwritten"):
+        cli.main(argv)
+
+
+def test_e05_parser_and_mechanism_against_the_real_pinned_build_help():
+    """Runs only `-version` and `-help` of the real tools; SKIPPED (never passed) when the pinned build is absent."""
+    tools = {name: cal._default_tool_which(name) for name in ("blastn", "blast_formatter")}
+    absent = [name for name, path in tools.items() if path is None]
+    if absent:
+        pytest.skip(f"real BLAST+ tools not available in this environment: {absent}")
+
+    def run(tool, flag):
+        done = subprocess.run([tools[tool], flag], capture_output=True, text=True, timeout=30, check=False)
+        assert done.returncode == 0
+        return done.stdout.replace("\r\n", "\n")
+
+    if "2.17.0+" not in run("blastn", "-version"):
+        pytest.skip("real BLAST+ build is not the pinned 2.17.0+; facts below were observed on that build")
+    helps = {tool: run(tool, "-help") for tool in tools}
+    blastn, formatter = cal.parse_blast_help_flags(helps["blastn"]), cal.parse_blast_help_flags(helps["blast_formatter"])
+    assert blastn["-task"]["documented_default_in_build_help"] == "Default = `megablast'"
+    assert blastn["-max_target_seqs"]["documented_default_in_build_help"] == "Default = `500'"
+    assert blastn["-max_hsps"]["documented_default_in_build_help"] == "NOT_DOCUMENTED_IN_BUILD_HELP"
+    assert "-sum_stats" not in blastn
+    assert formatter["-max_target_seqs"]["documented_default_in_build_help"] == "Default = `500'"
+    assert formatter["-num_descriptions"]["documented_default_in_build_help"] == "Default = `500'"
+    assert formatter["-num_alignments"]["documented_default_in_build_help"] == "Default = `250'"
+    mechanism = cal.inspect_e05_output_integrity_mechanism(
+        {"blastn": {"status": "OBSERVED"}, "blast_formatter": {"status": "OBSERVED"}}, helps)
+    assert mechanism["selected_mechanism"] == "IDENTIFIED_BLAST_ASN1_ARCHIVE_WITH_VERIFIABLE_BLAST_FORMATTER_TABULAR_EXPORT"
+    assert mechanism["available_not_adopted_specifiers"] == {"nident": True, "qcovhsp": True}

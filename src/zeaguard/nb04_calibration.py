@@ -1,9 +1,10 @@
-"""NB04 CP1 pre-freeze preservation control, execution scope, and geometry derivation (E01, E03).
+"""NB04 CP1 pre-freeze preservation control, execution scope, geometry, and E05 Part 1 inspection (E01, E03, E05).
 
 Re-executable verification of G0 certified artifacts, the 43 normative documents,
 the six frozen CP1 resources and their BLAST index volumes, historical snapshots,
-observed BLAST tool builds, the closed dirty-tree allowlist, and read-only
-derivation of NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 records for the six resources.
+observed BLAST tool builds, the closed dirty-tree allowlist, read-only
+derivation of NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 records for the six resources,
+and E05 Part 1 read-only tool build and parameter matrix configuration inspection.
 No BLAST query, index build, fixture materialization, or calibration is executed.
 """
 from __future__ import annotations
@@ -13,10 +14,12 @@ import csv
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 from typing import Any
 
 from zeaguard.nb04_resources import (
@@ -116,6 +119,8 @@ BLOCKED_OPERATIONS: tuple[str, ...] = (
 )
 
 BLAST_TOOLS: tuple[str, ...] = ("blastn", "makeblastdb", "blastdbcmd")
+# dustmasker reports its own tool version ("dustmasker: 1.0.0") under the shared BLAST package build.
+INDEPENDENTLY_VERSIONED_TOOLS: frozenset[str] = frozenset({"dustmasker"})
 _BLAST_VERSION_RE = re.compile(
     r"^\s*([A-Za-z0-9_+-]+):\s*(\S+)\s*\r?\n\s*Package:\s*([^,\r\n]+),\s*build\s+([^\r\n]+)\s*$"
 )
@@ -1509,7 +1514,7 @@ def observe_blast_tool_builds(
         exec_sha256 = digest(exec_path)
         exec_bytes = exec_path.stat().st_size
         matches_signature = (
-            parsed_tool["tool_version"] == expected_version
+            (tool in INDEPENDENTLY_VERSIONED_TOOLS or parsed_tool["tool_version"] == expected_version)
             and parsed_tool["package_version"] == expected_package
             and parsed_tool["build_date"] == expected_build_date
         )
@@ -2590,3 +2595,943 @@ def derive_and_write_all_resources_geometry(
         "fixtures_materialized": False,
     }
 
+
+
+# ======================================================================
+# E05 Part 1: build inspection, 31-parameter matrix, output integrity and
+# QA configuration state. Only `-version` and `-help` of the tools are run.
+# ======================================================================
+
+E05_INSPECTION_ARTIFACT_ID = "NB04_E05_CONFIGURATION_INSPECTION_V1"
+E05_INSPECTION_VERSION = "1.0.0"
+E05_INSPECTION_DEFAULT_PATH = f"{PRESERVATION_INVENTORY_DIR}/e05_configuration_inspection.json"
+E05_U04_RESERVED_PATH = "data/reference/nb04_calibration_candidate_configurations.json"
+
+E05_REQUIRED_TOOLS: tuple[str, ...] = ("blastn", "makeblastdb", "blastdbcmd", "blast_formatter", "dustmasker")
+
+E05_NORMATIVE_DOCUMENTS_SHA256: dict[str, str] = {
+    "08_b4_calibration_parameter_matrix_v2_1.tsv": "7731fa6bc8f4523f65d37c130e23885bab4358968ea655b2987712db160b8690",
+    "09_b4_calibration_qa_matrix_v2.tsv": "db59d77f44ec6be32962f25cb4da1e3b4f7c58c3c9c1a55348ba4581d57608b0",
+    "06_B4_TRUNCATION_AND_COMPLETENESS_CONTRACT_v2_1.md": "9e559f9f3dac621afafb2dff53f7c392a439a76d1ed13bd031a5eb17ce174851",
+    "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md": "aa156f77f02b618b878c8f4acac84bf45b36407c86ec9a674e2d5eb82ec3b91a",
+}
+
+E05_PARAMETER_MATRIX_HEADER: tuple[str, ...] = (
+    "parameter_id", "tool", "parameter", "current_precedent", "candidate_design_space", "parameter_role",
+    "biological_decision_role", "calibration_question", "failure_mode", "truncation_relevance",
+    "database_size_relevance", "determinism_relevance", "decision_stage", "status", "notes",
+)
+E05_QA_MATRIX_HEADER: tuple[str, ...] = (
+    "qa_id", "criterion", "fixture_dependency", "metric", "expected_behavior", "failure_interpretation",
+    "blocks_configuration_freeze", "biological_decision_role", "status",
+)
+
+# -outfmt 6 specifiers: the NB01-NB03 precedent, in the order written in the P26 matrix row
+# (`current_precedent`), plus `score` (raw score), which plan_v003.md section 8 requires the parser to
+# preserve. `nident` and `qcovhsp` are supported by the build but nothing in the matrix, in the G0 policy
+# row B4_P26 or in PLAN G.8 requires them, so they are recorded as available and NOT adopted.
+E05_OUTFMT_6_PRECEDENT: tuple[str, ...] = (
+    "qseqid", "sseqid", "pident", "length", "qlen", "slen", "qstart", "qend", "sstart", "send",
+    "sstrand", "evalue", "bitscore", "mismatch", "gapopen", "gaps", "qcovs", "btop",
+)
+E05_OUTFMT_6_ADDITIONS: tuple[str, ...] = ("score",)
+E05_OUTFMT_6_AVAILABLE_NOT_ADOPTED: tuple[str, ...] = ("nident", "qcovhsp")
+
+E05_COORDINATOR_DECISION_RECORD = (
+    "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4/implementation/cycle-001/coordination.md"
+)
+
+STATE_PENDING = "PENDING_CALIBRATION"
+STATE_RECORDED = "RECORDED_NOT_DECIDED_IN_U03"
+STATE_EXCLUDED = "OPTION_NOT_APPLIED_EXCLUDED_BY_ARCHITECTURE"
+STATE_FIXED = "FIXED_BY_ARCHITECTURE_AS_PROPOSED_IN_MATRIX"
+STATE_HYPOTHESIS = "STARTING_HYPOTHESIS_RECORDED"
+STATE_DECIDED = "DECIDED_BY_COORDINATOR_CONTRACT_CONFORMANCE"
+E05_STAGE_STATE: dict[str, str] = {
+    "G1_AFTER_CALIBRATION": STATE_PENDING,
+    "G1_RECORD_EXPLICITLY": STATE_RECORDED,
+    "EXCLUDED_BY_ARCHITECTURE": STATE_EXCLUDED,
+}
+E05_PARAMETER_IDS: tuple[str, ...] = tuple(f"P{n:02d}" for n in range(1, 32))
+
+# Parameters carried by a command-line flag: the flags looked up in the tool's -help (tool column of the matrix).
+E05_PARAMETER_FLAGS: dict[str, tuple[str, ...]] = {
+    "P02": ("-task",), "P03": ("-word_size",), "P04": ("-evalue",), "P05": ("-reward",), "P06": ("-penalty",),
+    "P07": ("-gapopen",), "P08": ("-gapextend",), "P09": ("-dust",), "P10": ("-soft_masking",),
+    "P11": ("-lcase_masking",), "P12": ("-strand",), "P13": ("-max_target_seqs",), "P14": ("-max_hsps",),
+    "P15": ("-perc_identity",), "P16": ("-qcov_hsp_perc",), "P17": ("-culling_limit",),
+    "P18": ("-best_hit_overhang",), "P19": ("-best_hit_score_edge",), "P20": ("-subject_besthit",),
+    "P21": ("-xdrop_ungap", "-xdrop_gap", "-xdrop_gap_final"), "P22": ("-window_size",),
+    "P23": ("-dbsize", "-searchsp"), "P24": ("-ungapped",), "P25": ("-sum_stats",), "P26": ("-outfmt",),
+    "P27": ("-num_threads",), "P28": ("-dbtype", "-parse_seqids", "-title", "-out"),
+    "P29": ("-max_file_sz",),
+}
+
+E05_P23_EFFECTIVE_VALUE: dict[str, str] = {
+    "-dbsize": "NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET",
+    "-searchsp": "NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET",
+    "primary_candidate_configurations": "NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET",
+    "production_policy": "PENDING_G1_DECISION",
+    "qa_f2": "EXPLICIT_NORMALIZATION_SANCTIONED_QA_F2_ONLY_VALUE_AFTER_FREEZE",
+    "search_space_policy_token": (
+        "NATURAL_SEARCH_SPACE_IN_PRIMARY_CANDIDATES_WITH_QA_F2_EXPLICIT_NORMALIZATION_G1_CONFIRMED"
+    ),
+}
+E05_P30_RULE_TOKEN = "ASCENDING_ASCII_DEFLINE_RECORD_ID_HASHED_WITH_DOWNSTREAM_HSP_TIE_SORT"
+
+# Parameters whose effective value is determinable in E05 Part 1 (decision_stage ARCHITECTURAL_PRE_G1 or
+# QA_ONLY_PLUS_G1_PRODUCTION_DECISION): (state, value).
+E05_EFFECTIVE_VALUES: dict[str, tuple[str, Any]] = {
+    "P01": (STATE_FIXED, "blastn"),
+    "P09": (STATE_FIXED, "no"),
+    "P11": (STATE_FIXED, "false"),
+    "P12": (STATE_FIXED, "both"),
+    "P23": (STATE_DECIDED, E05_P23_EFFECTIVE_VALUE),
+    "P26": (
+        STATE_HYPOTHESIS,
+        {
+            "adopted_specifiers_precedent_in_matrix_order": list(E05_OUTFMT_6_PRECEDENT),
+            "adopted_specifiers_added_from_plan_section_8": list(E05_OUTFMT_6_ADDITIONS),
+            "available_not_adopted": list(E05_OUTFMT_6_AVAILABLE_NOT_ADOPTED),
+            "field_order_closed": False,
+            "authoritative_output_format": "11",
+        },
+    ),
+    "P28": (STATE_HYPOTHESIS, {"-dbtype": "nucl", "-parse_seqids": True}),
+    "P30": (STATE_DECIDED, E05_P30_RULE_TOKEN),
+    "P31": (STATE_HYPOTHESIS, None),  # value taken verbatim from the matrix candidate_design_space
+}
+
+E05_COORDINATOR_DECISIONS: dict[str, dict[str, Any]] = {
+    "P30": {
+        "decision_record": E05_COORDINATOR_DECISION_RECORD,
+        "decision_section": "20.8",
+        "decision_class": "ESTABLISHED_BY_CONTRACT_NOT_RESERVED",
+        "decided_by": "IMPLEMENTATION_COORDINATOR",
+        "decision_date": "2026-10-25",
+        "decision": E05_P30_RULE_TOKEN,
+        "scope": (
+            "Fixes canonical_record_order_rule (plan_v003.md section 7) for the six certified CP1 resources and "
+            "for future E04 synthetic fixtures. It does not decide the HSP tie-break in the output."
+        ),
+        "alternatives_considered": {
+            "P30_ALT_1_ASCENDING_ASCII_DEFLINE_RECORD_ID": "ADOPTED. The six certified FASTA files already satisfy it (section b, canonical_record_order_check).",
+            "P30_ALT_2_RESORT_BY_UPSTREAM_SOURCE_ID": "REJECTED. It would invalidate the certified normalized.fasta files, identifier maps, indexes, manifest and E03 descriptor hashes.",
+            "P30_ALT_3_UNCONSTRAINED_INPUT_ORDER": "REJECTED. It violates P30 and leaves QA-E without a baseline order to permute.",
+        },
+    },
+    "P23": {
+        "decision_record": E05_COORDINATOR_DECISION_RECORD,
+        "decision_section": "20.9",
+        "decision_class": "ESTABLISHED_BY_CONTRACT_NOT_RESERVED",
+        "decided_by": "IMPLEMENTATION_COORDINATOR",
+        "decision_date": "2026-10-25",
+        "decision": E05_P23_EFFECTIVE_VALUE["search_space_policy_token"],
+        "scope": (
+            "Covers the candidate configurations before the freeze and the QA-F2 normalization. The production "
+            "policy is NOT decided: the matrix says 'preferred', so it remains pending at gate G1."
+        ),
+        "alternatives_considered": {
+            "P23_ALT_1_NATURAL_PRIMARY_WITH_QA_F2_NORMALIZATION": "ADOPTED.",
+            "P23_ALT_2_FIXED_SEARCH_SPACE_IN_PRIMARY_CANDIDATES": "REJECTED. Reported E-values would no longer describe the resource searched.",
+            "P23_ALT_3_NEVER_NORMALIZE_EVEN_IN_QA_F2": "REJECTED. The matrix sanctions normalization as a QA-F2 technique.",
+        },
+    },
+}
+
+# QA criteria: (configuration preconditions inspected in E05 Part 1, deferred to, note). No QA metric is
+# computed here; every note avoids numbers read from the build so that it cannot drift from the observed help.
+_E05_EXEC = "E04 fixtures and E08 search execution"
+E05_QA_SPEC: dict[str, tuple[bool, str, str]] = {
+    "QA-A": (False, _E05_EXEC, "Requires planted-alignment fixtures and search execution."),
+    "QA-B": (False, _E05_EXEC, "Requires planted coordinates and search execution."),
+    "QA-C": (True, "E08 search execution", "Inspected: the -strand record (P12) and the sstrand specifier support (section d). Minus-strand coordinate behaviour requires search execution."),
+    "QA-D": (False, _E05_EXEC, "Requires repeated executions."),
+    "QA-E": (True, _E05_EXEC, "Inspected: P30 canonical record order and its check on the six certified FASTA files (section b). Result-set equality across record orders requires fixtures and search execution."),
+    "QA-F1": (False, _E05_EXEC, "Requires integral and sharded executions."),
+    "QA-F2": (True, "E08 search execution", "Inspected: -dbsize and -searchsp are documented by the build (P23 record). The normalized comparison requires a frozen reference value and search execution."),
+    "QA-G": (True, "E02 (PC13 versus QA-G is reserved), E04 and E08", "Inspected: documented build defaults recorded for P13 and P14 without assigning values; P15-P20 recorded as unapplied; export-path default caps recorded (section d). Saturation indicators require search execution. The PC13 versus QA-G tension is a reserved E02 decision and is not resolved here."),
+    "QA-H": (True, "E08 search execution", "Inspected: P04, P23, P25 and P26 records. Score and E-value series require search execution."),
+    "QA-I": (True, "E04/E06 parser tests and E08", "Inspected: archive output availability in blastn and archive input in blast_formatter (section d). Parser behaviour on valid, truncated, malformed and corrupted tables requires the parser and corrupted copies."),
+    "QA-J": (False, _E05_EXEC, "Requires repeated process invocations."),
+    "QA-K": (True, "E08 calibration artifacts", "Inspected: tool name, version, package build and prospective executable SHA256 for each tool (section a) and a state for each of the 31 parameters (section c). Fixture hashes, database binary hashes, command line and UTC date belong to later artifacts."),
+    "QA-L": (True, "E02 scale cells (reserved), E04 and E08", "Inspected: exact total_bases and record_count of the six real resources from the E03 geometry records (section b). Class envelopes require reserved scale-cell decisions and fixtures."),
+    "QA-M": (True, "E06 harness and E08 execution", "Inspected: each of the 31 matrix parameters has a state, value or documented-default status (section c). The matrix does not enumerate every build option (section c, build_help_flags_outside_matrix); enlarging the parameter set would be a normative change outside the scope of any agent. Comparing reconstructed and executed command lines requires the harness and executions."),
+    "QA-N": (False, _E05_EXEC, "Requires no-planted-alignment background fixtures and search execution."),
+    "QA-O": (True, "E08 search execution", "Inspected: P24 recorded as unapplied and P07/P08 recorded as pending. Gapped recovery requires search execution."),
+    "QA-P": (False, "E02/E04 fixture-role partitioning and E08 selection records", "Requires fixture roles and selection records."),
+    "QA-Q": (True, "E08 search execution", "Inspected: the P27 record. Result-set invariance across thread counts requires search execution."),
+    "QA-R": (False, _E05_EXEC, "Requires timing and memory measurements during executions."),
+}
+
+E05_INFORMATIONAL_FLAGS = frozenset({"-h", "-help", "-help-full", "-version"})
+E05_EXPORT_PATH_CAP_FLAGS: tuple[str, ...] = ("-max_target_seqs", "-num_descriptions", "-num_alignments")
+
+
+def validate_e05_inspection_destination(root: Path, destination: Path | None = None) -> Path:
+    """Validate the E05 Part 1 inspection destination before any write; refuse pre-existing or protected paths."""
+    root = root.resolve()
+    if destination is None:
+        target = relative_path(root, E05_INSPECTION_DEFAULT_PATH)
+    else:
+        raw_dest = Path(destination)
+        target = (root / raw_dest).resolve() if not raw_dest.is_absolute() else raw_dest.resolve()
+    require(target.is_relative_to(root), f"E05 inspection destination outside project root: {target}")
+    rel = target.relative_to(root).as_posix()
+    require(
+        rel != E05_U04_RESERVED_PATH,
+        f"E05 Part 1 inspection artifact must not occupy {E05_U04_RESERVED_PATH} (reserved for U04)",
+    )
+    require(
+        rel.startswith(f"{PRESERVATION_INVENTORY_DIR}/") and rel.endswith(".json"),
+        f"E05 inspection destination outside authorized directory {PRESERVATION_INVENTORY_DIR}/: {rel}",
+    )
+    require(
+        target.name != PRESERVATION_INVENTORY_FILENAME,
+        f"E05 inspection destination must not target a preservation inventory file: {rel}",
+    )
+    require(not target.exists(), f"E05 inspection destination already exists and must never be overwritten: {target}")
+    return target
+
+
+def _read_matrix_tsv(text: str, header: tuple[str, ...], name: str, key: str) -> dict[str, dict[str, str]]:
+    lines = [line for line in text.splitlines() if line.strip()]
+    rows = list(csv.reader(lines, delimiter="\t", quoting=csv.QUOTE_NONE))
+    require(rows and tuple(rows[0]) == header, f"unexpected header in {name}: {rows[0] if rows else None!r}")
+    out: dict[str, dict[str, str]] = {}
+    for row in rows[1:]:
+        require(len(row) == len(header), f"malformed row in {name}: {row!r}")
+        item = dict(zip(header, row, strict=True))
+        require(item[key] not in out, f"duplicate {key} in {name}: {item[key]}")
+        out[item[key]] = item
+    return out
+
+
+def verify_and_read_e05_normative_inputs(
+    root: Path,
+    corpus_directories: Mapping[str, Path],
+    *,
+    expected_normative_sha256: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Verify the SHA256 of the 4 NB04_B5_INPUTS documents before reading them, then parse both matrices."""
+    root = root.resolve()
+    expected_map = dict(E05_NORMATIVE_DOCUMENTS_SHA256 if expected_normative_sha256 is None else expected_normative_sha256)
+    require(
+        set(expected_map) == set(E05_NORMATIVE_DOCUMENTS_SHA256),
+        f"E05 normative document set mismatch: {sorted(expected_map)}",
+    )
+    cert, _ = verify_g0_certified_artifacts_inventory(root)
+    cert_norm = cert.get("normative_documents", {})
+
+    corpus_dir_raw = corpus_directories.get("NB04_B5_INPUTS")
+    require(corpus_dir_raw is not None, "NORMATIVE_DOCUMENT_INACCESSIBLE: corpus NB04_B5_INPUTS directory not provided")
+    corpus_dir = Path(corpus_dir_raw).resolve()
+    require(corpus_dir.is_dir(), "NORMATIVE_DOCUMENT_INACCESSIBLE: corpus NB04_B5_INPUTS directory does not exist")
+
+    verified_docs: dict[str, dict[str, Any]] = {}
+    texts: dict[str, str] = {}
+    for doc_name in sorted(expected_map):
+        expected_sha = expected_map[doc_name]
+        spec_entry = NORMATIVE_DOCUMENTS_SPEC.get(doc_name)
+        if spec_entry is not None:
+            require(
+                spec_entry.get("hash_mode") == "RAW"
+                and spec_entry.get("corpus_id") == "NB04_B5_INPUTS"
+                and spec_entry.get("expected_sha256") == expected_sha,
+                f"E05 normative specification mismatch for {doc_name}",
+            )
+        if doc_name in cert_norm:
+            require(cert_norm[doc_name] == expected_sha, f"G0 certificate normative SHA256 mismatch for {doc_name}")
+        candidate = corpus_dir / doc_name
+        require(candidate.is_file(), f"NORMATIVE_DOCUMENT_INACCESSIBLE: {doc_name}")
+        raw_bytes = candidate.read_bytes()
+        observed_sha = hashlib.sha256(raw_bytes).hexdigest()
+        require(
+            observed_sha == expected_sha,
+            f"E05 normative document SHA256 mismatch before reading {doc_name}: "
+            f"expected={expected_sha} observed={observed_sha}",
+        )
+        texts[doc_name] = raw_bytes.decode("utf-8").replace("\r\n", "\n")
+        verified_docs[doc_name] = {
+            "corpus_id": "NB04_B5_INPUTS",
+            "expected_sha256": expected_sha,
+            "hash_mode": "RAW",
+            "location_class": "EXTERNAL_LOCAL_CORPUS",
+            "observed_sha256": observed_sha,
+            "size_bytes": len(raw_bytes),
+            "status": "VERIFIED_BEFORE_READ",
+        }
+
+    parameter_rows = _read_matrix_tsv(
+        texts["08_b4_calibration_parameter_matrix_v2_1.tsv"],
+        E05_PARAMETER_MATRIX_HEADER,
+        "08_b4_calibration_parameter_matrix_v2_1.tsv",
+        "parameter_id",
+    )
+    require(
+        tuple(sorted(parameter_rows)) == E05_PARAMETER_IDS,
+        f"parameter matrix must contain exactly P01..P31; observed={sorted(parameter_rows)}",
+    )
+    for pid, row in parameter_rows.items():
+        require(row["biological_decision_role"] == "false", f"{pid} must carry biological_decision_role=false")
+    qa_rows = _read_matrix_tsv(
+        texts["09_b4_calibration_qa_matrix_v2.tsv"],
+        E05_QA_MATRIX_HEADER,
+        "09_b4_calibration_qa_matrix_v2.tsv",
+        "qa_id",
+    )
+    require(
+        set(qa_rows) == set(E05_QA_SPEC),
+        f"QA matrix must contain exactly the 19 criteria {sorted(E05_QA_SPEC)}; observed={sorted(qa_rows)}",
+    )
+
+    # Verbatim contractual reason for the PROPOSED_EXCLUDED parameters (design document section 7).
+    match = re.search(
+        r"\*\*`PROPOSED_EXCLUDED`\*\*.*?(?=\*\*`OPEN_DESIGN_QUESTION`\*\*)",
+        texts["05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md"],
+        flags=re.DOTALL,
+    )
+    require(match is not None, "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md: PROPOSED_EXCLUDED passage not found")
+    excluded_passage = match.group(0).strip()
+    for pid, row in parameter_rows.items():
+        if row["decision_stage"] == "EXCLUDED_BY_ARCHITECTURE":
+            require(
+                row["parameter"] in excluded_passage,
+                f"{pid} {row['parameter']} is not named in the design document PROPOSED_EXCLUDED passage",
+            )
+    return {
+        "verification_summary": {
+            "corpus_id": "NB04_B5_INPUTS",
+            "documents": verified_docs,
+            "personal_paths_omitted": True,
+            "total_documents_verified": len(verified_docs),
+            "verdict": "PASS",
+        },
+        "parameter_matrix_rows": parameter_rows,
+        "qa_matrix_rows": qa_rows,
+        "excluded_passage": excluded_passage,
+    }
+
+
+def parse_blast_help_flags(help_text: str) -> dict[str, dict[str, Any]]:
+    """Parse NCBI BLAST+ `-help` into per-flag metadata; `Default = ...` is taken only when the help states it."""
+    flags: dict[str, list[str]] = {}
+    current: str | None = None
+    in_arguments = False
+    for raw_line in help_text.splitlines():
+        stripped = raw_line.strip()
+        if stripped in ("REQUIRED ARGUMENTS", "OPTIONAL ARGUMENTS"):
+            in_arguments = True
+            continue
+        if not in_arguments:
+            continue
+        if raw_line.startswith(" ***"):
+            current = None
+            continue
+        match = re.match(r"^ (-[A-Za-z0-9_-]+)(?:\s|$)", raw_line)
+        if match:
+            current = match.group(1)
+            flags[current] = [stripped]
+        elif current is not None and stripped:
+            flags[current].append(stripped)
+
+    parsed: dict[str, dict[str, Any]] = {}
+    for flag, lines in flags.items():
+        body: list[str] = []
+        constraints: list[str] = []
+        for line in lines[1:]:
+            if constraints or line.startswith(("* Incompatible with:", "* Requires:")):
+                constraints.append(line)
+            else:
+                body.append(line)
+        description = " ".join(body)
+        default_match = re.search(r"(Default = .*?)$", description)
+        parsed[flag] = {
+            "constraints": " ".join(constraints) if constraints else None,
+            "description": description,
+            "documented_default_in_build_help": (
+                default_match.group(1).strip() if default_match else "NOT_DOCUMENTED_IN_BUILD_HELP"
+            ),
+            "flag": flag,
+            "header_line": lines[0],
+            "present_in_build_help": True,
+        }
+    return parsed
+
+
+def _default_tool_which(tool: str) -> str | None:
+    """Resolve a tool in PATH or alongside the active Python executable (e.g. conda env bin/)."""
+    found = shutil.which(tool)
+    if found:
+        return found
+    candidate = Path(sys.executable).resolve().parent / tool
+    return str(candidate) if candidate.is_file() and os.access(candidate, os.X_OK) else None
+
+
+def _e05_not_applicable_tool(tool: str, reason: str) -> dict[str, Any]:
+    return {
+        "applicability_justification": (
+            f"{reason}; recorded as NOT_APPLICABLE with this justification and never presumed as passing."
+        ),
+        "executable_sha256": "NOT_APPLICABLE",
+        "help_output_sha256_lf": "NOT_APPLICABLE",
+        "matches_receipt_build": False,
+        "package_build": "NOT_APPLICABLE",
+        "status": "NOT_APPLICABLE",
+        "tool_name": tool,
+        "tool_version": "NOT_APPLICABLE",
+    }
+
+
+def _e05_geometry_derivations(
+    root: Path, manifest: Mapping[str, Any], campaign_id: str, require_e03_geometry: bool
+) -> dict[str, dict[str, Any]]:
+    """Verify each E03 geometry record against the authoritative manifest and check the P30 record order."""
+    derivations: dict[str, dict[str, Any]] = {}
+    for resource in sorted(manifest.get("resources", []), key=lambda item: item["resource_id"]):
+        rid = resource["resource_id"]
+        geom_rel = f"data/external/nto/{campaign_id}/geometry/{rid}.json"
+        geom_path = relative_path(root, geom_rel)
+        if not geom_path.is_file():
+            require(not require_e03_geometry, f"required E03 geometry record missing for {rid}: {geom_rel}")
+            derivations[rid] = {"geometry_record_path": geom_rel, "status": "NOT_MATERIALIZED"}
+            continue
+        record = json.loads(geom_path.read_text("utf-8"))
+        descriptor_sha = extract_geometry_descriptor_sha256_from_record(record)
+        source = record.get("source_fasta", {})
+        require(
+            record.get("resource_id") == rid
+            and source.get("observed_fasta_sha256") == resource["quality"]["fasta_sha256"]
+            and source.get("observed_identifier_map_sha256") == resource["quality"]["identifier_map_sha256"],
+            f"E03 geometry record out of sync with authoritative CP1 manifest for {rid}",
+        )
+        ids = record["canonical_order"]["ordered_analysis_ids"]
+        derivations[rid] = {
+            "canonical_record_order_check": {
+                "fasta_sha256": source["observed_fasta_sha256"],
+                "ordered_record_id_count": len(ids),
+                "strictly_ascending_ascii_record_id": all(a < b for a, b in zip(ids, ids[1:])),
+            },
+            "descriptor_sha256": descriptor_sha,
+            "geometry_record_path": geom_rel,
+            "geometry_record_sha256": digest(geom_path),
+            "status": "VERIFIED_AGAINST_AUTHORITATIVE_CP1_MANIFEST",
+            "total_bases": record["architecture_descriptor"]["total_bases"],
+        }
+    return derivations
+
+
+def inspect_e05_tool_builds_and_help(
+    root: Path,
+    manifest: Mapping[str, Any],
+    *,
+    campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    which_resolver: Callable[[str], str | None] = _default_tool_which,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    require_e03_geometry: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
+    """Observe `-version`/`-help` of the 5 tools (reusing E01 observation) and compare with receipts and E03 records."""
+    root = root.resolve()
+    observation = observe_blast_tool_builds(
+        root, manifest, tool_names=E05_REQUIRED_TOOLS, which_resolver=which_resolver, runner=runner
+    )
+    reuse_block_reasons = list(observation["reuse_block_reasons"])
+    tools: dict[str, dict[str, Any]] = {}
+    help_texts: dict[str, str] = {}
+    for tool, obs in observation["observed_tools"].items():
+        if obs["status"] != "OBSERVED":
+            tools[tool] = _e05_not_applicable_tool(tool, str(obs["reason"]))
+            continue
+        try:
+            help_proc = runner(
+                [str(Path(which_resolver(tool)).resolve()), "-help"],
+                capture_output=True, text=True, timeout=15, check=False,
+            )
+            help_text = (help_proc.stdout or "").replace("\r\n", "\n")
+            reason = None if help_proc.returncode == 0 and help_text.strip() else f"{tool} -help returned code {help_proc.returncode} or empty output"
+        except (OSError, subprocess.SubprocessError) as exc:
+            help_text, reason = "", f"{tool} -help execution failed: {exc}"
+        if reason is not None:
+            reuse_block_reasons.append(f"{tool}: NOT_APPLICABLE ({reason})")
+            tools[tool] = _e05_not_applicable_tool(tool, reason)
+            continue
+        help_texts[tool] = help_text
+        tools[tool] = {
+            "applicability_justification": f"Observed in the canonical environment via read-only `{tool} -version` and `{tool} -help` (plan_v003.md section 7 item 2).",
+            "executable_bytes": obs["prospective_executable_bytes"],
+            "executable_sha256": obs["prospective_executable_sha256"],
+            "executable_sha256_scope": "PROSPECTIVE_CURRENT_BINARY_ONLY_NEVER_ATTRIBUTED_TO_HISTORICAL_BUILDS",
+            "help_output_sha256_lf": hashlib.sha256(help_text.encode("utf-8")).hexdigest(),
+            "matches_receipt_build": obs["matches_historical_receipt_version_package_build"],
+            "package_build": f"{obs['package_version']}, build {obs['build_date']}",
+            "raw_version_output": obs["raw_version_output"],
+            "status": "OBSERVED",
+            "tool_name": tool,
+            "tool_version": obs["tool_version"],
+            "tool_version_compared_with_receipt": tool not in INDEPENDENTLY_VERSIONED_TOOLS,
+        }
+
+    all_observed = all(item["status"] == "OBSERVED" for item in tools.values())
+    all_match = all_observed and all(item["matches_receipt_build"] for item in tools.values())
+    if all_match:
+        overall, comparison = "ALL_FIVE_TOOLS_OBSERVED_AND_MATCH_RECEIPT_PACKAGE_BUILD", "MAKEBLASTDB_MATCHES_RECEIPTS_AND_ALL_FIVE_TOOLS_SHARE_PACKAGE_BUILD"
+    elif not all_observed:
+        overall, comparison = "INCOMPLETE_TOOLSET_NOT_APPLICABLE_RECORDED", "TOOL_MISSING_OR_UNINSPECTABLE_REUSE_BLOCKED"
+    else:
+        overall, comparison = "ALL_FIVE_TOOLS_OBSERVED_WITH_BUILD_DIVERGENCE", "BUILD_DIVERGENCE_DETECTED_REUSE_BLOCKED"
+
+    section_a = {
+        "all_five_tools_observed": all_observed,
+        "only_version_and_help_invoked": True,
+        "overall_status": overall,
+        "required_tools": list(E05_REQUIRED_TOOLS),
+        "searches_executed": False,
+        "tools": tools,
+    }
+    section_b = {
+        "comparison_status": comparison,
+        "current_e03_geometry_derivations": _e05_geometry_derivations(root, manifest, campaign_id, require_e03_geometry),
+        "equivalent_build_reuse_blocked": not all_match,
+        "historical_cp1_database_build_receipts": observation["historical_receipt_reference"],
+        "receipt_coverage_declaration": {
+            "covered_by_database_build_receipts": [
+                "makeblastdb tool_version and package build (the `tool` field)",
+                "makeblastdb command line with its flags (-dbtype, -parse_seqids, -blastdb_version, -taxid, -title, -out)",
+                "per-volume index_sha256 digests",
+                "searches_executed=False attestation",
+            ],
+            "not_covered_by_database_build_receipts": [
+                "executable SHA256 of makeblastdb",
+                "tool_version, package build or executable SHA256 of blastn, blastdbcmd, blast_formatter and dustmasker",
+            ],
+            "scope_statement": (
+                "The `tool` field of the six database_build.json receipts records only the makeblastdb version "
+                "and package build string. Prospective executable_sha256 values in section a apply to the current "
+                "binaries only and are not attributed retrospectively to the historical construction."
+            ),
+        },
+        "retrospective_executable_hash_attributed": False,
+        "reuse_block_reasons": reuse_block_reasons,
+    }
+    return section_a, section_b, help_texts
+
+
+def inspect_e05_output_integrity_mechanism(
+    observed_tools: Mapping[str, Mapping[str, Any]], help_texts: Mapping[str, str]
+) -> dict[str, Any]:
+    """Determine from the build help whether the ASN.1 archive plus blast_formatter tabular export is available."""
+    parsed = {tool: parse_blast_help_flags(help_texts[tool]) for tool in ("blastn", "blast_formatter") if tool in help_texts}
+    blastn_help = help_texts.get("blastn", "")
+    formatter_help = help_texts.get("blast_formatter", "")
+    formatter_flags = parsed.get("blast_formatter", {})
+    blastn_flags = parsed.get("blastn", {})
+
+    def lacks(specifiers: Sequence[str], text: str) -> list[str]:
+        return [s for s in specifiers if not re.search(rf"\b{re.escape(s)}\s+means\b", text)]
+
+    adopted = E05_OUTFMT_6_PRECEDENT + E05_OUTFMT_6_ADDITIONS
+    missing_blastn = lacks(adopted, blastn_help)
+    missing_formatter = lacks(adopted, formatter_help)
+    archive_in_blastn = "-outfmt" in blastn_flags and "11 = BLAST archive (ASN.1)" in blastn_help
+    archive_in_formatter = "BLAST Archive format in ASN.1" in formatter_flags.get("-archive", {}).get("description", "")
+    tabular_in_formatter = "-outfmt" in formatter_flags and "6 = Tabular" in formatter_help
+    supported = (
+        archive_in_blastn and archive_in_formatter and tabular_in_formatter
+        and not missing_blastn and not missing_formatter
+    )
+
+    def cap(flags: Mapping[str, Mapping[str, Any]], flag: str) -> dict[str, Any]:
+        item = flags.get(flag)
+        return {
+            "constraints": item["constraints"] if item else None,
+            "documented_default_in_build_help": item["documented_default_in_build_help"] if item else "NOT_DOCUMENTED_IN_BUILD_HELP",
+            "present_in_build_help": bool(item),
+        }
+
+    return {
+        "adopted_tabular_specifiers": list(adopted),
+        "available_not_adopted_specifiers": {
+            s: not lacks([s], blastn_help) and not lacks([s], formatter_help) for s in E05_OUTFMT_6_AVAILABLE_NOT_ADOPTED
+        },
+        "blast_archive_outfmt_11_available_in_blastn": archive_in_blastn,
+        "blast_formatter_archive_input_available": archive_in_formatter,
+        "blast_formatter_missing_adopted_specifiers": missing_formatter,
+        "blast_formatter_outfmt_6_available": tabular_in_formatter,
+        "blastn_missing_adopted_specifiers": missing_blastn,
+        "export_path_default_cap_observation": {
+            "classification": "INSPECTION_OBSERVATION_WITH_CONDITION_TO_VERIFY",
+            "blast_formatter_flags": {flag: cap(formatter_flags, flag) for flag in E05_EXPORT_PATH_CAP_FLAGS},
+            "blastn_search_stage_max_target_seqs": cap(blastn_flags, "-max_target_seqs"),
+            "destination": "E04 and E06",
+            "distinctness": (
+                "The blastn -max_target_seqs (search stage, parameter P13) and the blast_formatter -max_target_seqs "
+                "(export stage) are distinct caps of distinct tools at distinct stages, whatever their documented defaults."
+            ),
+            "established": "The build help documents a default for blast_formatter -max_target_seqs, -num_descriptions and -num_alignments (above), independent of the blastn search flag.",
+            "not_established": (
+                "Whether this default truncates the tabular export of an archive holding more subjects per query "
+                "than the default. Verifying it requires running blast_formatter on an archive, which requires a "
+                "search and is forbidden in this unit. Truncation is not asserted."
+            ),
+            "conditions_to_verify": [
+                "The integrity verification must compare, per query, the subject count of the derived tabular export with that of the authoritative archive.",
+                "The export command must be reconstructible with these three parameters explicit, not dependent on blast_formatter defaults. No values are fixed here.",
+            ],
+            "payload_boundary": (
+                "No field is added to the section 7 payload: its schema is closed and these caps do not belong to "
+                "search_parameters. They belong to the contract referenced by "
+                "execution_architecture.output_integrity_contract_id. If no existing contract identifier can carry them, "
+                "that is a normative gap to be reported, not an extension of the schema."
+            ),
+        },
+        "qa_i_mechanism_status": (
+            "SUFFICIENT_MECHANISM_AVAILABLE_IN_PINNED_BUILD_EXECUTION_VERIFICATION_IN_E06_AND_E08"
+            if supported else "QA_I_PENDING_NO_SUFFICIENT_MECHANISM_CONFIRMED"
+        ),
+        "selected_mechanism": (
+            "IDENTIFIED_BLAST_ASN1_ARCHIVE_WITH_VERIFIABLE_BLAST_FORMATTER_TABULAR_EXPORT"
+            if supported else "INSUFFICIENT_BUILD_SUPPORT_QA_I_PENDING"
+        ),
+        "termination_marker_and_query_count_fallback_required": not supported,
+        "termination_marker_fallback_disposition": (
+            "NOT_REQUIRED: the pinned blastn documents `11 = BLAST archive (ASN.1)` and the pinned blast_formatter "
+            "documents `-archive` with `-outfmt 6` and every adopted specifier (plan_v003.md section 8)."
+            if supported else
+            "Archive output or blast_formatter archive export was not confirmed in the inspected build; without a "
+            "verified termination-marker and per-query-count alternative QA-I remains pending."
+        ),
+    }
+
+
+def validate_e05_parameter_records(parameters: Mapping[str, Mapping[str, Any]]) -> None:
+    """Enforce the contractual invariants across the 31 parameter records."""
+    require(set(parameters) == set(E05_PARAMETER_IDS), f"E05 parameter records must be exactly P01..P31 (count={len(parameters)})")
+    for pid, rec in parameters.items():
+        default = rec.get("documented_default_in_build_help")
+        require(isinstance(default, str) and default.strip(), f"E05 parameter {pid} needs a documented_default_in_build_help string")
+        require(
+            isinstance(rec.get("applicability_justification"), str) and rec["applicability_justification"].strip(),
+            f"E05 parameter {pid} needs a non-empty applicability_justification",
+        )
+        stage, state, value = rec.get("decision_stage"), rec.get("effective_value_state"), rec.get("effective_value")
+        if stage == "G1_AFTER_CALIBRATION":
+            require(
+                state == STATE_PENDING and value is None,
+                f"E05 parameter {pid} is G1_AFTER_CALIBRATION and must stay {STATE_PENDING} with no value "
+                f"(state={state!r}, value={value!r})",
+            )
+        elif stage == "G1_RECORD_EXPLICITLY":
+            require(
+                state == STATE_RECORDED and value is None,
+                f"E05 parameter {pid} is G1_RECORD_EXPLICITLY and must be recorded without a decided value",
+            )
+        elif stage == "EXCLUDED_BY_ARCHITECTURE":
+            reason = rec.get("contractual_exclusion_reason")
+            require(
+                state == STATE_EXCLUDED and value == "OPTION_NOT_APPLIED" and rec.get("option_applied") is False
+                and isinstance(reason, Mapping)
+                and all(isinstance(reason.get(k), str) and reason[k].strip() for k in ("design_document_passage_verbatim", "matrix_failure_mode_verbatim", "matrix_notes_verbatim"))
+                and rec.get("parameter", "\0") in reason["design_document_passage_verbatim"],
+                f"E05 excluded parameter {pid} requires OPTION_NOT_APPLIED and a verbatim contractual exclusion reason",
+            )
+        elif pid in E05_COORDINATOR_DECISIONS:
+            decision = rec.get("coordinator_decision")
+            require(
+                state == STATE_DECIDED and value is not None and isinstance(decision, Mapping)
+                and decision.get("decided_by") == "IMPLEMENTATION_COORDINATOR" and decision.get("decision_section"),
+                f"E05 parameter {pid} must record the Coordinator decision it applies, not a Programmer choice",
+            )
+        else:
+            require(state in (STATE_FIXED, STATE_HYPOTHESIS) and value is not None, f"E05 parameter {pid} has an unexpected state {state!r}")
+
+
+def build_e05_parameter_matrix_inspection(
+    parameter_rows: Mapping[str, Mapping[str, str]],
+    observed_tools: Mapping[str, Mapping[str, Any]],
+    help_texts: Mapping[str, str],
+    excluded_passage: str,
+) -> dict[str, Any]:
+    """Build the 31-parameter table from the matrix rows (verbatim) and the live build help."""
+    parsed_help = {tool: parse_blast_help_flags(text) for tool, text in help_texts.items()}
+    parameters: dict[str, dict[str, Any]] = {}
+    for pid in E05_PARAMETER_IDS:
+        row = parameter_rows[pid]
+        stage, tool = row["decision_stage"], row["tool"]
+        flags = E05_PARAMETER_FLAGS.get(pid, ())
+        if stage in E05_STAGE_STATE:
+            require(pid not in E05_EFFECTIVE_VALUES, f"{pid} must not have an assigned value at stage {stage}")
+            state = E05_STAGE_STATE[stage]
+            value = "OPTION_NOT_APPLIED" if state == STATE_EXCLUDED else None
+        else:
+            require(pid in E05_EFFECTIVE_VALUES, f"{pid} at stage {stage} needs an effective-value specification")
+            state, value = E05_EFFECTIVE_VALUES[pid]
+        if state == STATE_FIXED:
+            require(str(value) == row["candidate_design_space"], f"{pid} value {value!r} differs from the matrix candidate_design_space")
+        if pid == "P26":
+            precedent = row["current_precedent"]
+            require(
+                [t for t in precedent.split() if t in E05_OUTFMT_6_PRECEDENT] == list(E05_OUTFMT_6_PRECEDENT),
+                "P26 precedent specifiers differ from the matrix current_precedent",
+            )
+        if pid == "P31":
+            value = row["candidate_design_space"]
+
+        per_flag: dict[str, dict[str, Any]] = {}
+        if not flags:
+            documented = "NOT_DOCUMENTED_IN_BUILD_HELP"
+        elif observed_tools.get(tool, {}).get("status") != "OBSERVED":
+            documented = "NOT_APPLICABLE"
+            per_flag = {f: {"documented_default_in_build_help": "NOT_APPLICABLE", "present_in_build_help": False} for f in flags}
+        else:
+            for flag in flags:
+                per_flag[flag] = dict(parsed_help[tool].get(flag, {
+                    "documented_default_in_build_help": "NOT_DOCUMENTED_IN_BUILD_HELP",
+                    "flag": flag,
+                    "present_in_build_help": False,
+                }))
+            defaults = [per_flag[f]["documented_default_in_build_help"] for f in flags]
+            if len(flags) == 1:
+                documented = defaults[0]
+            elif all(d == "NOT_DOCUMENTED_IN_BUILD_HELP" for d in defaults):
+                documented = "NOT_DOCUMENTED_IN_BUILD_HELP"
+            else:
+                documented = "PARTIAL_BY_FLAG: " + "; ".join(f"{f}={d}" for f, d in zip(flags, defaults, strict=True))
+
+        record: dict[str, Any] = {
+            "applicability_justification": (
+                f"decision_stage {stage}, status {row['status']} in 08_b4_calibration_parameter_matrix_v2_1.tsv; "
+                f"state {state}. Matrix text is copied verbatim below; the documented default is read from the build help."
+            ),
+            "biological_decision_role": row["biological_decision_role"],
+            "calibration_question": row["calibration_question"],
+            "candidate_design_space_in_matrix": row["candidate_design_space"],
+            "current_precedent_in_matrix": row["current_precedent"],
+            "database_size_relevance": row["database_size_relevance"],
+            "decision_stage": stage,
+            "determinism_relevance": row["determinism_relevance"],
+            "documented_default_in_build_help": documented,
+            "effective_value": value,
+            "effective_value_state": state,
+            "failure_mode": row["failure_mode"],
+            "matrix_notes": row["notes"],
+            "option_applied": False if stage == "EXCLUDED_BY_ARCHITECTURE" else None,
+            "parameter": row["parameter"],
+            "parameter_id": pid,
+            "parameter_role": row["parameter_role"],
+            "per_flag_build_help": per_flag,
+            "status": row["status"],
+            "tool": tool,
+            "truncation_relevance": row["truncation_relevance"],
+        }
+        if stage == "EXCLUDED_BY_ARCHITECTURE":
+            record["contractual_exclusion_reason"] = {
+                "design_document": "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md section 7",
+                "design_document_passage_verbatim": excluded_passage,
+                "matrix_failure_mode_verbatim": row["failure_mode"],
+                "matrix_notes_verbatim": row["notes"],
+            }
+        if pid in E05_COORDINATOR_DECISIONS:
+            record["coordinator_decision"] = E05_COORDINATOR_DECISIONS[pid]
+        if pid in ("P13", "P14"):
+            record["reserved_decision_note"] = (
+                "The PC13 versus QA-G tension is a reserved E02 decision (plan_v003.md section 6.6). It is not "
+                "resolved here and no value is assigned."
+            )
+        if pid == "P02" and "-task" in per_flag:
+            task_default = re.search(r"Default = `([^']+)'", documented)
+            admitted = [t.strip() for t in row["candidate_design_space"].split(";")]
+            record["task_default_observation"] = {
+                "admitted_tasks_in_matrix": admitted,
+                "documented_default_task": task_default.group(1) if task_default else None,
+                "documented_default_task_is_admitted": bool(task_default and task_default.group(1) in admitted),
+            }
+        parameters[pid] = record
+
+    validate_e05_parameter_records(parameters)
+    counts: dict[str, dict[str, int]] = {"by_decision_stage": {}, "by_effective_value_state": {}}
+    for rec in parameters.values():
+        for key, field in (("by_decision_stage", "decision_stage"), ("by_effective_value_state", "effective_value_state")):
+            counts[key][rec[field]] = counts[key].get(rec[field], 0) + 1
+
+    outside: dict[str, dict[str, str]] = {}
+    for tool in ("blastn", "makeblastdb"):
+        if tool in parsed_help:
+            covered = {f for pid, rec in parameters.items() if rec["tool"] == tool for f in E05_PARAMETER_FLAGS.get(pid, ())}
+            outside[tool] = {
+                flag: item["documented_default_in_build_help"]
+                for flag, item in sorted(parsed_help[tool].items())
+                if flag not in covered and flag not in E05_INFORMATIONAL_FLAGS
+            }
+    return {
+        "build_help_flags_outside_matrix": {
+            "observation_only": True,
+            "statement": (
+                "The matrix has 31 parameters. The flags below exist in the build help but are not matrix "
+                "parameters; none is adopted. Enlarging the parameter set would be a normative change outside the "
+                "scope of any agent."
+            ),
+            "flags_with_documented_default_by_tool": outside,
+        },
+        "counts": counts,
+        "parameters": parameters,
+        "parameters_without_documented_default": sorted(
+            pid for pid, rec in parameters.items() if rec["documented_default_in_build_help"] == "NOT_DOCUMENTED_IN_BUILD_HELP"
+        ),
+        "total_parameters": len(parameters),
+    }
+
+
+def build_e05_qa_configuration_inspection(
+    qa_rows: Mapping[str, Mapping[str, str]], output_integrity: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Record, for the 19 QA criteria, the configuration preconditions inspected; no QA metric is computed."""
+    criteria: dict[str, dict[str, Any]] = {}
+    for qid in sorted(E05_QA_SPEC):
+        inspected, deferred_to, note = E05_QA_SPEC[qid]
+        row = qa_rows[qid]
+        criteria[qid] = {
+            "biological_decision_role": row["biological_decision_role"],
+            "blocks_configuration_freeze": row["blocks_configuration_freeze"],
+            "configuration_preconditions_inspected_in_e05_part1": inspected,
+            "criterion": row["criterion"],
+            "deferred_to": deferred_to,
+            "expected_behavior": row["expected_behavior"],
+            "failure_interpretation": row["failure_interpretation"],
+            "fixture_dependency": row["fixture_dependency"],
+            "matrix_initial_status": row["status"],
+            "metric": row["metric"],
+            "metric_computed_in_e05_part1": False,
+            "precondition_note": note,
+            "qa_id": qid,
+            "state_after_e05_part1": "NOT_TESTED",
+        }
+    inspected_ids = [q for q, c in criteria.items() if c["configuration_preconditions_inspected_in_e05_part1"]]
+    return {
+        "criteria": criteria,
+        "no_qa_metric_computable_without_search": True,
+        "qa_i_linked_output_integrity_status": output_integrity["qa_i_mechanism_status"],
+        "statement": (
+            "No QA metric of the 19 criteria is computable without a search. The criteria below marked as "
+            "preconditions inspected had only their configuration preconditions inspected; every criterion remains "
+            "NOT_TESTED."
+        ),
+        "total_criteria": len(criteria),
+        "preconditions_inspected_count": len(inspected_ids),
+        "preconditions_inspected_ids": inspected_ids,
+        "preconditions_not_inspectable_count": len(criteria) - len(inspected_ids),
+        "preconditions_not_inspectable_ids": [q for q in criteria if q not in inspected_ids],
+    }
+
+
+def build_e05_design_decisions(parameter_rows: Mapping[str, Mapping[str, str]], qa_rows: Mapping[str, Mapping[str, str]]) -> dict[str, Any]:
+    """Questions P30 and P23 with matrix evidence (verbatim) and the Coordinator decisions applied."""
+    return {
+        "P30": {
+            "question": "Which deterministic record order (canonical_record_order_rule, plan_v003.md section 7) governs the FASTA before makeblastdb?",
+            "evidence_matrix_candidate_design_space_verbatim": parameter_rows["P30"]["candidate_design_space"],
+            "evidence_matrix_notes_verbatim": parameter_rows["P30"]["notes"],
+            "decision": E05_COORDINATOR_DECISIONS["P30"],
+        },
+        "P23": {
+            "question": "How are -dbsize and -searchsp specified in the primary candidates and in QA-F2, and when is production decided?",
+            "evidence_matrix_candidate_design_space_verbatim": parameter_rows["P23"]["candidate_design_space"],
+            "evidence_matrix_notes_verbatim": parameter_rows["P23"]["notes"],
+            "evidence_qa_f2_expected_behavior_verbatim": qa_rows["QA-F2"]["expected_behavior"],
+            "decision": E05_COORDINATOR_DECISIONS["P23"],
+        },
+    }
+
+
+def build_e05_configuration_inspection(
+    root: Path,
+    corpus_directories: Mapping[str, Path],
+    *,
+    campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    expected_normative_sha256: Mapping[str, str] | None = None,
+    expected_reference_sha256: Any = _DEFAULT,
+    expected_run_manifest_sha256: Any = _DEFAULT,
+    expected_resource_count: Any = _DEFAULT,
+    expected_resource_ids: Sequence[str] | None = None,
+    which_resolver: Callable[[str], str | None] = _default_tool_which,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    require_e03_geometry: bool = True,
+) -> dict[str, Any]:
+    """Execute the E05 Part 1 read-only configuration inspection and assemble the deterministic record."""
+    root = root.resolve()
+    validate_geometry_campaign_id(campaign_id)
+    normative = verify_and_read_e05_normative_inputs(
+        root, corpus_directories, expected_normative_sha256=expected_normative_sha256
+    )
+    manifest, _, manifest_sha256 = verify_authoritative_cp1_manifest_for_e03(
+        root,
+        expected_reference_sha256=expected_reference_sha256,
+        expected_run_manifest_sha256=expected_run_manifest_sha256,
+        expected_resource_count=expected_resource_count,
+        expected_resource_ids=expected_resource_ids,
+    )
+    section_a, section_b, help_texts = inspect_e05_tool_builds_and_help(
+        root, manifest, campaign_id=campaign_id, which_resolver=which_resolver, runner=runner,
+        require_e03_geometry=require_e03_geometry,
+    )
+    section_c = build_e05_parameter_matrix_inspection(
+        normative["parameter_matrix_rows"], section_a["tools"], help_texts, normative["excluded_passage"]
+    )
+    section_d = inspect_e05_output_integrity_mechanism(section_a["tools"], help_texts)
+    return {
+        "schema_version": 1,
+        "artifact_id": E05_INSPECTION_ARTIFACT_ID,
+        "inspection_version": E05_INSPECTION_VERSION,
+        "stage": "NB04_CP1_E05_PART_1_CONFIGURATION_INSPECTION",
+        "scope_boundary": {
+            "candidate_configurations_materialized": False,
+            "candidate_payload_section_7_assembled": False,
+            "candidate_sha256_ordering_or_aliases_computed": False,
+            "information_from_recovery_used": False,
+            "only_version_and_help_executed": True,
+            "queries_executed": False,
+            "reserved_decisions_untouched": True,
+            "u04_target_path_occupied": False,
+            "u04_target_path_reserved": E05_U04_RESERVED_PATH,
+        },
+        "authoritative_inputs_verified": {
+            "cp1_manifest_path": MANIFEST,
+            "cp1_manifest_sha256": manifest_sha256,
+            "normative_corpus": normative["verification_summary"],
+            "plan_v003_path": PLAN_V003_PATH,
+            "plan_v003_sha256": PLAN_V003_SHA256,
+        },
+        "a_observed_tool_builds": section_a,
+        "b_build_comparison_with_cp1_receipts_and_derivations": section_b,
+        "c_parameter_matrix_inspection": section_c,
+        "d_output_integrity_mechanism": section_d,
+        "e_configuration_qa_matrix_status": build_e05_qa_configuration_inspection(normative["qa_matrix_rows"], section_d),
+        "design_questions_decided_by_coordinator": build_e05_design_decisions(
+            normative["parameter_matrix_rows"], normative["qa_matrix_rows"]
+        ),
+        "simplification_s02_declaration": {
+            "simplification_id": "S02",
+            "statement": (
+                "Plan_v003.md section 11 S02: three initial candidate bundles (blastn, blastn-short, dc-megablast). "
+                "It reduces fine optimization and supports no claim of an optimal configuration. This inspection "
+                "materializes no candidate."
+            ),
+        },
+    }
+
+
+def write_e05_configuration_inspection(
+    root: Path, inspection_payload: Mapping[str, Any], *, destination: Path | None = None
+) -> tuple[Path, str]:
+    """Validate the payload and the destination before writing; never overwrite an existing file."""
+    root = root.resolve()
+    target = validate_e05_inspection_destination(root, destination)
+    require(
+        inspection_payload.get("artifact_id") == E05_INSPECTION_ARTIFACT_ID,
+        f"unexpected artifact_id in E05 inspection payload: {inspection_payload.get('artifact_id')!r}",
+    )
+    section_c = inspection_payload.get("c_parameter_matrix_inspection", {})
+    require(isinstance(section_c, Mapping) and "parameters" in section_c, "E05 inspection payload missing c_parameter_matrix_inspection.parameters")
+    validate_e05_parameter_records(section_c["parameters"])
+    payload = dict(inspection_payload)
+    write_json(target, payload)
+    return target, hashlib.sha256(json_bytes(payload)).hexdigest()
