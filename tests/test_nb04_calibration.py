@@ -21,7 +21,7 @@ def _sha256_raw(data: bytes) -> str:
 
 
 def _sha256_lf(data: bytes) -> str:
-    return hashlib.sha256(data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")).hexdigest()
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _put(path: Path, data: bytes) -> Path:
@@ -741,5 +741,472 @@ def test_reviewer_round_001_adversarial_counterexamples(synthetic_e01_env):
     with pytest.raises(r.ResourceContractError, match="diverges from preserved E01 baseline"):
         cal.verify_preparation_allowlist(root)
     gi.write_bytes(orig_gi)
+
+
+# ======================================================================
+# U02 / E03: Read-only geometry derivation unit tests
+# ======================================================================
+
+
+def _build_synthetic_resource(
+    root: Path,
+    resource_id: str,
+    records: list[tuple[str, str, str]],
+    *,
+    campaign_id: str = "cp1_20261015",
+    g0_sha: str = "0" * 64,
+) -> dict:
+    """Create a tiny synthetic resource directory (normalized.fasta + identifier_map.tsv) using independent hashes."""
+    res_dir = f"data/external/nto/{campaign_id}/{resource_id}"
+    fasta_rel = f"{res_dir}/normalized.fasta"
+    idmap_rel = f"{res_dir}/identifier_map.tsv"
+
+    fasta_lines: list[str] = []
+    idmap_lines: list[str] = ["analysis_id\tsource_id\tsource_header\tlength_nt\tsequence_sha256\n"]
+    total_bases = 0
+    total_ambig = 0
+    lengths: list[int] = []
+
+    for idx, (source_id, source_header, seq) in enumerate(records, start=1):
+        analysis_id = f"{resource_id}__{idx:08d}"
+        fasta_lines.append(f">{analysis_id}\n")
+        for start in range(0, len(seq), 80):
+            fasta_lines.append(seq[start : start + 80] + "\n")
+        seq_sha = hashlib.sha256(seq.encode("ascii")).hexdigest()
+        idmap_lines.append(f"{analysis_id}\t{source_id}\t{source_header}\t{len(seq)}\t{seq_sha}\n")
+        lengths.append(len(seq))
+        total_bases += len(seq)
+        total_ambig += sum(ch not in "ACGT" for ch in seq)
+
+    fasta_bytes = "".join(fasta_lines).encode("ascii")
+    idmap_bytes = "".join(idmap_lines).encode("utf-8")
+    _put(root / fasta_rel, fasta_bytes)
+    _put(root / idmap_rel, idmap_bytes)
+
+    fasta_sha = _sha256_raw(fasta_bytes)
+    idmap_sha = _sha256_raw(idmap_bytes)
+    sorted_lengths = sorted(lengths)
+    return {
+        "resource_id": resource_id,
+        "organism_id": "APIS_MELLIFERA",
+        "scientific_name": "Apis mellifera",
+        "taxid": 7460,
+        "accession_version": "GCF_003254395.2",
+        "release": "Release 104",
+        "release_date": "2018-09-13",
+        "resource_tier": "TRANSCRIPT_TIER",
+        "resource_record_type": "OTHER",
+        "annotation_status": "ANNOTATED",
+        "adequate_annotated_transcript_set": True,
+        "fasta_path": fasta_rel,
+        "identifier_map_path": idmap_rel,
+        "database_prefix": f"{res_dir}/blastdb/sequences",
+        "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/003/254/395/test.fna.gz",
+        "acquired_utc": "2026-10-15T08:05:36+00:00",
+        "selection_sha256": "1" * 64,
+        "g0_certificate_sha256": g0_sha,
+        "quality": {
+            "record_count": len(records),
+            "total_bases": total_bases,
+            "ambiguous_bases": total_ambig,
+            "lowercase_bases_in_source": 0,
+            "minimum_length": sorted_lengths[0],
+            "maximum_length": sorted_lengths[-1],
+            "median_length_numerator": sorted_lengths[(len(sorted_lengths) - 1) // 2] + sorted_lengths[len(sorted_lengths) // 2],
+            "median_length_denominator": 2,
+            "source_sha256": "2" * 64,
+            "fasta_sha256": fasta_sha,
+            "identifier_map_sha256": idmap_sha,
+            "normalization": "SOURCE_ORDER_ALL_RECORDS_UPPERCASE_IUPAC_DNA_NO_FILTER_NO_DEDUPLICATION",
+            "annotation_consistency_status": "PASS",
+            "annotation_coordinate_anomaly_count": 0,
+        },
+        "artifacts_sha256": {
+            fasta_rel: fasta_sha,
+            idmap_rel: idmap_sha,
+        },
+    }
+
+
+def test_e03_descriptor_sha256_boundary_and_coverage_predicate():
+    """Verify the strict 6-field boundary of descriptor_sha256 vs geometry_record_sha256 and the coverage predicate."""
+    base_descriptor = {
+        "record_count": 3,
+        "total_bases": 28,
+        "ordered_record_lengths": [8, 12, 8],
+        "ordered_ambiguous_base_counts": [0, 3, 1],
+        "alphabet_policy": "UPPERCASE_IUPAC_DNA",
+        "record_boundary_policy": "NEVER_CROSSED",
+    }
+
+    # Independent SHA256 oracle over the exact canonical JSON literal of the 6 fields
+    expected_canonical_bytes = (
+        '{\n'
+        '  "alphabet_policy": "UPPERCASE_IUPAC_DNA",\n'
+        '  "ordered_ambiguous_base_counts": [\n'
+        '    0,\n'
+        '    3,\n'
+        '    1\n'
+        '  ],\n'
+        '  "ordered_record_lengths": [\n'
+        '    8,\n'
+        '    12,\n'
+        '    8\n'
+        '  ],\n'
+        '  "record_boundary_policy": "NEVER_CROSSED",\n'
+        '  "record_count": 3,\n'
+        '  "total_bases": 28\n'
+        '}\n'
+    ).encode("utf-8")
+    expected_desc_sha = hashlib.sha256(expected_canonical_bytes).hexdigest()
+
+    computed_desc_sha = cal.compute_geometry_descriptor_sha256(base_descriptor)
+    assert computed_desc_sha == expected_desc_sha
+
+    # 1. Adding administrative metadata, paths, or IDs to the provenance record does NOT alter descriptor_sha256,
+    #    while geometry_record_sha256 DOES change.
+    rec_a = {
+        "schema_version": 1,
+        "artifact_id": cal.GEOMETRY_RECORD_ARTIFACT_ID,
+        "campaign_id": "cp1_20261015",
+        "resource_id": "R1_RNA",
+        "descriptor_schema_id": cal.GEOMETRY_DESCRIPTOR_SCHEMA_ID,
+        "descriptor_sha256": expected_desc_sha,
+        "architecture_descriptor": dict(base_descriptor),
+    }
+    rec_b = {
+        **rec_a,
+        "administrative_note": "extra metadata outside descriptor",
+        "source_fasta": {"fasta_path": "data/external/nto/cp1_20261015/R1_RNA/normalized.fasta"},
+        "operator_audit_id": "AUDIT_99",
+    }
+    assert cal.extract_geometry_descriptor_sha256_from_record(rec_a) == expected_desc_sha
+    assert cal.extract_geometry_descriptor_sha256_from_record(rec_b) == expected_desc_sha
+    assert _sha256_raw(r.json_bytes(rec_a)) != _sha256_raw(r.json_bytes(rec_b))
+
+    # 2. Altering ANY of the 6 fields changes descriptor_sha256 (or fails validation if invalid policy/sum)
+    mut_lengths_permuted = {
+        **base_descriptor,
+        "ordered_record_lengths": [12, 8, 8],  # same sum=28 and record_count=3, different order
+    }
+    assert cal.compute_geometry_descriptor_sha256(mut_lengths_permuted) != expected_desc_sha
+
+    mut_ambig_permuted = {
+        **base_descriptor,
+        "ordered_ambiguous_base_counts": [1, 3, 0],  # same sum=4, different order
+    }
+    assert cal.compute_geometry_descriptor_sha256(mut_ambig_permuted) != expected_desc_sha
+
+    mut_ambig_value = {
+        **base_descriptor,
+        "ordered_ambiguous_base_counts": [0, 2, 1],
+    }
+    assert cal.compute_geometry_descriptor_sha256(mut_ambig_value) != expected_desc_sha
+
+    mut_count_and_vectors = {
+        **base_descriptor,
+        "record_count": 2,
+        "ordered_record_lengths": [16, 12],
+        "ordered_ambiguous_base_counts": [0, 4],
+    }
+    assert cal.compute_geometry_descriptor_sha256(mut_count_and_vectors) != expected_desc_sha
+
+    mut_total_bases = {
+        **base_descriptor,
+        "total_bases": 29,
+        "ordered_record_lengths": [9, 12, 8],
+    }
+    assert cal.compute_geometry_descriptor_sha256(mut_total_bases) != expected_desc_sha
+
+    with pytest.raises(r.ResourceContractError, match="alphabet_policy"):
+        cal.validate_geometry_descriptor({**base_descriptor, "alphabet_policy": "LOWERCASE_DNA"})
+
+    with pytest.raises(r.ResourceContractError, match="record_boundary_policy"):
+        cal.validate_geometry_descriptor({**base_descriptor, "record_boundary_policy": "CONCATENATED"})
+
+    # 3. Slipping extra fields (paths, IDs, mean, median, histogram, interval) or omitting a field in descriptor fails closed
+    for forbidden_key, val in [
+        ("fasta_path", "data/external/nto/cp1_20261015/R1/normalized.fasta"),
+        ("resource_id", "R1"),
+        ("mean_length", 9.33),
+        ("median_length", 8),
+        ("histogram", {"8": 2, "12": 1}),
+        ("length_interval", [8, 12]),
+    ]:
+        with pytest.raises(r.ResourceContractError, match="NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 requires exactly"):
+            cal.validate_geometry_descriptor({**base_descriptor, forbidden_key: val})
+
+    for key in base_descriptor:
+        incomplete = {k: v for k, v in base_descriptor.items() if k != key}
+        with pytest.raises(r.ResourceContractError, match="NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 requires exactly"):
+            cal.validate_geometry_descriptor(incomplete)
+
+    # Boolean values disguised as integers are rejected
+    with pytest.raises(r.ResourceContractError, match="positive integer"):
+        cal.validate_geometry_descriptor({**base_descriptor, "record_count": True})
+    with pytest.raises(r.ResourceContractError, match="positive integer"):
+        cal.validate_geometry_descriptor({**base_descriptor, "ordered_record_lengths": [True, 19, 8]})
+
+    # 4. Coverage predicate requires exact equality across all scalars, vectors, and policies
+    assert cal.geometry_cell_covers_resource(
+        base_descriptor,
+        dict(base_descriptor),
+        cell_descriptor_sha256=expected_desc_sha,
+        resource_descriptor_sha256=expected_desc_sha,
+    ) is True
+    assert cal.geometry_cell_covers_resource(mut_lengths_permuted, base_descriptor) is False
+    assert cal.geometry_cell_covers_resource(mut_ambig_permuted, base_descriptor) is False
+    assert cal.geometry_cell_covers_resource(mut_ambig_value, base_descriptor) is False
+
+
+def test_e03_geometry_derivation_iupac_ambiguity_canonical_order_and_determinism(synthetic_e01_env, capsys):
+    """Verify IUPAC ambiguity counting (N and non-N IUPAC bases), canonical order, scientific limitations, and byte determinism."""
+    import importlib.util
+
+    root = synthetic_e01_env["root"]
+    g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
+
+    # Record 1: 16 nt pure ACGT -> 0 ambiguous
+    # Record 2: 15 nt containing N and all non-ACGT IUPAC DNA symbols (R,Y,S,W,K,M,B,D,H,V,N = 11 ambiguous + 4 ACGT = 15 nt)
+    # Record 3: 90 nt wrapped across 2 lines (80 + 10), with 2 'N' and 1 'R' -> 3 ambiguous
+    rec3_seq = ("ACGT" * 20) + "ACGTNNRACG"
+    assert len(rec3_seq) == 90
+    res_entry = _build_synthetic_resource(
+        root,
+        "R1_RNA",
+        [
+            ("TX_002.1", "TX_002.1 Pure ACGT transcript", "ACGTACGTACGTACGT"),
+            ("TX_001.1", "TX_001.1 IUPAC ambiguity transcript", "ACGTRYSWKMBDHVN"),
+            ("TX_003.1", "TX_003.1 Wrapped transcript", rec3_seq),
+        ],
+        g0_sha=g0_sha,
+    )
+
+    # Update manifest in synthetic workspace
+    manifest_path = root / r.MANIFEST
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    manifest["resources"] = [res_entry]
+    _put(manifest_path, r.json_bytes(manifest))
+
+    derived_1 = cal.derive_resource_geometry_record(root, res_entry)
+    derived_2 = cal.derive_resource_geometry_record(root, res_entry)
+    assert r.json_bytes(derived_1) == r.json_bytes(derived_2)
+
+    desc = derived_1["architecture_descriptor"]
+    assert set(desc.keys()) == cal.GEOMETRY_DESCRIPTOR_KEYS
+    assert desc["record_count"] == 3
+    assert desc["total_bases"] == 16 + 15 + 90
+    assert desc["ordered_record_lengths"] == [16, 15, 90]
+    assert desc["ordered_ambiguous_base_counts"] == [0, 11, 3]
+    assert desc["alphabet_policy"] == "UPPERCASE_IUPAC_DNA"
+    assert desc["record_boundary_policy"] == "NEVER_CROSSED"
+
+    # Canonical order preserved (TX_002.1 first, TX_001.1 second, TX_003.1 third)
+    assert derived_1["canonical_order"]["ordered_analysis_ids"] == [
+        "R1_RNA__00000001",
+        "R1_RNA__00000002",
+        "R1_RNA__00000003",
+    ]
+    assert derived_1["canonical_order"]["ordered_source_ids"] == [
+        "TX_002.1",
+        "TX_001.1",
+        "TX_003.1",
+    ]
+
+    # Scientific limitations and S05 declarations present; no summary statistics (mean, median, histogram, interval)
+    policy = derived_1["policy_and_scientific_limitations"]
+    assert policy["simplification_id"] == "S05"
+    assert "ENVELOPE_GEOMETRY_ONLY_REAL_COMPOSITION_NOT_REPRESENTED" in policy["nominal_limitations"]
+    assert "RESOURCE_SPECIFIC_TRUNCATION_QA_REQUIRED" in policy["nominal_limitations"]
+    assert "unmaterialized" in policy["prior_state_declaration"]
+    assert policy["structural_preparation_only"] is True
+    assert policy["queries_executed"] is False
+    assert policy["recovery_evaluation_executed"] is False
+    for summary_field in ("mean_length", "median_length", "minimum_length", "maximum_length", "histogram", "interval"):
+        assert summary_field not in desc
+        assert summary_field not in derived_1
+
+    # Run CLI subcommand e03 and verify output file and hashes
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "prepare_nb04_calibration.py"
+    spec = importlib.util.spec_from_file_location("prepare_nb04_calibration", script_path)
+    cli = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(cli)
+
+    rc = cli.main(["e03", "--root", str(root)])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["stage"] == "NB04_CP1_E03_GEOMETRY_DERIVATION"
+    assert out["campaign_id"] == "cp1_20261015"
+    assert out["queries_executed"] is False
+    assert out["recovery_evaluation_executed"] is False
+    res_out = out["resources"]["R1_RNA"]
+    geom_path = root / res_out["geometry_record_path"]
+    assert geom_path.is_file()
+    assert res_out["geometry_record_sha256"] == _sha256_raw(geom_path.read_bytes())
+    assert res_out["descriptor_sha256"] == cal.compute_geometry_descriptor_sha256(desc)
+    assert res_out["geometry_record_sha256"] != res_out["descriptor_sha256"]
+
+
+def test_e03_cross_check_failures_block_derivation(synthetic_e01_env):
+    """Verify that any mismatch in fasta_sha256, identifier_map.tsv, quality, or sequence alphabet blocks derivation."""
+    root = synthetic_e01_env["root"]
+    g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
+    base_res = _build_synthetic_resource(
+        root,
+        "R1_RNA",
+        [
+            ("TX_1", "TX_1 desc", "ACGTACGTNN"),
+            ("TX_2", "TX_2 desc", "ACGTRYSW"),
+        ],
+        g0_sha=g0_sha,
+    )
+    fasta_path = root / base_res["fasta_path"]
+    idmap_path = root / base_res["identifier_map_path"]
+    orig_fasta = fasta_path.read_bytes()
+    orig_idmap = idmap_path.read_bytes()
+
+    # 1. fasta_sha256 mismatch on disk vs certified manifest blocks derivation
+    fasta_path.write_bytes(orig_fasta + b"\n")
+    with pytest.raises(r.ResourceContractError, match="certified fasta_sha256 mismatch before geometry derivation"):
+        cal.derive_resource_geometry_record(root, base_res)
+    fasta_path.write_bytes(orig_fasta)
+
+    # 2. identifier_map_sha256 mismatch on disk vs certified manifest blocks derivation
+    idmap_path.write_bytes(orig_idmap + b"\n")
+    with pytest.raises(r.ResourceContractError, match="certified identifier_map_sha256 mismatch before geometry derivation"):
+        cal.derive_resource_geometry_record(root, base_res)
+    idmap_path.write_bytes(orig_idmap)
+
+    # Helper to test post-hash checks by updating expected hashes in a copy of base_res
+    def _with_current_hashes(res_copy: dict) -> dict:
+        f_sha = _sha256_raw(fasta_path.read_bytes())
+        i_sha = _sha256_raw(idmap_path.read_bytes())
+        res_copy = json.loads(json.dumps(res_copy))
+        res_copy["quality"]["fasta_sha256"] = f_sha
+        res_copy["quality"]["identifier_map_sha256"] = i_sha
+        res_copy["artifacts_sha256"][res_copy["fasta_path"]] = f_sha
+        res_copy["artifacts_sha256"][res_copy["identifier_map_path"]] = i_sha
+        return res_copy
+
+    # 3. Record count mismatch against identifier_map.tsv (fewer rows in map)
+    lines = orig_idmap.decode("utf-8").splitlines(keepends=True)
+    idmap_path.write_bytes("".join(lines[:-1]).encode("utf-8"))
+    with pytest.raises(r.ResourceContractError, match="identifier_map record count mismatch"):
+        cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
+    idmap_path.write_bytes(orig_idmap)
+
+    # 4. Per-record length_nt mismatch in identifier_map.tsv (even when total sum is preserved: 11 + 7 == 10 + 8)
+    bad_len_lines = [
+        lines[0],
+        lines[1].replace("\t10\t", "\t11\t"),
+        lines[2].replace("\t8\t", "\t7\t"),
+    ]
+    idmap_path.write_bytes("".join(bad_len_lines).encode("utf-8"))
+    with pytest.raises(r.ResourceContractError, match="identifier_map length_nt mismatch"):
+        cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
+    idmap_path.write_bytes(orig_idmap)
+
+    # 5. Canonical analysis_id order mismatch in identifier_map.tsv
+    swapped_lines = [lines[0], lines[2], lines[1]]
+    idmap_path.write_bytes("".join(swapped_lines).encode("utf-8"))
+    with pytest.raises(r.ResourceContractError, match="identifier_map analysis_id order mismatch"):
+        cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
+    idmap_path.write_bytes(orig_idmap)
+
+    # 6. Ambiguity sum mismatch against manifest quality.ambiguous_bases
+    bad_ambig_res = _with_current_hashes(base_res)
+    bad_ambig_res["quality"]["ambiguous_bases"] = 999
+    with pytest.raises(r.ResourceContractError, match="ambiguous_bases sum mismatch against manifest quality"):
+        cal.derive_resource_geometry_record(root, bad_ambig_res)
+
+    # 7. Total bases mismatch against manifest quality.total_bases
+    bad_total_res = _with_current_hashes(base_res)
+    bad_total_res["quality"]["total_bases"] = 999
+    with pytest.raises(r.ResourceContractError, match="total_bases mismatch against manifest quality"):
+        cal.derive_resource_geometry_record(root, bad_total_res)
+
+    # 8. Record count mismatch against manifest quality.record_count
+    bad_count_res = _with_current_hashes(base_res)
+    bad_count_res["quality"]["record_count"] = 99
+    with pytest.raises(r.ResourceContractError, match="record_count mismatch against manifest quality"):
+        cal.derive_resource_geometry_record(root, bad_count_res)
+
+    # 9. Lowercase or non-IUPAC base in normalized.fasta rejected
+    fasta_path.write_bytes(orig_fasta.replace(b"ACGTACGTNN", b"acgtacgtnn"))
+    with pytest.raises(r.ResourceContractError, match="non-uppercase-IUPAC DNA"):
+        cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
+    fasta_path.write_bytes(orig_fasta)
+
+
+def test_e03_destination_protection_and_atomic_batch_prewrite_validation(synthetic_e01_env):
+    """Verify that protected or pre-existing destinations are rejected before any write and batch failure writes nothing."""
+    root = synthetic_e01_env["root"]
+    g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
+
+    res1 = _build_synthetic_resource(
+        root,
+        "R1_RNA",
+        [("TX_1", "TX_1 desc", "ACGTACGTNN")],
+        g0_sha=g0_sha,
+    )
+    res2 = _build_synthetic_resource(
+        root,
+        "R2_RNA",
+        [("TX_2", "TX_2 desc", "ACGTRYSW")],
+        g0_sha=g0_sha,
+    )
+
+    manifest_path = root / r.MANIFEST
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    manifest["resources"] = [res1, res2]
+    _put(manifest_path, r.json_bytes(manifest))
+
+    # 1. Protected in-root destination rejected before any write
+    victim = root / "config/frozen.tsv"
+    victim_before = victim.read_bytes()
+    with pytest.raises(r.ResourceContractError, match="outside authorized E03 path"):
+        cal.derive_and_write_all_resources_geometry(
+            root,
+            destination_overrides={"R1_RNA": victim},
+        )
+    assert victim.read_bytes() == victim_before
+    assert not (root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json").exists()
+    assert not (root / "data/external/nto/cp1_20261015/geometry/R2_RNA.json").exists()
+
+    # 2. Out-of-root destination and unsafe campaign_id rejected
+    with pytest.raises(r.ResourceContractError, match="outside project root"):
+        cal.validate_e03_geometry_destination(root, root.parent / "escape.json", resource_id="R1_RNA")
+    with pytest.raises(r.ResourceContractError, match="invalid geometry campaign_id"):
+        cal.validate_e03_geometry_destination(root, campaign_id="../escape", resource_id="R1_RNA")
+
+    # 3. Pre-existing destination on R2_RNA blocks the entire batch BEFORE writing R1_RNA
+    r2_target = root / "data/external/nto/cp1_20261015/geometry/R2_RNA.json"
+    _put(r2_target, b'{"preexisting": true}\n')
+    with pytest.raises(r.ResourceContractError, match="already exists and must never be overwritten"):
+        cal.derive_and_write_all_resources_geometry(root)
+    assert r2_target.read_bytes() == b'{"preexisting": true}\n'
+    assert not (root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json").exists()
+    r2_target.unlink()
+
+    # 4. Verification failure on R2_RNA (corrupted FASTA) blocks the entire batch BEFORE writing R1_RNA
+    r2_fasta = root / res2["fasta_path"]
+    orig_r2_fasta = r2_fasta.read_bytes()
+    r2_fasta.write_bytes(orig_r2_fasta + b"A\n")
+    with pytest.raises(r.ResourceContractError, match="certified fasta_sha256 mismatch"):
+        cal.derive_and_write_all_resources_geometry(root)
+    assert not (root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json").exists()
+    assert not (root / "data/external/nto/cp1_20261015/geometry/R2_RNA.json").exists()
+    r2_fasta.write_bytes(orig_r2_fasta)
+
+    # 5. Clean batch succeeds and writes both R1_RNA.json and R2_RNA.json; a second run is refused (pre-existing)
+    summary = cal.derive_and_write_all_resources_geometry(root)
+    assert summary["resource_count"] == 2
+    assert (root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json").is_file()
+    assert (root / "data/external/nto/cp1_20261015/geometry/R2_RNA.json").is_file()
+
+    with pytest.raises(r.ResourceContractError, match="already exists and must never be overwritten"):
+        cal.derive_and_write_all_resources_geometry(root)
+
 
 

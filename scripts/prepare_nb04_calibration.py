@@ -3,6 +3,8 @@
 Importing or running this script never invokes blastn, builds indices, or runs
 informative calibration. Subcommand `e01` executes E01 preservation verification
 and materializes the execution scope and preservation inventory artifacts.
+Subcommand `e03` derives the read-only NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1
+records for the six certified CP1 resources.
 """
 from __future__ import annotations
 
@@ -81,6 +83,19 @@ def run_e01(
     }
 
 
+def run_e03(
+    root: Path,
+    *,
+    campaign_id: str = cal.DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    destination_overrides: dict[str, Path] | None = None,
+) -> dict[str, object]:
+    return cal.derive_and_write_all_resources_geometry(
+        root,
+        campaign_id=campaign_id,
+        destination_overrides=destination_overrides,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
@@ -115,6 +130,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional explicit UTC timestamp string for deterministic inventory generation.",
     )
+
+    e03 = subparsers.add_parser(
+        "e03",
+        help="Derive read-only NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 records for the six CP1 resources.",
+    )
+    e03.add_argument("--root", type=Path, default=ROOT, help="Repository root path.")
+    e03.add_argument(
+        "--campaign-id",
+        type=str,
+        default=cal.DEFAULT_GEOMETRY_CAMPAIGN_ID,
+        help=f"Target campaign identifier under data/external/nto/<campaign_id>/geometry/ (default: {cal.DEFAULT_GEOMETRY_CAMPAIGN_ID}).",
+    )
     return parser
 
 
@@ -129,6 +156,13 @@ def main(argv: list[str] | None = None) -> int:
             scope_output=args.scope_output,
             inventory_output=args.inventory_output,
             executed_utc=args.executed_utc,
+        )
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+    if args.subcommand == "e03":
+        summary = run_e03(
+            args.root,
+            campaign_id=args.campaign_id,
         )
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0

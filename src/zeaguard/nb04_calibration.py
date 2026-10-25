@@ -1,13 +1,15 @@
-"""NB04 CP1 pre-freeze preservation control and execution scope (E01, section 8.1).
+"""NB04 CP1 pre-freeze preservation control, execution scope, and geometry derivation (E01, E03).
 
 Re-executable verification of G0 certified artifacts, the 43 normative documents,
 the six frozen CP1 resources and their BLAST index volumes, historical snapshots,
-observed BLAST tool builds, and the closed dirty-tree allowlist.
+observed BLAST tool builds, the closed dirty-tree allowlist, and read-only
+derivation of NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 records for the six resources.
 No BLAST query, index build, fixture materialization, or calibration is executed.
 """
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import csv
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -20,10 +22,12 @@ from typing import Any
 from zeaguard.nb04_resources import (
     ASSESSABILITY,
     CP1,
+    DNA,
     G0_PATH,
     INVENTORY,
     MANIFEST,
     REGISTRY,
+    RESOURCE_ID,
     ResourceContractError,
     digest,
     json_bytes,
@@ -1729,3 +1733,700 @@ def write_preservation_inventory(
     target = validate_e01_inventory_destination(root, output_path)
     write_json(target, dict(inventory))
     return target
+
+
+# ======================================================================
+# E03: Read-only geometry derivation for the six CP1 resources (section 5)
+# ======================================================================
+
+DEFAULT_GEOMETRY_CAMPAIGN_ID = "cp1_20261015"
+GEOMETRY_CAMPAIGN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+GEOMETRY_DESCRIPTOR_SCHEMA_ID = "NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1"
+GEOMETRY_RECORD_ARTIFACT_ID = "NB04_CP1_E03_RESOURCE_GEOMETRY_RECORD_V1"
+GEOMETRY_DERIVATION_VERSION = "NB04_RESOURCE_ARCHITECTURE_GEOMETRY_DERIVATION_V1"
+ALPHABET_POLICY_UPPERCASE_IUPAC_DNA = "UPPERCASE_IUPAC_DNA"
+RECORD_BOUNDARY_POLICY_NEVER_CROSSED = "NEVER_CROSSED"
+GEOMETRY_DESCRIPTOR_KEYS: frozenset[str] = frozenset(
+    {
+        "record_count",
+        "total_bases",
+        "ordered_record_lengths",
+        "ordered_ambiguous_base_counts",
+        "alphabet_policy",
+        "record_boundary_policy",
+    }
+)
+GEOMETRY_NOMINAL_LIMITATIONS: tuple[str, ...] = (
+    "ENVELOPE_GEOMETRY_ONLY_REAL_COMPOSITION_NOT_REPRESENTED",
+    "RESOURCE_SPECIFIC_TRUNCATION_QA_REQUIRED",
+)
+IDENTIFIER_MAP_REQUIRED_COLUMNS: tuple[str, ...] = (
+    "analysis_id",
+    "source_id",
+    "source_header",
+    "length_nt",
+    "sequence_sha256",
+)
+
+
+def _is_strict_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def validate_geometry_campaign_id(campaign_id: object) -> str:
+    require(
+        isinstance(campaign_id, str)
+        and bool(GEOMETRY_CAMPAIGN_ID_PATTERN.fullmatch(campaign_id))
+        and campaign_id not in {".", ".."}
+        and ".." not in campaign_id,
+        f"invalid geometry campaign_id: {campaign_id!r}",
+    )
+    return campaign_id
+
+
+def validate_geometry_descriptor(descriptor: object) -> dict[str, Any]:
+    """Validate that a descriptor is strictly the 6-field NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 object."""
+    require(isinstance(descriptor, Mapping), "geometry descriptor must be a mapping")
+    keys = set(descriptor.keys())
+    extra = sorted(keys - GEOMETRY_DESCRIPTOR_KEYS)
+    missing = sorted(GEOMETRY_DESCRIPTOR_KEYS - keys)
+    require(
+        not extra and not missing,
+        f"NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 requires exactly {sorted(GEOMETRY_DESCRIPTOR_KEYS)}; extra={extra}, missing={missing}",
+    )
+
+    record_count = descriptor["record_count"]
+    total_bases = descriptor["total_bases"]
+    lengths = descriptor["ordered_record_lengths"]
+    ambig_counts = descriptor["ordered_ambiguous_base_counts"]
+    alphabet_policy = descriptor["alphabet_policy"]
+    boundary_policy = descriptor["record_boundary_policy"]
+
+    require(
+        _is_strict_int(record_count) and record_count > 0,
+        f"record_count must be a positive integer: {record_count!r}",
+    )
+    require(
+        _is_strict_int(total_bases) and total_bases > 0,
+        f"total_bases must be a positive integer: {total_bases!r}",
+    )
+    require(
+        isinstance(lengths, list) and len(lengths) == record_count,
+        f"ordered_record_lengths must be a list of length record_count ({record_count})",
+    )
+    require(
+        all(_is_strict_int(x) and x > 0 for x in lengths),
+        "every element of ordered_record_lengths must be a positive integer",
+    )
+    lengths_sum = sum(lengths)
+    require(
+        lengths_sum == total_bases,
+        f"sum of ordered_record_lengths ({lengths_sum}) does not equal total_bases ({total_bases})",
+    )
+    require(
+        isinstance(ambig_counts, list) and len(ambig_counts) == record_count,
+        f"ordered_ambiguous_base_counts must be a list of length record_count ({record_count})",
+    )
+    require(
+        all(
+            _is_strict_int(a) and 0 <= a <= lengths[i]
+            for i, a in enumerate(ambig_counts)
+        ),
+        "every element of ordered_ambiguous_base_counts must be an integer in [0, record_length]",
+    )
+    require(
+        alphabet_policy == ALPHABET_POLICY_UPPERCASE_IUPAC_DNA,
+        f"alphabet_policy must be {ALPHABET_POLICY_UPPERCASE_IUPAC_DNA!r}: {alphabet_policy!r}",
+    )
+    require(
+        boundary_policy == RECORD_BOUNDARY_POLICY_NEVER_CROSSED,
+        f"record_boundary_policy must be {RECORD_BOUNDARY_POLICY_NEVER_CROSSED!r}: {boundary_policy!r}",
+    )
+
+    return {
+        "record_count": int(record_count),
+        "total_bases": int(total_bases),
+        "ordered_record_lengths": [int(x) for x in lengths],
+        "ordered_ambiguous_base_counts": [int(a) for a in ambig_counts],
+        "alphabet_policy": ALPHABET_POLICY_UPPERCASE_IUPAC_DNA,
+        "record_boundary_policy": RECORD_BOUNDARY_POLICY_NEVER_CROSSED,
+    }
+
+
+def compute_geometry_descriptor_sha256(descriptor: object) -> str:
+    """Compute descriptor_sha256 strictly over the 6-field NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 JSON bytes."""
+    clean = validate_geometry_descriptor(descriptor)
+    return hashlib.sha256(json_bytes(clean)).hexdigest()
+
+
+def extract_geometry_descriptor_sha256_from_record(geometry_record: Mapping[str, Any]) -> str:
+    """Extract and verify descriptor_sha256 from a provenance record, ignoring outer administrative metadata."""
+    require(isinstance(geometry_record, Mapping), "geometry record must be a mapping")
+    require(
+        geometry_record.get("descriptor_schema_id") == GEOMETRY_DESCRIPTOR_SCHEMA_ID,
+        f"unexpected descriptor_schema_id: {geometry_record.get('descriptor_schema_id')!r}",
+    )
+    require(
+        "architecture_descriptor" in geometry_record,
+        "geometry record missing architecture_descriptor",
+    )
+    computed = compute_geometry_descriptor_sha256(geometry_record["architecture_descriptor"])
+    if "descriptor_sha256" in geometry_record:
+        require(
+            geometry_record["descriptor_sha256"] == computed,
+            f"geometry record descriptor_sha256 mismatch: declared={geometry_record['descriptor_sha256']} computed={computed}",
+        )
+    return computed
+
+
+def geometry_cell_covers_resource(
+    cell_descriptor: object,
+    resource_descriptor: object,
+    *,
+    cell_descriptor_sha256: str | None = None,
+    resource_descriptor_sha256: str | None = None,
+) -> bool:
+    """Evaluate the section 5 exact geometry coverage predicate without summary approximations."""
+    clean_cell = validate_geometry_descriptor(cell_descriptor)
+    clean_res = validate_geometry_descriptor(resource_descriptor)
+    cell_bytes = json_bytes(clean_cell)
+    res_bytes = json_bytes(clean_res)
+    cell_hash = hashlib.sha256(cell_bytes).hexdigest()
+    res_hash = hashlib.sha256(res_bytes).hexdigest()
+
+    if cell_descriptor_sha256 is not None:
+        require(
+            cell_descriptor_sha256 == cell_hash,
+            f"cell_descriptor_sha256 mismatch: expected={cell_descriptor_sha256} computed={cell_hash}",
+        )
+    if resource_descriptor_sha256 is not None:
+        require(
+            resource_descriptor_sha256 == res_hash,
+            f"resource_descriptor_sha256 mismatch: expected={resource_descriptor_sha256} computed={res_hash}",
+        )
+    if cell_hash == res_hash:
+        require(
+            cell_bytes == res_bytes and clean_cell == clean_res,
+            "descriptor hash collision with distinct descriptor bytes",
+        )
+    return clean_cell == clean_res and cell_bytes == res_bytes
+
+
+def validate_e03_geometry_destination(
+    root: Path,
+    destination: Path | None = None,
+    *,
+    campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    resource_id: str,
+) -> Path:
+    """Validate that an E03 geometry output path is strictly the canonical non-existent destination."""
+    root = root.resolve()
+    validate_geometry_campaign_id(campaign_id)
+    require(
+        isinstance(resource_id, str) and bool(RESOURCE_ID.fullmatch(resource_id)),
+        f"invalid resource_id: {resource_id!r}",
+    )
+    expected_rel = f"data/external/nto/{campaign_id}/geometry/{resource_id}.json"
+    expected_target = relative_path(root, expected_rel)
+    if destination is None:
+        target = expected_target
+    else:
+        raw_dest = Path(destination)
+        target = (root / raw_dest).resolve() if not raw_dest.is_absolute() else raw_dest.resolve()
+    require(target.is_relative_to(root), f"geometry destination outside project root: {target}")
+    rel = target.relative_to(root).as_posix()
+    require(
+        target == expected_target and rel == expected_rel,
+        f"geometry destination outside authorized E03 path ({expected_rel}): {rel}",
+    )
+    require(
+        not target.exists(),
+        f"geometry destination already exists and must never be overwritten: {target}",
+    )
+    return target
+
+
+def derive_resource_geometry_record(
+    root: Path,
+    resource: Mapping[str, Any],
+    *,
+    campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    manifest_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Derive the E03 geometry record for one certified CP1 resource in a single read-only streaming pass."""
+    root = root.resolve()
+    validate_geometry_campaign_id(campaign_id)
+    require(isinstance(resource, Mapping), "resource entry must be a mapping")
+    resource_id = resource.get("resource_id")
+    require(
+        isinstance(resource_id, str) and bool(RESOURCE_ID.fullmatch(resource_id)),
+        f"invalid resource_id: {resource_id!r}",
+    )
+
+    fasta_rel = resource.get("fasta_path")
+    idmap_rel = resource.get("identifier_map_path")
+    require(isinstance(fasta_rel, str) and bool(fasta_rel), f"missing fasta_path for {resource_id}")
+    require(isinstance(idmap_rel, str) and bool(idmap_rel), f"missing identifier_map_path for {resource_id}")
+    fasta_path = relative_path(root, fasta_rel)
+    idmap_path = relative_path(root, idmap_rel)
+    require(fasta_path.is_file(), f"normalized FASTA missing for {resource_id}: {fasta_rel}")
+    require(idmap_path.is_file(), f"identifier_map.tsv missing for {resource_id}: {idmap_rel}")
+
+    quality = resource.get("quality")
+    artifacts_sha256 = resource.get("artifacts_sha256")
+    require(isinstance(quality, Mapping), f"missing quality block for {resource_id}")
+    require(isinstance(artifacts_sha256, Mapping), f"missing artifacts_sha256 block for {resource_id}")
+
+    expected_fasta_sha256 = quality.get("fasta_sha256")
+    expected_idmap_sha256 = quality.get("identifier_map_sha256")
+    require(
+        isinstance(expected_fasta_sha256, str)
+        and bool(expected_fasta_sha256)
+        and artifacts_sha256.get(fasta_rel) == expected_fasta_sha256,
+        f"manifest fasta_sha256 binding inconsistent for {resource_id}",
+    )
+    require(
+        isinstance(expected_idmap_sha256, str)
+        and bool(expected_idmap_sha256)
+        and artifacts_sha256.get(idmap_rel) == expected_idmap_sha256,
+        f"manifest identifier_map_sha256 binding inconsistent for {resource_id}",
+    )
+
+    # Mandatory pre-derivation check: verify observed fasta_sha256 and identifier_map_sha256 against certified manifest
+    observed_fasta_sha256 = digest(fasta_path)
+    require(
+        observed_fasta_sha256 == expected_fasta_sha256,
+        f"certified fasta_sha256 mismatch before geometry derivation for {resource_id}: observed={observed_fasta_sha256} expected={expected_fasta_sha256}",
+    )
+    observed_idmap_sha256 = digest(idmap_path)
+    require(
+        observed_idmap_sha256 == expected_idmap_sha256,
+        f"certified identifier_map_sha256 mismatch before geometry derivation for {resource_id}: observed={observed_idmap_sha256} expected={expected_idmap_sha256}",
+    )
+
+    # Single read-only streaming pass over normalized.fasta (O(B) time, O(1) per-record accumulator state)
+    ordered_analysis_ids: list[str] = []
+    ordered_record_lengths: list[int] = []
+    ordered_ambiguous_base_counts: list[int] = []
+    ordered_sequence_sha256: list[str] = []
+    total_bases = 0
+    total_ambiguous_bases = 0
+
+    current_id: str | None = None
+    current_len = 0
+    current_ambig = 0
+    current_seq_hasher = hashlib.sha256()
+
+    def flush_record() -> None:
+        nonlocal total_bases, total_ambiguous_bases
+        require(
+            current_id is not None and current_len > 0,
+            f"empty FASTA record in {fasta_rel}: {current_id!r}",
+        )
+        ordered_analysis_ids.append(current_id)
+        ordered_record_lengths.append(current_len)
+        ordered_ambiguous_base_counts.append(current_ambig)
+        ordered_sequence_sha256.append(current_seq_hasher.hexdigest())
+        total_bases += current_len
+        total_ambiguous_bases += current_ambig
+
+    with fasta_path.open("rt", encoding="ascii", errors="strict") as stream:
+        for raw_line in stream:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if current_id is not None:
+                    flush_record()
+                header = line[1:]
+                require(bool(header), f"empty FASTA header in {fasta_rel}")
+                expected_id = f"{resource_id}__{len(ordered_analysis_ids) + 1:08d}"
+                require(
+                    header == expected_id,
+                    f"canonical FASTA analysis_id order mismatch in {fasta_rel}: observed={header!r} expected={expected_id!r}",
+                )
+                current_id = header
+                current_len = 0
+                current_ambig = 0
+                current_seq_hasher = hashlib.sha256()
+            else:
+                require(current_id is not None, f"sequence before FASTA header in {fasta_rel}")
+                require(
+                    set(line) <= DNA,
+                    f"non-uppercase-IUPAC DNA in {fasta_rel} record {current_id}",
+                )
+                current_len += len(line)
+                # Exact normalize_fasta ambiguity criterion: IUPAC DNA base not in "ACGT"
+                current_ambig += sum(base not in "ACGT" for base in line)
+                current_seq_hasher.update(line.encode("ascii"))
+        if current_id is not None:
+            flush_record()
+
+    record_count = len(ordered_record_lengths)
+    require(record_count > 0, f"no FASTA records in {fasta_rel}")
+
+    # Mandatory read-only cross-check against identifier_map.tsv
+    ordered_source_ids: list[str] = []
+    seen_source_ids: set[str] = set()
+    map_row_count = 0
+    with idmap_path.open("r", encoding="utf-8", newline="") as id_stream:
+        reader = csv.DictReader(id_stream, delimiter="\t")
+        require(
+            tuple(reader.fieldnames or ()) == IDENTIFIER_MAP_REQUIRED_COLUMNS,
+            f"unexpected identifier_map.tsv columns in {idmap_rel}: {reader.fieldnames!r}",
+        )
+        for idx, row in enumerate(reader):
+            map_row_count += 1
+            require(
+                idx < record_count,
+                f"identifier_map record count mismatch for {resource_id}: map has more than {record_count} records",
+            )
+            map_analysis_id = row["analysis_id"]
+            require(
+                map_analysis_id == ordered_analysis_ids[idx],
+                f"identifier_map analysis_id order mismatch at index {idx} for {resource_id}: map={map_analysis_id!r} fasta={ordered_analysis_ids[idx]!r}",
+            )
+            try:
+                map_len = int(row["length_nt"])
+            except (TypeError, ValueError) as exc:
+                raise ResourceContractError(
+                    f"invalid integer length_nt in {idmap_rel} at {map_analysis_id}: {row.get('length_nt')!r}"
+                ) from exc
+            require(
+                map_len == ordered_record_lengths[idx],
+                f"identifier_map length_nt mismatch at {map_analysis_id} for {resource_id}: map={map_len} fasta={ordered_record_lengths[idx]}",
+            )
+            require(
+                row["sequence_sha256"] == ordered_sequence_sha256[idx],
+                f"identifier_map sequence_sha256 mismatch at {map_analysis_id} for {resource_id}: map={row['sequence_sha256']} fasta={ordered_sequence_sha256[idx]}",
+            )
+            source_id = row["source_id"]
+            require(
+                isinstance(source_id, str) and bool(source_id) and source_id not in seen_source_ids,
+                f"missing or duplicate source_id in {idmap_rel} at {map_analysis_id}: {source_id!r}",
+            )
+            seen_source_ids.add(source_id)
+            ordered_source_ids.append(source_id)
+
+    require(
+        map_row_count == record_count,
+        f"identifier_map record count mismatch for {resource_id}: map={map_row_count} fasta={record_count}",
+    )
+
+    # Mandatory cross-checks against internal vector sums/counts and manifest quality fields
+    require(
+        len(ordered_record_lengths) == record_count
+        and len(ordered_ambiguous_base_counts) == record_count
+        and len(ordered_analysis_ids) == record_count
+        and len(ordered_source_ids) == record_count,
+        f"geometry vector length mismatch against record_count for {resource_id}",
+    )
+    lengths_sum = sum(ordered_record_lengths)
+    require(
+        lengths_sum == total_bases,
+        f"sum of ordered_record_lengths ({lengths_sum}) differs from total_bases ({total_bases}) for {resource_id}",
+    )
+    ambig_sum = sum(ordered_ambiguous_base_counts)
+    require(
+        ambig_sum == total_ambiguous_bases,
+        f"sum of ordered_ambiguous_base_counts ({ambig_sum}) differs from total_ambiguous_bases ({total_ambiguous_bases}) for {resource_id}",
+    )
+
+    manifest_record_count = quality.get("record_count")
+    manifest_total_bases = quality.get("total_bases")
+    manifest_ambiguous_bases = quality.get("ambiguous_bases")
+    require(
+        _is_strict_int(manifest_record_count) and record_count == manifest_record_count,
+        f"record_count mismatch against manifest quality for {resource_id}: observed={record_count} manifest={manifest_record_count!r}",
+    )
+    require(
+        _is_strict_int(manifest_total_bases) and total_bases == manifest_total_bases,
+        f"total_bases mismatch against manifest quality for {resource_id}: observed={total_bases} manifest={manifest_total_bases!r}",
+    )
+    require(
+        _is_strict_int(manifest_ambiguous_bases) and total_ambiguous_bases == manifest_ambiguous_bases,
+        f"ambiguous_bases sum mismatch against manifest quality for {resource_id}: observed={total_ambiguous_bases} manifest={manifest_ambiguous_bases!r}",
+    )
+
+    descriptor = validate_geometry_descriptor(
+        {
+            "record_count": record_count,
+            "total_bases": total_bases,
+            "ordered_record_lengths": ordered_record_lengths,
+            "ordered_ambiguous_base_counts": ordered_ambiguous_base_counts,
+            "alphabet_policy": ALPHABET_POLICY_UPPERCASE_IUPAC_DNA,
+            "record_boundary_policy": RECORD_BOUNDARY_POLICY_NEVER_CROSSED,
+        }
+    )
+    descriptor_sha256 = compute_geometry_descriptor_sha256(descriptor)
+
+    resolved_manifest_sha256 = (
+        manifest_sha256
+        if manifest_sha256 is not None
+        else digest(relative_path(root, MANIFEST))
+    )
+
+    return {
+        "schema_version": 1,
+        "artifact_id": GEOMETRY_RECORD_ARTIFACT_ID,
+        "derivation_version": GEOMETRY_DERIVATION_VERSION,
+        "stage": "NB04_CP1_E03_STRUCTURAL_GEOMETRY_DERIVATION",
+        "campaign_id": campaign_id,
+        "resource_id": resource_id,
+        "organism_id": str(resource["organism_id"]),
+        "scientific_name": str(resource["scientific_name"]),
+        "taxid": int(resource["taxid"]),
+        "accession_version": str(resource["accession_version"]),
+        "resource_record_type": str(resource["resource_record_type"]),
+        "source_fasta": {
+            "fasta_path": fasta_rel,
+            "certified_fasta_sha256": expected_fasta_sha256,
+            "observed_fasta_sha256": observed_fasta_sha256,
+            "identifier_map_path": idmap_rel,
+            "certified_identifier_map_sha256": expected_idmap_sha256,
+            "observed_identifier_map_sha256": observed_idmap_sha256,
+            "resources_manifest_path": MANIFEST,
+            "resources_manifest_sha256": resolved_manifest_sha256,
+            "g0_certificate_sha256": str(resource["g0_certificate_sha256"]),
+        },
+        "canonical_order": {
+            "order_rule": "NORMALIZED_FASTA_SOURCE_ORDER_SEQUENTIAL_ANALYSIS_ID",
+            "analysis_id_range": f"{resource_id}__00000001..{resource_id}__{record_count:08d}",
+            "ordered_analysis_ids": ordered_analysis_ids,
+            "ordered_source_ids": ordered_source_ids,
+        },
+        "descriptor_schema_id": GEOMETRY_DESCRIPTOR_SCHEMA_ID,
+        "descriptor_sha256": descriptor_sha256,
+        "architecture_descriptor": descriptor,
+        "verification_against_certified_sources": {
+            "fasta_sha256_matches_manifest": True,
+            "identifier_map_sha256_matches_manifest": True,
+            "identifier_map_record_count": map_row_count,
+            "identifier_map_record_count_matches": True,
+            "identifier_map_all_record_lengths_match": True,
+            "identifier_map_all_sequence_sha256_match": True,
+            "identifier_map_all_analysis_ids_match_canonical_order": True,
+            "manifest_quality_record_count": int(manifest_record_count),
+            "manifest_quality_total_bases": int(manifest_total_bases),
+            "manifest_quality_ambiguous_bases": int(manifest_ambiguous_bases),
+            "observed_record_count": record_count,
+            "observed_total_bases": total_bases,
+            "observed_total_ambiguous_bases": total_ambiguous_bases,
+            "sum_of_ordered_record_lengths_matches_total_bases": True,
+            "vector_length_matches_record_count": True,
+            "sum_of_ordered_ambiguous_base_counts_matches_manifest_quality": True,
+            "verdict": "PASS",
+        },
+        "policy_and_scientific_limitations": {
+            "coverage_predicate_rule": (
+                "A geometry cell covers the resource if and only if all scalars "
+                "(record_count, total_bases), integral vectors (ordered_record_lengths, "
+                "ordered_ambiguous_base_counts), and policies (alphabet_policy, "
+                "record_boundary_policy) of NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 are "
+                "identically equal (plan_v003.md section 5). No missing value, summary "
+                "statistic, mean, median, histogram, or presumed interval satisfies "
+                "this predicate."
+            ),
+            "candidate_identity_binding_rule": (
+                "Only descriptor_sha256 (computed strictly over the 6-field "
+                "NB04_RESOURCE_ARCHITECTURE_GEOMETRY_V1 object without paths, "
+                "administrative IDs, or derivation metadata) enters candidate "
+                "configuration identity; geometry_record_sha256 covers the full "
+                "provenance file."
+            ),
+            "ambiguity_definition": "IUPAC_DNA_BASE_NOT_IN_ACGT_AFTER_UPPERCASE_NORMALIZATION",
+            "prior_state_declaration": (
+                "Prior to this E03 read-only derivation, only the aggregate "
+                "quality.ambiguous_bases scalar was materialized in the CP1 manifest; "
+                "the per-record ordered_ambiguous_base_counts vector remained "
+                "explicitly unmaterialized (plan_v003.md section 5)."
+            ),
+            "simplification_id": "S05",
+            "nominal_limitations": list(GEOMETRY_NOMINAL_LIMITATIONS),
+            "excluded_from_geometry_predicate": [
+                "BASE_COMPOSITION_AND_GC_CONTENT",
+                "REPETITIVE_MOTIF_IDENTITY_LOCATION_AND_EXTENT",
+                "LOW_COMPLEXITY_REGIONS",
+                "PARALOG_FAMILY_STRUCTURE",
+                "TSA_REDUNDANCY_AND_FRAGMENTATION",
+                "EXACT_INTRARECORD_POSITIONS_AND_RUN_DISTRIBUTIONS_OF_AMBIGUOUS_BASES",
+            ],
+            "scientific_scope_statement": (
+                "Simplification S05 (plan_v003.md sections 5 and 11): discrete geometry "
+                "cells preserve exact record_count, total_bases, ordered_record_lengths, "
+                "quantitative per-record ambiguity counts, and record boundaries, and "
+                "reduce generalization to resources or dimensions outside this descriptor. "
+                "Acceptability of this reduction is restricted to geometric dimension "
+                "verification under closure A.1 and QA-L and depends on per-query, "
+                "per-resource saturation and truncation controls (section 6.6) and the "
+                "remaining B4 detectors before any future absence statement. Equal "
+                "geometry does not imply biological equivalence, sequence composition "
+                "equivalence, equal seedable/effective search space (even under dust=no "
+                "and lcase_masking=false), or search recovery equivalence, and makes no "
+                "claim of global biological sensitivity."
+            ),
+            "structural_preparation_only": True,
+            "queries_executed": False,
+            "recovery_evaluation_executed": False,
+            "biological_decision_role": False,
+        },
+    }
+
+
+def write_resource_geometry_record(
+    root: Path,
+    geometry_record: Mapping[str, Any],
+    *,
+    destination: Path | None = None,
+) -> tuple[Path, str, str]:
+    """Validate and write a single resource geometry record without overwriting any existing file."""
+    root = root.resolve()
+    require(
+        "descriptor_sha256" in geometry_record,
+        "geometry_record missing declared descriptor_sha256",
+    )
+    descriptor_sha256 = extract_geometry_descriptor_sha256_from_record(geometry_record)
+    campaign_id = validate_geometry_campaign_id(geometry_record.get("campaign_id"))
+    resource_id = geometry_record.get("resource_id")
+    require(
+        isinstance(resource_id, str) and bool(RESOURCE_ID.fullmatch(resource_id)),
+        f"invalid resource_id in geometry_record: {resource_id!r}",
+    )
+    rec_count = geometry_record["architecture_descriptor"]["record_count"]
+    canon = geometry_record.get("canonical_order")
+    require(
+        isinstance(canon, Mapping)
+        and isinstance(canon.get("ordered_analysis_ids"), list)
+        and len(canon["ordered_analysis_ids"]) == rec_count
+        and isinstance(canon.get("ordered_source_ids"), list)
+        and len(canon["ordered_source_ids"]) == rec_count,
+        f"geometry_record canonical_order ID vectors do not match record_count ({rec_count})",
+    )
+    verif = geometry_record.get("verification_against_certified_sources")
+    require(
+        isinstance(verif, Mapping) and verif.get("verdict") == "PASS",
+        f"geometry_record verification_against_certified_sources verdict must be PASS for {resource_id}",
+    )
+    target = validate_e03_geometry_destination(
+        root,
+        destination,
+        campaign_id=campaign_id,
+        resource_id=resource_id,
+    )
+    payload = dict(geometry_record)
+    encoded = json_bytes(payload)
+    geometry_record_sha256 = hashlib.sha256(encoded).hexdigest()
+    write_json(target, payload)
+    return target, geometry_record_sha256, descriptor_sha256
+
+
+def derive_and_write_all_resources_geometry(
+    root: Path,
+    *,
+    campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
+    destination_overrides: Mapping[str, Path] | None = None,
+) -> dict[str, Any]:
+    """Derive and write E03 geometry records for all certified CP1 resources atomically after full validation."""
+    root = root.resolve()
+    validate_geometry_campaign_id(campaign_id)
+    verify_g0(root)
+
+    manifest_path = relative_path(root, MANIFEST)
+    require(manifest_path.is_file(), f"CP1 resources manifest missing: {MANIFEST}")
+    manifest_sha256 = digest(manifest_path)
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    require(
+        manifest.get("g0_certificate_sha256") == digest(relative_path(root, G0_PATH)),
+        "CP1 manifest g0_certificate_sha256 mismatch",
+    )
+    require(
+        manifest.get("inventory_sha256") == digest(relative_path(root, INVENTORY)),
+        "CP1 manifest inventory_sha256 mismatch",
+    )
+    resources = manifest.get("resources")
+    require(isinstance(resources, list) and len(resources) > 0, "CP1 manifest contains no resources")
+
+    resource_ids = [r.get("resource_id") for r in resources]
+    require(
+        len(set(resource_ids)) == len(resource_ids),
+        "duplicate resource_id in CP1 manifest",
+    )
+    if destination_overrides:
+        unknown = sorted(set(destination_overrides.keys()) - set(resource_ids))
+        require(not unknown, f"destination_overrides for unknown resource_id(s): {unknown}")
+
+    # Step 1: Validate all destination paths upfront before any derivation or write
+    validated_targets: dict[str, Path] = {}
+    for res in resources:
+        rid = res["resource_id"]
+        override = destination_overrides.get(rid) if destination_overrides else None
+        validated_targets[rid] = validate_e03_geometry_destination(
+            root,
+            override,
+            campaign_id=campaign_id,
+            resource_id=rid,
+        )
+
+    # Step 2: Complete all read-only derivations and cross-checks in memory before any disk write
+    derived_records: list[tuple[str, Path, dict[str, Any]]] = []
+    for res in resources:
+        rid = res["resource_id"]
+        record = derive_resource_geometry_record(
+            root,
+            res,
+            campaign_id=campaign_id,
+            manifest_sha256=manifest_sha256,
+        )
+        derived_records.append((rid, validated_targets[rid], record))
+
+    # Step 3: Materialize all validated geometry records
+    summary_by_resource: dict[str, dict[str, Any]] = {}
+    total_records = 0
+    total_bases = 0
+    total_ambiguous = 0
+    for rid, target, record in derived_records:
+        written_path, geom_sha256, desc_sha256 = write_resource_geometry_record(
+            root,
+            record,
+            destination=target,
+        )
+        desc = record["architecture_descriptor"]
+        ver = record["verification_against_certified_sources"]
+        rec_count = int(desc["record_count"])
+        rec_bases = int(desc["total_bases"])
+        rec_ambig = int(ver["observed_total_ambiguous_bases"])
+        total_records += rec_count
+        total_bases += rec_bases
+        total_ambiguous += rec_ambig
+        summary_by_resource[rid] = {
+            "geometry_record_path": written_path.relative_to(root).as_posix(),
+            "geometry_record_sha256": geom_sha256,
+            "descriptor_sha256": desc_sha256,
+            "fasta_path": record["source_fasta"]["fasta_path"],
+            "fasta_sha256": record["source_fasta"]["observed_fasta_sha256"],
+            "identifier_map_path": record["source_fasta"]["identifier_map_path"],
+            "identifier_map_sha256": record["source_fasta"]["observed_identifier_map_sha256"],
+            "record_count": rec_count,
+            "total_bases": rec_bases,
+            "ambiguous_bases": rec_ambig,
+            "alphabet_policy": desc["alphabet_policy"],
+            "record_boundary_policy": desc["record_boundary_policy"],
+            "identifier_map_verdict": "PASS",
+            "manifest_quality_verdict": "PASS",
+        }
+
+    return {
+        "stage": "NB04_CP1_E03_GEOMETRY_DERIVATION",
+        "campaign_id": campaign_id,
+        "descriptor_schema_id": GEOMETRY_DESCRIPTOR_SCHEMA_ID,
+        "derivation_version": GEOMETRY_DERIVATION_VERSION,
+        "resource_count": len(derived_records),
+        "total_records_across_resources": total_records,
+        "total_bases_across_resources": total_bases,
+        "total_ambiguous_bases_across_resources": total_ambiguous,
+        "resources": summary_by_resource,
+        "queries_executed": False,
+        "recovery_evaluation_executed": False,
+        "fixtures_materialized": False,
+    }
+
