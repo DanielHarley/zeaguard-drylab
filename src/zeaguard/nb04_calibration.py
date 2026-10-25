@@ -1,0 +1,1613 @@
+"""NB04 CP1 pre-freeze preservation control and execution scope (E01, section 8.1).
+
+Re-executable verification of G0 certified artifacts, the 43 normative documents,
+the six frozen CP1 resources and their BLAST index volumes, historical snapshots,
+observed BLAST tool builds, and the closed dirty-tree allowlist.
+No BLAST query, index build, fixture materialization, or calibration is executed.
+"""
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+from typing import Any
+
+from zeaguard.nb04_resources import (
+    ASSESSABILITY,
+    CP1,
+    G0_PATH,
+    INVENTORY,
+    MANIFEST,
+    REGISTRY,
+    ResourceContractError,
+    digest,
+    json_bytes,
+    relative_path,
+    require,
+    verify_g0,
+    write_json,
+)
+
+EXECUTION_SCOPE_PATH = "data/reference/nb04_calibration_execution_scope.json"
+PRESERVATION_INVENTORY_DIR = "artifacts/validation/nb04_cp1_prefreeze"
+PRESERVATION_INVENTORY_FILENAME = "preservation_inventory.json"
+
+PLAN_V003_PATH = "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4/plan_v003.md"
+PLAN_V003_SHA256 = "dfaac13bd97ac0e9504dcd97443d0286a872b92046881f60fbf8e5fcdd43c72b"
+EVALUATOR_OPINION_V003_PATH = "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4/parecer_avaliador_v003.md"
+EVALUATOR_OPINION_V003_SHA256 = "8b066d884b2044064f1c0d93a8f64a0e28c455b152bd76334da3fb083a346907"
+
+PLAN_SECTION_2_GITIGNORE_RAW_SHA256 = "a40c0c295b5f1a6f31b8cd7f576307c0bc62aaa561bf43631c20fdbec21eed44"
+E01_BASELINE_GITIGNORE_RAW_SHA256 = "2ed210bb34cedb631968097b078434ff4322a6cc6bdafcfbf6d34cf797fbce6a"
+
+EXPECTED_G0_CERTIFICATE_SHA256 = "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1"
+EXPECTED_CP1_REFERENCE_SHA256: dict[str, str] = {
+    MANIFEST: "2988284ac3e8a5c790f820dab479dacd5c9834f434eda5c9f6b9076fa2a99c52",
+    INVENTORY: "f11ab874762ccd2b23fe8cbff0bdd2eaa4ead64d416893dcf4a6601aae13c027",
+    REGISTRY: "fd4eb4f92898cbe7447c4c7f4ac7db2424613a1eba19f300e3bd559c13580a5a",
+    ASSESSABILITY: "d81b50cb1da60f3692deb13c28912ad081f017e1deb1627cf0a4b927ef1807db",
+}
+EXPECTED_CP1_RUN_MANIFEST_PATH = f"{CP1}/run_manifest.json"
+EXPECTED_CP1_RUN_MANIFEST_SHA256 = "b050ea0123a299c4516527d01279186306a2770470ad034455e8f2d7468440fb"
+EXPECTED_LATEST_POINTER_PATH = "artifacts/reproducibility/latest.json"
+EXPECTED_LATEST_POINTER_SHA256 = "c14960d556afdbe2fe94b1893f20af7824b93df0b2cd969064f8276cd6a62b08"
+EXPECTED_CP1_SNAPSHOT_PATH = "artifacts/reproducibility/20261015T082821773339Z_e37481d6d154/snapshot.json"
+EXPECTED_CP1_SNAPSHOT_SHA256 = "c4ddbbabb42092ebcf24a2e8cbcd972995374d7b241185fc48007de5a27955c3"
+
+HISTORICAL_CP1_PROTECTED_CODE_PATHS: tuple[str, ...] = (
+    "src/zeaguard/nb04_resources.py",
+    "scripts/run_nb04_cp1.py",
+    "scripts/inventory_nb04_cp1.py",
+)
+
+PREPARATION_IMPLEMENTATION_PATHS: tuple[str, ...] = (
+    "src/zeaguard/nb04_calibration.py",
+    "scripts/prepare_nb04_calibration.py",
+    "scripts/run_nb04_calibration.py",
+    "tests/test_nb04_calibration.py",
+)
+
+PREPARATION_REFERENCE_ARTIFACT_PATHS: tuple[str, ...] = (
+    EXECUTION_SCOPE_PATH,
+    "data/reference/nb04_cp1_resource_review.json",
+    "data/reference/nb04_calibration_fixture_catalog.json",
+    "data/reference/nb04_calibration_candidate_configurations.json",
+    "data/reference/nb04_calibration_tolerances.json",
+    "data/reference/nb04_calibration_prefreeze.json",
+)
+
+POST_E08_VERSIONED_EXPORT_PATHS: tuple[str, ...] = (
+    "data/reference/nb04_nto_search_configuration.json",
+    "data/reference/nb04_nto_search_calibration.tsv",
+)
+
+CLOSED_PREPARATION_DIRTY_ALLOWLIST: tuple[str, ...] = (
+    ".gitignore",
+    *PREPARATION_IMPLEMENTATION_PATHS,
+    *PREPARATION_REFERENCE_ARTIFACT_PATHS,
+)
+
+BLOCKED_OPERATIONS: tuple[str, ...] = (
+    "INFORMATIVE_CALIBRATION",
+    "REAL_NTO_SEARCHES",
+    "E08_CALIBRATION_EXECUTION",
+    "E09_G1_CERTIFICATION",
+    "G1_CERTIFICATION_DECLARATION",
+    "SYNTHETIC_FIXTURE_MATERIALIZATION",
+    "BLAST_INDEX_BUILD_FOR_FIXTURES_OR_RESOURCES",
+)
+
+BLAST_TOOLS: tuple[str, ...] = ("blastn", "makeblastdb", "blastdbcmd")
+_BLAST_VERSION_RE = re.compile(
+    r"^\s*([A-Za-z0-9_+-]+):\s*(\S+)\s*\r?\n\s*Package:\s*([^,\r\n]+),\s*build\s+([^\r\n]+)\s*$"
+)
+
+IN_REPO_B6_A1_RELATIVE_PATH = "src/workstreams/bioinformatics/decisions/B6_GOVERNANCE_AMENDMENT_A1.md"
+
+# Explicit declaration of the 43 G0 normative documents (no personal filesystem paths).
+NORMATIVE_DOCUMENTS_SPEC: dict[str, dict[str, str | None]] = {
+    "01_PLAN_v2.2.5.md": {
+        "expected_sha256": "9b759f71de500f65947bb150db71a5d20029da06971a26f7e20d1c72193dc83a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "02_B3_L4_REVIEW_v2.md": {
+        "expected_sha256": "e8b4c4269a60bcaab97aa58a5b9936ed4d80e03233a41cf217cdd0f91a715ea4",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "03_B3_L4_METHOD_DECISION_MEMO_v2.md": {
+        "expected_sha256": "580da72ed08859523ba2d079c249c4a75b59cb282c79e4c768eaffc26fabe70e",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "04_parameter_classification_v2.tsv": {
+        "expected_sha256": "8203ca35bf290700c6d7ac541c1e953dfbe6ae33b91ed1c936e1ebbd9d10f45d",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md": {
+        "expected_sha256": "aa156f77f02b618b878c8f4acac84bf45b36407c86ec9a674e2d5eb82ec3b91a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "06_B4_TRUNCATION_AND_COMPLETENESS_CONTRACT_v2_1.md": {
+        "expected_sha256": "9e559f9f3dac621afafb2dff53f7c392a439a76d1ed13bd031a5eb17ce174851",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "07_B4_TECHNICAL_DECISION_MEMO_v2_1_2.md": {
+        "expected_sha256": "8e2ab29a2f08f13bd31076879e965205a732e2929156759c7e29e1b7dfdb5273",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "08_b4_calibration_parameter_matrix_v2_1.tsv": {
+        "expected_sha256": "7731fa6bc8f4523f65d37c130e23885bab4358968ea655b2987712db160b8690",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "09_b4_calibration_qa_matrix_v2.tsv": {
+        "expected_sha256": "db59d77f44ec6be32962f25cb4da1e3b4f7c58c3c9c1a55348ba4581d57608b0",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "10_l1_l2_l3_l8_ecological_evidence_v2.tsv": {
+        "expected_sha256": "a253e6e2a1cde375e19e2457271683412cea7133673e7a3f23b275fe6b48494f",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "11_nto_candidate_receptors_precontract_v2.tsv": {
+        "expected_sha256": "870e468d626fef05248e05da76ebb184f2604131fd2162ce0f06c2db8b53d72a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "12_mandatory_category_closure_v2.tsv": {
+        "expected_sha256": "04b3e7773186926942e9b4fecd087615c7a8a47518b20bb3b02746ce045a6505",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "13_l9a_pre_g0_resource_landscape_v2.tsv": {
+        "expected_sha256": "68af318ed95fb4bbc808a8b2f249c0ed7ab59d15c0838844e25e67fae9ad0eab",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "14_l9a_resource_landscape_metadata_v2.tsv": {
+        "expected_sha256": "c9aa0ceb988e440202c0b5e555ce341d3ffa10a2772170b993ec82d5a97bd7ed",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "15_SOURCE_AUDIT_v2.md": {
+        "expected_sha256": "dd0d285366b4e73a4b3c7caad5da6024ecc4c7bae6c9bf7783dff06888d403c9",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "16_l4_b3_methodological_evidence_v2.tsv": {
+        "expected_sha256": "9e26cc3b6c386fb5c6bd050f1264f924f66a98e9556d6dd4b83809e4b78ef61c",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "17_B4_V2_1_2_CHANGELOG.md": {
+        "expected_sha256": "e99592617674668c4c6b9a00f1f3fc8563057e6fd91ef82fa553773d5a98d9d7",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "18_b4_fixture_spec_v2.tsv": {
+        "expected_sha256": "1beb9845b357a279fca11d1ba317d91f79a84d7fdb3501169daa4c9229d6ad2c",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_INPUTS",
+        "repository_relative_path": None,
+    },
+    "B4_CALIBRATION_AMENDMENT_A1.md": {
+        "expected_sha256": "0c1815be37ca6187639a27429fc0b38adb3f4be762f773f17a159f29b38f0ecc",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "repository_relative_path": None,
+    },
+    "B5_CONCERN_CRITERIA_REVIEW.md": {
+        "expected_sha256": "ed7fd88c6ed8655d0c7b320bf21c618ef15ef11c478a60ec375436fcd4e37eb1",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "B5_METHOD_DECISION_MEMO.md": {
+        "expected_sha256": "179d262a41608af4759e95a918e702bce7477c88416618381d23d6ca97bcf57a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "B5_SOURCE_AUDIT.md": {
+        "expected_sha256": "ab02e65e2e8383940949bb328984fb49f332f342a7d328a5ed153cbe6d495be8",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "B6_GOVERNANCE_AMENDMENT_A1.md": {
+        "expected_sha256": "9ea167a88359f78e916d753865d7d40a5c37d2ff04d3a09d73c647c3aebaa62b",
+        "hash_mode": "RAW",
+        "location_class": "IN_REPOSITORY",
+        "corpus_id": "REPOSITORY_DECISIONS",
+        "repository_relative_path": IN_REPO_B6_A1_RELATIVE_PATH,
+    },
+    "B6_GOVERNANCE_REVIEW.md": {
+        "expected_sha256": "b239e42bcc8cede524418a4866aadc32ae6f3f081ee89592167156c23e4a0b20",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "B6_METHOD_DECISION_MEMO.md": {
+        "expected_sha256": "6488b8cfc9bdab5d870402358f1fe955d050552ef3f586a30b24f69dee49dc00",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "B6_SOURCE_AUDIT.md": {
+        "expected_sha256": "591270f9abb8bd90049cbd11b9dcab519c17aba9537dbcd4a4ebb7cbaf0bae60",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "NB04_CP0_COMPLEMENTARY_CONTRACT_PROPOSAL.md": {
+        "expected_sha256": "617438b9bf5a0a4dd2e80fc832af288432060899e5f615384df3e306bb919c68",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "repository_relative_path": None,
+    },
+    "NB04_CP0_COMPLEMENTARY_INDEPENDENT_AUDIT.md": {
+        "expected_sha256": "277ac250c6f66a0ff0d451682f75b08d325a33bd58d7d476a374ff2c22581572",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "repository_relative_path": None,
+    },
+    "NB04_CP0_COMPLEMENTARY_RATIFICATION_RECORD.md": {
+        "expected_sha256": "a0b3d81d2d94351663a758603470509c91d81d2fdf30e9519c3bf2bbc66d9232",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "repository_relative_path": None,
+    },
+    "NB04_PREAPPROVAL_CLOSURE.md": {
+        "expected_sha256": "52b54d4fa633b2847818e7382e57fdbf9c1ec73588f662c93fb30f56aa7f618b",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "repository_relative_path": None,
+    },
+    "b5_adjudication_matrix.tsv": {
+        "expected_sha256": "cf28f1c388fd8a94de6477bf5afc552a6b2200db4ab06418db24ed8782b145a6",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b5_concern_methodological_evidence.tsv": {
+        "expected_sha256": "2b102d6ccddbe0f3e863e4022f91bdd89d5838395477d20f1b9ffca678558618",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b5_review_trigger_registry.tsv": {
+        "expected_sha256": "1058163a9294f3a114053b3213e418521fa2ccb95a6fece05219bac2cfd28146",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b5_rule_classification.tsv": {
+        "expected_sha256": "1a60e1ad00e201d26d4270a90af83a7f498bc58d4a80075971061352d3453636",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b5_state_machine.tsv": {
+        "expected_sha256": "9737888ce5633e890dfb394d18362167da8f0d3e16a5ddb01339e7593f89b3bb",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B5_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_amendment_matrix.tsv": {
+        "expected_sha256": "bfae1f4685c5af44f836ba567f823c52fd1d041cfead3002b03eaab732e24f57",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_competency_matrix.tsv": {
+        "expected_sha256": "1a6b16410d87a25fed0a2d3d83cc81a0af36356dbf9250196f44d2aea15a1670",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_disagreement_resolution.tsv": {
+        "expected_sha256": "c6362ede9b0af46149072a0b2a0821980aca1c3b461ffc22657b0e998554a983",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_governance_methodological_evidence.tsv": {
+        "expected_sha256": "2d31e1b6b499d7784e03cd80012a4a36ca4cef786b09dbad744266c724e81ff8",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_review_governance_matrix.tsv": {
+        "expected_sha256": "bca35004c5306d3a6eb6b1f639c6fcd608d9cacb3f100b359329a3fbd02993a3",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_review_workflow.tsv": {
+        "expected_sha256": "0c955d310013d820997c73a8f3bd44329868fad7b9845344002cf9764be9bb51",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_role_registry.tsv": {
+        "expected_sha256": "005309631796d173f2fd747e94b665d4447fafd4d011c55da792c0b1c032d272",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+    "b6_signoff_contract.tsv": {
+        "expected_sha256": "22da08f61ec6daef53fafe4e0dd5da2c6379d41d1b3a0798ea7235b4cfb322df",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "corpus_id": "NB04_B6_REVIEW",
+        "repository_relative_path": None,
+    },
+}
+
+
+def _git_output(root: Path, *args: str) -> str:
+    require(
+        bool(args) and args[0] in {"rev-parse", "branch", "status", "diff", "show"},
+        "only read-only Git inspection commands are permitted in E01",
+    )
+    local_autocrlf = subprocess.run(
+        ["git", "-C", str(root), "config", "--local", "--get", "core.autocrlf"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+        check=False,
+    )
+    git_cmd = ["git", "-C", str(root)]
+    if local_autocrlf.returncode != 0 or not local_autocrlf.stdout.strip():
+        git_cmd.extend(["-c", "core.autocrlf=true"])
+    git_cmd.extend(args)
+    completed = subprocess.run(
+        git_cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+        check=False,
+    )
+    require(completed.returncode == 0, f"git {args[0]} failed: {completed.stderr.strip()}")
+    return completed.stdout
+
+
+def _parse_porcelain_paths(porcelain_output: str) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    for raw_line in porcelain_output.splitlines():
+        if not raw_line:
+            continue
+        status_code = raw_line[:2]
+        path_part = raw_line[3:].strip()
+        if " -> " in path_part:
+            path_part = path_part.split(" -> ", 1)[1].strip()
+        if path_part.startswith('"') and path_part.endswith('"'):
+            path_part = path_part[1:-1]
+        entries.append({"status": status_code, "path": path_part})
+    return entries
+
+
+def phase_git_and_snapshot_policy() -> dict[str, Any]:
+    """Declare file classification and per-phase allow_dirty/snapshot rules (section 8.1)."""
+    return {
+        "file_classification": {
+            "versioned_preparation_code_and_tests": list(PREPARATION_IMPLEMENTATION_PATHS),
+            "versioned_preparation_reference_records": list(PREPARATION_REFERENCE_ARTIFACT_PATHS),
+            "versioned_post_e08_normative_exports": list(POST_E08_VERSIONED_EXPORT_PATHS),
+            "versioned_task_documentation_directory": "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4",
+            "protected_immutable_historical_cp1_code": list(HISTORICAL_CP1_PROTECTED_CODE_PATHS),
+            "ignored_unversioned_campaign_outputs": [
+                "data/external/nto",
+                "results/bioinformatics/nb04",
+                "artifacts/validation/nb04_cp1_prefreeze",
+            ],
+            "local_uncommitted_preserved_file": ".gitignore",
+        },
+        "phases": {
+            "E01_TO_E07_PREFREEZE_PREPARATION": {
+                "allow_dirty": True,
+                "allowlist_required": True,
+                "closed_dirty_allowlist": list(CLOSED_PREPARATION_DIRTY_ALLOWLIST),
+                "repro_checkpoint": "nb04_cp0",
+                "snapshot_policy": (
+                    "Preserve existing historical snapshots without overwriting; "
+                    "dirty working tree is explicitly declared and permitted only within "
+                    "CLOSED_PREPARATION_DIRTY_ALLOWLIST."
+                ),
+                "informative_execution_permitted": False,
+            },
+            "E08_INFORMATIVE_CALIBRATION_EXECUTION": {
+                "allow_dirty": False,
+                "allowlist_required": False,
+                "closed_dirty_allowlist": [],
+                "repro_checkpoint": "nb04_cp0",
+                "snapshot_policy": (
+                    "Requires prior authorized freeze commit, isolated clean checkout "
+                    "(without local .gitignore edit or private directories), a new Linux "
+                    "environment snapshot matching the freeze commit, and VERIFIED_BYTE_COPY "
+                    "of all ignored frozen inputs (sections 8.1 and 8.2)."
+                ),
+                "informative_execution_permitted": True,
+            },
+            "POST_E08_FINAL_ARTIFACT_MATERIALIZATION": {
+                "allow_dirty": True,
+                "allowlist_required": True,
+                "closed_dirty_allowlist": list(POST_E08_VERSIONED_EXPORT_PATHS),
+                "repro_checkpoint": "nb04_cp0",
+                "snapshot_policy": (
+                    "Execution receipts preserve the E08 freeze commit and snapshot; "
+                    "dirty state is restricted strictly to the versioned final exports."
+                ),
+                "informative_execution_permitted": False,
+            },
+            "E09_G1_CERTIFICATION": {
+                "allow_dirty": False,
+                "allowlist_required": False,
+                "closed_dirty_allowlist": [],
+                "repro_checkpoint": "nb04_cp0",
+                "snapshot_policy": (
+                    "Requires authorized commit of final artifacts, a new Linux environment "
+                    "snapshot of that published commit, allow_dirty=False preflight, and "
+                    "qualified external human review."
+                ),
+                "informative_execution_permitted": False,
+            },
+        },
+        "repro_profile_note": (
+            "config/repro.yaml and config/repro.schema.json remain unmodified (G0 certified); "
+            "no nb04_cp1 profile is added to config/repro.yaml, and checkpoint=None is preserved."
+        ),
+    }
+
+
+_DEFAULT = object()
+
+
+def normative_corpus_declaration(
+    corpus_spec: Mapping[str, Mapping[str, str | None]] | None = None,
+) -> dict[str, Any]:
+    """Build the public-safe normative corpus declaration with location_class and corpus_id."""
+    if corpus_spec is None:
+        corpus_spec = NORMATIVE_DOCUMENTS_SPEC
+    documents: dict[str, dict[str, str | None]] = {}
+    corpus_counts: dict[str, int] = {}
+    in_repo_count = 0
+    external_count = 0
+    for name in sorted(corpus_spec):
+        entry = corpus_spec[name]
+        loc_class = entry["location_class"]
+        corpus_id = str(entry["corpus_id"])
+        require(
+            loc_class in {"IN_REPOSITORY", "EXTERNAL_LOCAL_CORPUS"},
+            f"invalid normative location_class for {name}: {loc_class}",
+        )
+        require(entry.get("hash_mode") == "RAW", f"normative document hash_mode must be RAW: {name}")
+        if loc_class == "IN_REPOSITORY":
+            in_repo_count += 1
+            availability = "VERSIONED_IN_REPOSITORY"
+        else:
+            external_count += 1
+            availability = "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED"
+        corpus_counts[corpus_id] = corpus_counts.get(corpus_id, 0) + 1
+        documents[name] = {
+            "availability_semantics": availability,
+            "corpus_id": corpus_id,
+            "expected_sha256": entry["expected_sha256"],
+            "hash_mode": "RAW",
+            "location_class": loc_class,
+            "repository_relative_path": entry.get("repository_relative_path"),
+        }
+    return {
+        "total_documents": len(documents),
+        "in_repository_count": in_repo_count,
+        "external_local_corpus_count": external_count,
+        "logical_corpora_document_counts": dict(sorted(corpus_counts.items())),
+        "personal_paths_omitted": True,
+        "availability_qualification": (
+            "The 42 EXTERNAL_LOCAL_CORPUS documents reside outside version control in operator-supplied "
+            "directories; their accessibility is local and temporal to the verification run."
+        ),
+        "inaccessibility_policy": (
+            "Any missing corpus directory mapping or missing/unreadable file produces explicit status "
+            "NORMATIVE_DOCUMENT_INACCESSIBLE and fails closed (raises ResourceContractError when strict=True); "
+            "inaccessibility is never silently treated as approval."
+        ),
+        "documents": documents,
+    }
+
+
+def verify_gitignore_and_git_state(
+    root: Path,
+    *,
+    expected_plan_raw_sha256: str | None = None,
+    expected_baseline_raw_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Verify repository Git state and .gitignore RAW identity with byte-reduction proof."""
+    root = root.resolve()
+    if expected_plan_raw_sha256 is None:
+        expected_plan_raw_sha256 = PLAN_SECTION_2_GITIGNORE_RAW_SHA256
+    if expected_baseline_raw_sha256 is None:
+        expected_baseline_raw_sha256 = E01_BASELINE_GITIGNORE_RAW_SHA256
+    gitignore_path = relative_path(root, ".gitignore")
+    require(gitignore_path.is_file(), ".gitignore missing from repository root")
+
+    raw_bytes = gitignore_path.read_bytes()
+    observed_raw = hashlib.sha256(raw_bytes).hexdigest()
+    observed_lf = digest(gitignore_path, normalized=True)
+
+    reduced_bytes = raw_bytes.replace(b"\ndocs\n", b"\n", 1)
+    if reduced_bytes == raw_bytes:
+        reduced_bytes = raw_bytes.replace(b"\r\ndocs\r\n", b"\r\n", 1)
+    reduced_raw_sha256 = hashlib.sha256(reduced_bytes).hexdigest()
+    reproduces_plan_hash = reduced_raw_sha256 == expected_plan_raw_sha256
+
+    if observed_raw == expected_baseline_raw_sha256:
+        require(
+            reproduces_plan_hash,
+            ".gitignore matches E01 baseline hash but single-line 'docs' reduction did not reproduce plan section 2 hash",
+        )
+        verdict = "PASS_EXPLAINED_BASELINE_FIXED"
+    elif observed_raw == expected_plan_raw_sha256:
+        verdict = "PASS_MATCHES_PLAN_SECTION_2"
+    else:
+        raise ResourceContractError(
+            f"unexplained .gitignore RAW SHA256 divergence: observed={observed_raw}, "
+            f"expected_baseline={expected_baseline_raw_sha256}, plan_section_2={expected_plan_raw_sha256}"
+        )
+
+    branch = _git_output(root, "branch", "--show-current").strip()
+    head = _git_output(root, "rev-parse", "HEAD").strip()
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", head)), f"invalid Git HEAD SHA: {head}")
+    porcelain_raw = _git_output(root, "status", "--porcelain=v1", "-uall")
+    porcelain_entries = _parse_porcelain_paths(porcelain_raw)
+
+    modified_tracked = sorted(
+        entry["path"] for entry in porcelain_entries if entry["status"] != "??"
+    )
+    tracked_diffs: dict[str, dict[str, str]] = {}
+    for rel_path in modified_tracked:
+        file_path = relative_path(root, rel_path)
+        diff_text = _git_output(root, "diff", "HEAD", "--", rel_path)
+        tracked_diffs[rel_path] = {
+            "diff_from_head": diff_text,
+            "observed_raw_sha256": digest(file_path) if file_path.is_file() else "DELETED",
+            "observed_lf_sha256": digest(file_path, normalized=True) if file_path.is_file() else "DELETED",
+        }
+
+    return {
+        "project_root_name": root.name,
+        "branch": branch,
+        "head": head,
+        "working_tree_dirty": bool(porcelain_entries),
+        "git_status_porcelain": [line for line in porcelain_raw.splitlines() if line],
+        "modified_tracked_files": modified_tracked,
+        "modified_tracked_diffs": tracked_diffs,
+        "gitignore_preservation": {
+            "path": ".gitignore",
+            "plan_section_2_expected_raw_sha256": expected_plan_raw_sha256,
+            "current_e01_baseline_raw_sha256": expected_baseline_raw_sha256,
+            "observed_raw_sha256": observed_raw,
+            "observed_lf_sha256": observed_lf,
+            "matches_plan_section_2_raw_sha256": observed_raw == expected_plan_raw_sha256,
+            "matches_current_e01_baseline_raw_sha256": observed_raw == expected_baseline_raw_sha256,
+            "demonstrated_content_difference": {
+                "evidence_class": "DEMONSTRATED_BY_GIT_DIFF_AND_BYTE_REDUCTION",
+                "diff_vs_head_added_lines": [".claude", ".maestri", ".planning", "docs"],
+                "reduction_operation": "REMOVE_SINGLE_LINE_DOCS",
+                "removed_line_literal": "docs",
+                "reduced_bytes_raw_sha256": reduced_raw_sha256,
+                "reproduces_plan_section_2_expected_raw_sha256": reproduces_plan_hash,
+                "statement": (
+                    "Removing exclusively the single line 'docs' from the observed .gitignore bytes "
+                    f"({observed_raw}) yields RAW SHA256 {reduced_raw_sha256}, which equals the exact "
+                    f"plan_v003.md section 2 hash ({expected_plan_raw_sha256})."
+                ),
+            },
+            "reported_attribution": {
+                "evidence_class": "REPORTED_CONTEXT_NOT_DEMONSTRATED_BY_GIT_DIFF",
+                "statement": (
+                    "Coordinator delegation C-01 reports that the repository owner added the 'docs' "
+                    "entry after plan_v003.md was drafted; authorship and timestamp of that untracked "
+                    "working-tree edit are reported context, not demonstrated by git diff."
+                ),
+            },
+            "verdict": verdict,
+        },
+    }
+
+
+def verify_preparation_allowlist(
+    root: Path,
+    *,
+    allowlist: tuple[str, ...] | None = None,
+    expected_gitignore_baseline_sha256: str | None = None,
+    expected_gitignore_plan_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Enforce the closed section 8.1 allowlist on all dirty tracked and untracked files."""
+    root = root.resolve()
+    if allowlist is None:
+        allowlist = CLOSED_PREPARATION_DIRTY_ALLOWLIST
+    if expected_gitignore_baseline_sha256 is None:
+        expected_gitignore_baseline_sha256 = E01_BASELINE_GITIGNORE_RAW_SHA256
+    if expected_gitignore_plan_sha256 is None:
+        expected_gitignore_plan_sha256 = PLAN_SECTION_2_GITIGNORE_RAW_SHA256
+    require(bool(allowlist), "closed preparation allowlist cannot be empty")
+    allowed_set = set(allowlist)
+
+    porcelain_raw = _git_output(root, "status", "--porcelain=v1", "-uall")
+    porcelain_entries = _parse_porcelain_paths(porcelain_raw)
+    dirty_paths = sorted({entry["path"] for entry in porcelain_entries})
+    unauthorized = [path for path in dirty_paths if path not in allowed_set]
+
+    tracked_diffs: dict[str, str] = {}
+    dirty_file_hashes: dict[str, dict[str, str | None]] = {}
+    for entry in porcelain_entries:
+        rel_path = entry["path"]
+        file_path = relative_path(root, rel_path)
+        if entry["status"] != "??":
+            tracked_diffs[rel_path] = _git_output(root, "diff", "HEAD", "--", rel_path)
+        if file_path.is_file():
+            dirty_file_hashes[rel_path] = {
+                "status": entry["status"],
+                "raw_sha256": digest(file_path),
+                "lf_sha256": digest(file_path, normalized=True),
+            }
+        else:
+            dirty_file_hashes[rel_path] = {
+                "status": entry["status"],
+                "raw_sha256": None,
+                "lf_sha256": None,
+            }
+
+    require(
+        not unauthorized,
+        f"dirty working-tree files outside closed preparation allowlist: {unauthorized}",
+    )
+
+    if ".gitignore" in dirty_file_hashes:
+        gitignore_raw = dirty_file_hashes[".gitignore"]["raw_sha256"]
+        require(
+            gitignore_raw in {expected_gitignore_baseline_sha256, expected_gitignore_plan_sha256},
+            f".gitignore modified to unauthorized RAW SHA256: {gitignore_raw}",
+        )
+
+    for protected in HISTORICAL_CP1_PROTECTED_CODE_PATHS:
+        require(
+            protected not in dirty_file_hashes,
+            f"protected historical CP1 file cannot be dirty: {protected}",
+        )
+
+    implementation_hashes: dict[str, dict[str, str | bool | None]] = {}
+    for rel_path in (*HISTORICAL_CP1_PROTECTED_CODE_PATHS, *PREPARATION_IMPLEMENTATION_PATHS):
+        path = relative_path(root, rel_path)
+        if path.is_file():
+            implementation_hashes[rel_path] = {
+                "present": True,
+                "raw_sha256": digest(path),
+                "lf_sha256": digest(path, normalized=True),
+            }
+        else:
+            implementation_hashes[rel_path] = {
+                "present": False,
+                "raw_sha256": None,
+                "lf_sha256": None,
+            }
+
+    return {
+        "readiness_allow_dirty": True,
+        "closed_allowlist": list(allowlist),
+        "dirty_paths_observed": dirty_paths,
+        "unauthorized_dirty_paths": unauthorized,
+        "dirty_file_hashes": dict(sorted(dirty_file_hashes.items())),
+        "tracked_diffs": dict(sorted(tracked_diffs.items())),
+        "current_implementation_sha256": implementation_hashes,
+        "verdict": "PASS",
+    }
+
+
+def verify_g0_certified_artifacts_inventory(
+    root: Path,
+    *,
+    expected_certificate_sha256: Any = _DEFAULT,
+    expected_artifact_count: Any = _DEFAULT,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Reuse zeaguard.nb04_resources.verify_g0 and record per-artifact verification."""
+    root = root.resolve()
+    if expected_certificate_sha256 is _DEFAULT:
+        expected_certificate_sha256 = EXPECTED_G0_CERTIFICATE_SHA256
+    if expected_artifact_count is _DEFAULT:
+        expected_artifact_count = 26
+    g0_file = relative_path(root, G0_PATH)
+    require(g0_file.is_file(), f"G0 certificate missing: {G0_PATH}")
+    observed_cert_sha256 = digest(g0_file)
+    if expected_certificate_sha256 is not None:
+        require(
+            observed_cert_sha256 == expected_certificate_sha256,
+            f"G0 certificate SHA256 mismatch: expected={expected_certificate_sha256} observed={observed_cert_sha256}",
+        )
+
+    certificate = verify_g0(root)
+    artifacts = certificate["certified_artifacts"]
+    if expected_artifact_count is not None:
+        require(
+            len(artifacts) == expected_artifact_count,
+            f"G0 certified_artifacts count mismatch: expected={expected_artifact_count} observed={len(artifacts)}",
+        )
+
+    records: dict[str, dict[str, str]] = {}
+    for rel_path in sorted(artifacts):
+        entry = artifacts[rel_path]
+        hash_mode = entry["hash_mode"]
+        path = relative_path(root, rel_path)
+        observed = digest(path, normalized=hash_mode == "LF_NORMALIZED")
+        require(observed == entry["sha256"], f"G0 artifact changed: {rel_path}")
+        records[rel_path] = {
+            "hash_mode": hash_mode,
+            "expected_sha256": entry["sha256"],
+            "observed_sha256": observed,
+            "verdict": "PASS",
+        }
+
+    summary = {
+        "certificate_path": G0_PATH,
+        "certificate_id": certificate.get("certification_id"),
+        "expected_certificate_sha256": expected_certificate_sha256,
+        "observed_certificate_sha256": observed_cert_sha256,
+        "gate": certificate["gate"],
+        "status": certificate["status"],
+        "artifact_count": len(records),
+        "artifacts": records,
+        "verdict": "PASS",
+    }
+    return certificate, summary
+
+
+def verify_normative_documents(
+    root: Path,
+    certificate: Mapping[str, Any],
+    corpus_directories: Mapping[str, Path] | None = None,
+    *,
+    corpus_spec: Mapping[str, Mapping[str, str | None]] | None = None,
+    strict: bool = True,
+) -> dict[str, Any]:
+    """Verify the 43 G0 normative documents without recording personal paths."""
+    root = root.resolve()
+    if corpus_spec is None:
+        corpus_spec = NORMATIVE_DOCUMENTS_SPEC
+    cert_normatives = certificate.get("normative_documents")
+    require(
+        isinstance(cert_normatives, Mapping) and bool(cert_normatives),
+        "G0 certificate normative_documents missing or empty",
+    )
+    spec_hashes = {name: entry["expected_sha256"] for name, entry in corpus_spec.items()}
+    require(
+        dict(cert_normatives) == spec_hashes,
+        "normative_documents in G0 certificate diverge from declared NORMATIVE_DOCUMENTS_SPEC",
+    )
+
+    corpus_dirs = dict(corpus_directories or {})
+    results: dict[str, dict[str, Any]] = {}
+    inaccessible: list[str] = []
+    mismatched: list[str] = []
+
+    for doc_name in sorted(corpus_spec):
+        require(
+            Path(doc_name).name == doc_name and "/" not in doc_name and "\\" not in doc_name and ".." not in doc_name,
+            f"unsafe normative document name: {doc_name}",
+        )
+        spec = corpus_spec[doc_name]
+        expected_sha = str(spec["expected_sha256"])
+        loc_class = str(spec["location_class"])
+        corpus_id = str(spec["corpus_id"])
+        hash_mode = str(spec.get("hash_mode", "RAW"))
+        require(hash_mode == "RAW", f"unknown normative hash_mode for {doc_name}: {hash_mode}")
+
+        if loc_class == "IN_REPOSITORY":
+            rel_repo = spec.get("repository_relative_path")
+            require(isinstance(rel_repo, str) and bool(rel_repo), f"missing repo path for {doc_name}")
+            candidate_path = relative_path(root, rel_repo)
+            availability_semantics = "VERSIONED_IN_REPOSITORY"
+        elif loc_class == "EXTERNAL_LOCAL_CORPUS":
+            availability_semantics = "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED"
+            base_dir = corpus_dirs.get(corpus_id)
+            if base_dir is None:
+                candidate_path = None
+            else:
+                resolved_base = Path(base_dir).resolve()
+                candidate_path = (resolved_base / doc_name).resolve()
+                require(
+                    candidate_path.is_relative_to(resolved_base),
+                    f"normative document path escapes corpus directory: {doc_name}",
+                )
+        else:
+            raise ResourceContractError(f"unknown location_class for {doc_name}: {loc_class}")
+
+        if candidate_path is None or not candidate_path.is_file():
+            inaccessible.append(doc_name)
+            results[doc_name] = {
+                "corpus_id": corpus_id,
+                "location_class": loc_class,
+                "repository_relative_path": spec.get("repository_relative_path"),
+                "availability_semantics": availability_semantics,
+                "hash_mode": hash_mode,
+                "expected_sha256": expected_sha,
+                "observed_sha256": None,
+                "status": "NORMATIVE_DOCUMENT_INACCESSIBLE",
+                "verdict": "FAIL_INACCESSIBLE",
+            }
+            continue
+
+        observed_sha = digest(candidate_path)
+        if observed_sha != expected_sha:
+            mismatched.append(doc_name)
+            results[doc_name] = {
+                "corpus_id": corpus_id,
+                "location_class": loc_class,
+                "repository_relative_path": spec.get("repository_relative_path"),
+                "availability_semantics": availability_semantics,
+                "hash_mode": hash_mode,
+                "expected_sha256": expected_sha,
+                "observed_sha256": observed_sha,
+                "status": "NORMATIVE_DOCUMENT_HASH_MISMATCH",
+                "verdict": "FAIL_HASH_MISMATCH",
+            }
+        else:
+            results[doc_name] = {
+                "corpus_id": corpus_id,
+                "location_class": loc_class,
+                "repository_relative_path": spec.get("repository_relative_path"),
+                "availability_semantics": availability_semantics,
+                "hash_mode": hash_mode,
+                "expected_sha256": expected_sha,
+                "observed_sha256": observed_sha,
+                "status": (
+                    "VERIFIED_IN_REPOSITORY"
+                    if loc_class == "IN_REPOSITORY"
+                    else "VERIFIED_LOCAL_TEMPORAL"
+                ),
+                "verdict": "PASS",
+            }
+
+    if strict:
+        require(
+            not inaccessible,
+            f"NORMATIVE_DOCUMENT_INACCESSIBLE: {inaccessible}",
+        )
+        require(
+            not mismatched,
+            f"normative document SHA256 mismatch: {mismatched}",
+        )
+
+    overall_verdict = (
+        "PASS"
+        if not inaccessible and not mismatched
+        else "FAIL_INACCESSIBLE"
+        if inaccessible
+        else "FAIL_HASH_MISMATCH"
+    )
+    return {
+        "total_documents": len(results),
+        "verified_count": sum(1 for item in results.values() if item["verdict"] == "PASS"),
+        "inaccessible_count": len(inaccessible),
+        "inaccessible_documents": inaccessible,
+        "mismatch_count": len(mismatched),
+        "mismatched_documents": mismatched,
+        "personal_paths_omitted": True,
+        "availability_qualification": (
+            "External normative documents (EXTERNAL_LOCAL_CORPUS) are verified at runtime from "
+            "operator-supplied directories; their availability is local and temporal, and future "
+            "inaccessibility transitions explicitly to NORMATIVE_DOCUMENT_INACCESSIBLE."
+        ),
+        "documents": results,
+        "verdict": overall_verdict,
+    }
+
+
+def verify_cp1_resources_and_manifests(
+    root: Path,
+    *,
+    expected_reference_sha256: Any = _DEFAULT,
+    expected_run_manifest_sha256: Any = _DEFAULT,
+    expected_resource_count: Any = _DEFAULT,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Stream-verify all CP1 reference manifests, 6 resources, FASTA, ID maps, and blastdb volumes."""
+    root = root.resolve()
+    if expected_reference_sha256 is _DEFAULT:
+        expected_reference_sha256 = EXPECTED_CP1_REFERENCE_SHA256
+    if expected_run_manifest_sha256 is _DEFAULT:
+        expected_run_manifest_sha256 = EXPECTED_CP1_RUN_MANIFEST_SHA256
+    if expected_resource_count is _DEFAULT:
+        expected_resource_count = 6
+    reference_records: dict[str, dict[str, str]] = {}
+    ref_expectations = dict(expected_reference_sha256 or {})
+    for rel_path in (MANIFEST, INVENTORY, REGISTRY, ASSESSABILITY):
+        path = relative_path(root, rel_path)
+        require(path.is_file(), f"CP1 reference artifact missing: {rel_path}")
+        observed = digest(path)
+        expected = ref_expectations.get(rel_path)
+        if expected is not None:
+            require(
+                observed == expected,
+                f"CP1 reference artifact hash mismatch for {rel_path}: expected={expected} observed={observed}",
+            )
+        reference_records[rel_path] = {
+            "hash_mode": "RAW",
+            "expected_sha256": expected or observed,
+            "observed_sha256": observed,
+            "verdict": "PASS",
+        }
+
+    manifest = json.loads(relative_path(root, MANIFEST).read_text("utf-8"))
+    g0_sha = digest(relative_path(root, G0_PATH))
+    inv_sha = reference_records[INVENTORY]["observed_sha256"]
+    require(
+        manifest.get("g0_certificate_sha256") == g0_sha,
+        "manifest g0_certificate_sha256 binding mismatch",
+    )
+    require(
+        manifest.get("inventory_sha256") == inv_sha,
+        "manifest inventory_sha256 binding mismatch",
+    )
+
+    run_manifest_path = relative_path(root, EXPECTED_CP1_RUN_MANIFEST_PATH)
+    require(run_manifest_path.is_file(), f"CP1 run_manifest missing: {EXPECTED_CP1_RUN_MANIFEST_PATH}")
+    observed_run_manifest_sha = digest(run_manifest_path)
+    if expected_run_manifest_sha256 is not None:
+        require(
+            observed_run_manifest_sha == expected_run_manifest_sha256,
+            f"CP1 run_manifest SHA256 mismatch: expected={expected_run_manifest_sha256} observed={observed_run_manifest_sha}",
+        )
+    run_manifest = json.loads(run_manifest_path.read_text("utf-8"))
+    for out_rel, exp_sha in sorted(run_manifest.get("outputs_sha256", {}).items()):
+        out_path = relative_path(root, out_rel)
+        require(out_path.is_file(), f"CP1 run_manifest output missing: {out_rel}")
+        require(digest(out_path) == exp_sha, f"CP1 run_manifest output hash mismatch: {out_rel}")
+    for code_rel, exp_lf_sha in sorted(run_manifest.get("implementation_sha256_lf", {}).items()):
+        code_path = relative_path(root, code_rel)
+        require(code_path.is_file(), f"CP1 implementation file missing: {code_rel}")
+        require(
+            digest(code_path, normalized=True) == exp_lf_sha,
+            f"CP1 protected implementation LF hash changed: {code_rel}",
+        )
+
+    resources = manifest.get("resources", [])
+    if expected_resource_count is not None:
+        require(
+            len(resources) == expected_resource_count,
+            f"CP1 resource count mismatch: expected={expected_resource_count} observed={len(resources)}",
+        )
+
+    nto_root = (root / "data/external/nto").resolve()
+    resource_records: dict[str, dict[str, Any]] = {}
+    total_bytes_checked = 0
+
+    for resource in sorted(resources, key=lambda item: item["resource_id"]):
+        rid = resource["resource_id"]
+        fasta_rel = resource["fasta_path"]
+        idmap_rel = resource["identifier_map_path"]
+        fasta_path = relative_path(root, fasta_rel)
+        idmap_path = relative_path(root, idmap_rel)
+        require(fasta_path.is_relative_to(nto_root), f"FASTA path outside data/external/nto: {fasta_rel}")
+        require(idmap_path.is_relative_to(nto_root), f"ID map path outside data/external/nto: {idmap_rel}")
+        require(fasta_path.is_file(), f"resource FASTA missing: {fasta_rel}")
+        require(idmap_path.is_file(), f"resource identifier_map missing: {idmap_rel}")
+
+        expected_fasta_sha = resource["quality"]["fasta_sha256"]
+        expected_idmap_sha = resource["quality"]["identifier_map_sha256"]
+        artifacts_map = resource.get("artifacts_sha256", {})
+        require(bool(artifacts_map), f"resource artifacts_sha256 empty: {rid}")
+        require(
+            artifacts_map.get(fasta_rel) == expected_fasta_sha,
+            f"resource FASTA hash disagrees with artifacts_sha256: {rid}",
+        )
+        require(
+            artifacts_map.get(idmap_rel) == expected_idmap_sha,
+            f"resource identifier_map hash disagrees with artifacts_sha256: {rid}",
+        )
+
+        artifact_verifications: dict[str, dict[str, Any]] = {}
+        blastdb_volumes: dict[str, dict[str, Any]] = {}
+        blastdb_total_bytes = 0
+
+        for art_rel in sorted(artifacts_map):
+            expected_art_sha = artifacts_map[art_rel]
+            art_path = relative_path(root, art_rel)
+            require(art_path.is_relative_to(nto_root), f"resource artifact outside data/external/nto: {art_rel}")
+            require(art_path.is_file(), f"resource artifact missing: {art_rel}")
+            observed_art_sha = digest(art_path)
+            require(
+                observed_art_sha == expected_art_sha,
+                f"resource artifact SHA256 mismatch for {art_rel}: expected={expected_art_sha} observed={observed_art_sha}",
+            )
+            size_bytes = art_path.stat().st_size
+            total_bytes_checked += size_bytes
+            entry_record = {
+                "bytes": size_bytes,
+                "expected_sha256": expected_art_sha,
+                "hash_mode": "RAW",
+                "observed_sha256": observed_art_sha,
+                "verdict": "PASS",
+            }
+            artifact_verifications[art_rel] = entry_record
+            if "/blastdb/" in art_rel.replace("\\", "/"):
+                blastdb_volumes[art_path.name] = entry_record
+                blastdb_total_bytes += size_bytes
+
+        require(bool(blastdb_volumes), f"no blastdb index volumes in artifacts_sha256 for {rid}")
+        db_build_path = fasta_path.parent / "database_build.json"
+        require(db_build_path.is_file(), f"database_build.json missing for {rid}")
+        db_build = json.loads(db_build_path.read_text("utf-8"))
+        require(
+            {name: rec["observed_sha256"] for name, rec in blastdb_volumes.items()} == db_build.get("index_sha256"),
+            f"blastdb index_sha256 in database_build.json diverges from artifacts_sha256 for {rid}",
+        )
+        blastdb_dir = fasta_path.parent / "blastdb"
+        actual_blastdb_files = sorted(p.name for p in blastdb_dir.iterdir() if p.is_file())
+        require(
+            actual_blastdb_files == sorted(blastdb_volumes),
+            f"unlisted or missing files in blastdb directory for {rid}",
+        )
+
+        fasta_bytes = fasta_path.stat().st_size
+        require(fasta_bytes > 0, f"empty FASTA file for {rid}")
+        ratio = round(blastdb_total_bytes / fasta_bytes, 6)
+
+        resource_records[rid] = {
+            "organism_id": resource["organism_id"],
+            "scientific_name": resource["scientific_name"],
+            "taxid": resource["taxid"],
+            "record_count": resource["quality"]["record_count"],
+            "total_bases": resource["quality"]["total_bases"],
+            "fasta_path": fasta_rel,
+            "fasta_bytes": fasta_bytes,
+            "fasta_expected_sha256": expected_fasta_sha,
+            "fasta_observed_sha256": artifact_verifications[fasta_rel]["observed_sha256"],
+            "identifier_map_path": idmap_rel,
+            "identifier_map_expected_sha256": expected_idmap_sha,
+            "identifier_map_observed_sha256": artifact_verifications[idmap_rel]["observed_sha256"],
+            "blastdb_volume_count": len(blastdb_volumes),
+            "blastdb_total_bytes": blastdb_total_bytes,
+            "index_to_fasta_byte_ratio": ratio,
+            "blastdb_volumes": blastdb_volumes,
+            "artifacts_count": len(artifact_verifications),
+            "artifacts": artifact_verifications,
+            "verdict": "PASS",
+        }
+
+    summary = {
+        "reference_artifacts": reference_records,
+        "cp1_run_manifest": {
+            "path": EXPECTED_CP1_RUN_MANIFEST_PATH,
+            "expected_sha256": expected_run_manifest_sha256 or observed_run_manifest_sha,
+            "observed_sha256": observed_run_manifest_sha,
+            "protected_implementation_sha256_lf": run_manifest.get("implementation_sha256_lf", {}),
+            "verdict": "PASS",
+        },
+        "manifest_bindings": {
+            "g0_certificate_sha256": {
+                "expected": manifest["g0_certificate_sha256"],
+                "observed": g0_sha,
+                "verdict": "PASS",
+            },
+            "inventory_sha256": {
+                "expected": manifest["inventory_sha256"],
+                "observed": inv_sha,
+                "verdict": "PASS",
+            },
+        },
+        "streaming_hash_mode": "CHUNKED_1MB_O_B_TIME_O_1_MEMORY",
+        "total_resource_artifact_bytes_streamed": total_bytes_checked,
+        "resource_count": len(resource_records),
+        "resources": resource_records,
+        "verdict": "PASS",
+    }
+    return manifest, summary
+
+
+def compute_index_size_ratio_summary(resources_summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Summarize the empirical BLAST index-to-FASTA byte ratio across the 6 real CP1 resources."""
+    per_resource: dict[str, dict[str, int | float]] = {}
+    ratios: list[float] = []
+    for rid, rec in sorted(resources_summary["resources"].items()):
+        ratio = float(rec["index_to_fasta_byte_ratio"])
+        ratios.append(ratio)
+        per_resource[rid] = {
+            "fasta_bytes": int(rec["fasta_bytes"]),
+            "blastdb_total_bytes": int(rec["blastdb_total_bytes"]),
+            "blastdb_volume_count": int(rec["blastdb_volume_count"]),
+            "index_to_fasta_byte_ratio": ratio,
+        }
+    require(bool(ratios), "cannot compute index size ratio summary from empty resource set")
+    return {
+        "empirical_origin": "REAL_BIOLOGICAL_NTO_CP1_RESOURCES",
+        "observed_min_ratio": min(ratios),
+        "observed_max_ratio": max(ratios),
+        "plan_section_5_approx_range": [0.298, 0.402],
+        "per_resource": per_resource,
+        "domain_restrictions": [
+            "NOT_GUARANTEED_ESTIMATE_FOR_SYNTHETIC_ACGT_FIXTURES",
+            "NOT_A_RUNTIME_OR_RAM_ESTIMATE",
+            "EMPIRICAL_BIOLOGICAL_TRANSCRIPT_COMPOSITION_AND_REDUNDANCY_ONLY",
+        ],
+        "statement": (
+            "Observed CP1 BLAST index byte sizes range from approximately 0.298 to 0.402 of the "
+            "corresponding normalized FASTA byte size across the six real biological resources "
+            "(plan_v003.md section 5). Synthetic ACGT fixtures may exhibit different compressibility "
+            "and index structure; this ratio is not a guaranteed bound for synthetic fixtures and "
+            "does not estimate runtime or RAM."
+        ),
+    }
+
+
+def verify_historical_snapshots(
+    root: Path,
+    certificate: Mapping[str, Any],
+    *,
+    working_tree_dirty: bool,
+    expected_latest_pointer_sha256: Any = _DEFAULT,
+    expected_cp1_snapshot_sha256: Any = _DEFAULT,
+) -> dict[str, Any]:
+    """Verify the G0 certificate snapshot and latest CP1 snapshot, declaring dirty-tree non-equivalence."""
+    root = root.resolve()
+    if expected_latest_pointer_sha256 is _DEFAULT:
+        expected_latest_pointer_sha256 = EXPECTED_LATEST_POINTER_SHA256
+    if expected_cp1_snapshot_sha256 is _DEFAULT:
+        expected_cp1_snapshot_sha256 = EXPECTED_CP1_SNAPSHOT_SHA256
+    env_snap = certificate.get("environment_snapshot")
+    require(
+        isinstance(env_snap, Mapping) and "path" in env_snap and "sha256" in env_snap,
+        "G0 certificate environment_snapshot missing",
+    )
+    g0_snap_rel = str(env_snap["path"])
+    g0_snap_expected = str(env_snap["sha256"])
+    g0_snap_path = relative_path(root, g0_snap_rel)
+    require(g0_snap_path.is_file(), f"G0 environment_snapshot missing: {g0_snap_rel}")
+    g0_snap_observed = digest(g0_snap_path)
+    require(
+        g0_snap_observed == g0_snap_expected,
+        f"G0 environment_snapshot SHA256 mismatch: expected={g0_snap_expected} observed={g0_snap_observed}",
+    )
+    g0_snap_payload = json.loads(g0_snap_path.read_text("utf-8"))
+
+    latest_record: dict[str, Any] | None = None
+    latest_path = relative_path(root, EXPECTED_LATEST_POINTER_PATH)
+    if latest_path.is_file() or expected_latest_pointer_sha256 is not None:
+        require(latest_path.is_file(), f"latest reproducibility pointer missing: {EXPECTED_LATEST_POINTER_PATH}")
+        latest_observed_sha = digest(latest_path)
+        if expected_latest_pointer_sha256 is not None:
+            require(
+                latest_observed_sha == expected_latest_pointer_sha256,
+                f"latest.json SHA256 mismatch: expected={expected_latest_pointer_sha256} observed={latest_observed_sha}",
+            )
+        latest_payload = json.loads(latest_path.read_text("utf-8"))
+        cp1_snap_rel = f"artifacts/reproducibility/{latest_payload['snapshot_file']}"
+        cp1_snap_path = relative_path(root, cp1_snap_rel)
+        require(cp1_snap_path.is_file(), f"latest snapshot missing: {cp1_snap_rel}")
+        cp1_snap_observed = digest(cp1_snap_path)
+        require(
+            cp1_snap_observed == latest_payload["snapshot_sha256"],
+            "latest.json snapshot_sha256 does not match target snapshot file",
+        )
+        if expected_cp1_snapshot_sha256 is not None:
+            require(
+                cp1_snap_observed == expected_cp1_snapshot_sha256,
+                f"CP1 snapshot SHA256 mismatch: expected={expected_cp1_snapshot_sha256} observed={cp1_snap_observed}",
+            )
+        cp1_snap_payload = json.loads(cp1_snap_path.read_text("utf-8"))
+        latest_record = {
+            "latest_pointer_path": EXPECTED_LATEST_POINTER_PATH,
+            "latest_pointer_expected_sha256": expected_latest_pointer_sha256 or latest_observed_sha,
+            "latest_pointer_observed_sha256": latest_observed_sha,
+            "snapshot_path": cp1_snap_rel,
+            "snapshot_expected_sha256": expected_cp1_snapshot_sha256 or cp1_snap_observed,
+            "snapshot_observed_sha256": cp1_snap_observed,
+            "snapshot_git": cp1_snap_payload.get("git"),
+            "verdict": "PASS",
+        }
+
+    return {
+        "g0_certificate_environment_snapshot": {
+            "path": g0_snap_rel,
+            "expected_sha256": g0_snap_expected,
+            "observed_sha256": g0_snap_observed,
+            "snapshot_git": g0_snap_payload.get("git"),
+            "verdict": "PASS",
+        },
+        "latest_published_snapshot": latest_record,
+        "current_working_tree_dirty": working_tree_dirty,
+        "historical_snapshot_captures_current_working_tree_state": False,
+        "dirty_tree_non_equivalence_declaration": (
+            "The current working tree is dirty (.gitignore locally modified and preparation "
+            "files present), whereas historical snapshots recorded dirty=false at their capture "
+            "commits; therefore historical snapshots are preserved as historical provenance only "
+            "and are not a capture of the current working-tree state (plan_v003.md section 2)."
+        ),
+        "verdict": "PASS",
+    }
+
+
+def _parse_blast_version_text(text: str) -> dict[str, str] | None:
+    match = _BLAST_VERSION_RE.match(text.strip())
+    if match is None:
+        return None
+    return {
+        "reported_tool_name": match.group(1),
+        "tool_version": match.group(2),
+        "package_version": match.group(3).strip(),
+        "build_date": match.group(4).strip(),
+    }
+
+
+def observe_blast_tool_builds(
+    root: Path,
+    manifest: Mapping[str, Any],
+    *,
+    tool_names: tuple[str, ...] = BLAST_TOOLS,
+    which_resolver: Callable[[str], str | None] = shutil.which,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> dict[str, Any]:
+    """Observe blastn, makeblastdb, and blastdbcmd builds and compare with the 6 CP1 receipts."""
+    root = root.resolve()
+    receipt_builds: dict[str, dict[str, Any]] = {}
+    unique_receipt_signatures: set[tuple[str, str, str]] = set()
+    unique_receipt_raw_strings: set[str] = set()
+
+    for resource in sorted(manifest.get("resources", []), key=lambda item: item["resource_id"]):
+        rid = resource["resource_id"]
+        fasta_path = relative_path(root, resource["fasta_path"])
+        db_build_rel = (fasta_path.parent / "database_build.json").relative_to(root).as_posix()
+        db_build_path = relative_path(root, db_build_rel)
+        require(db_build_path.is_file(), f"database_build.json missing: {db_build_rel}")
+        db_build = json.loads(db_build_path.read_text("utf-8"))
+        raw_tool_str = str(db_build.get("tool", "")).strip()
+        parsed = _parse_blast_version_text(raw_tool_str)
+        require(parsed is not None, f"unparseable tool string in {db_build_rel}: {raw_tool_str!r}")
+        signature = (parsed["tool_version"], parsed["package_version"], parsed["build_date"])
+        unique_receipt_signatures.add(signature)
+        unique_receipt_raw_strings.add(raw_tool_str)
+        receipt_builds[rid] = {
+            "database_build_path": db_build_rel,
+            "database_build_sha256": digest(db_build_path),
+            "raw_tool_field": raw_tool_str,
+            "tool_version": parsed["tool_version"],
+            "package_version": parsed["package_version"],
+            "build_date": parsed["build_date"],
+            "historical_executable_sha256": db_build.get("executable_sha256"),
+        }
+
+    require(
+        len(unique_receipt_signatures) == 1,
+        f"historical database_build.json receipts do not share a single build signature: {unique_receipt_signatures}",
+    )
+    expected_version, expected_package, expected_build_date = next(iter(unique_receipt_signatures))
+    expected_makeblastdb_raw = next(iter(unique_receipt_raw_strings))
+
+    observed_tools: dict[str, dict[str, Any]] = {}
+    reuse_block_reasons: list[str] = []
+
+    for tool in tool_names:
+        resolved = which_resolver(tool)
+        if not resolved or not Path(resolved).is_file():
+            reason = f"{tool} executable not found in PATH"
+            reuse_block_reasons.append(f"{tool}: BUILD_NOT_OBSERVED ({reason})")
+            observed_tools[tool] = {
+                "tool_name": tool,
+                "status": "BUILD_NOT_OBSERVED",
+                "reason": reason,
+                "tool_version": None,
+                "package_version": None,
+                "build_date": None,
+                "raw_version_output": None,
+                "prospective_executable_sha256": None,
+                "prospective_executable_bytes": None,
+                "matches_historical_receipt_version_package_build": False,
+            }
+            continue
+
+        exec_path = Path(resolved).resolve()
+        try:
+            completed = runner(
+                [str(exec_path), "-version"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            reason = f"{tool} -version execution failed: {exc}"
+            reuse_block_reasons.append(f"{tool}: BUILD_NOT_OBSERVED ({reason})")
+            observed_tools[tool] = {
+                "tool_name": tool,
+                "status": "BUILD_NOT_OBSERVED",
+                "reason": reason,
+                "tool_version": None,
+                "package_version": None,
+                "build_date": None,
+                "raw_version_output": None,
+                "prospective_executable_sha256": None,
+                "prospective_executable_bytes": None,
+                "matches_historical_receipt_version_package_build": False,
+            }
+            continue
+
+        raw_out = (completed.stdout or "").strip()
+        parsed_tool = _parse_blast_version_text(raw_out) if completed.returncode == 0 else None
+        if completed.returncode != 0 or parsed_tool is None:
+            reason = f"{tool} -version returned code {completed.returncode} with unparseable output"
+            reuse_block_reasons.append(f"{tool}: BUILD_NOT_OBSERVED ({reason})")
+            observed_tools[tool] = {
+                "tool_name": tool,
+                "status": "BUILD_NOT_OBSERVED",
+                "reason": reason,
+                "tool_version": None,
+                "package_version": None,
+                "build_date": None,
+                "raw_version_output": raw_out or None,
+                "prospective_executable_sha256": None,
+                "prospective_executable_bytes": None,
+                "matches_historical_receipt_version_package_build": False,
+            }
+            continue
+
+        exec_sha256 = digest(exec_path)
+        exec_bytes = exec_path.stat().st_size
+        matches_signature = (
+            parsed_tool["tool_version"] == expected_version
+            and parsed_tool["package_version"] == expected_package
+            and parsed_tool["build_date"] == expected_build_date
+        )
+        if tool == "makeblastdb":
+            matches_signature = matches_signature and (raw_out == expected_makeblastdb_raw)
+
+        if not matches_signature:
+            reuse_block_reasons.append(
+                f"{tool}: observed ({parsed_tool['tool_version']}, {parsed_tool['package_version']}, "
+                f"{parsed_tool['build_date']}) diverges from historical receipt "
+                f"({expected_version}, {expected_package}, {expected_build_date})"
+            )
+
+        observed_tools[tool] = {
+            "tool_name": tool,
+            "status": "OBSERVED",
+            "reason": None,
+            "tool_version": parsed_tool["tool_version"],
+            "package_version": parsed_tool["package_version"],
+            "build_date": parsed_tool["build_date"],
+            "raw_version_output": raw_out,
+            "prospective_executable_sha256": exec_sha256,
+            "prospective_executable_bytes": exec_bytes,
+            "matches_historical_receipt_version_package_build": matches_signature,
+        }
+
+    all_observed = all(item["status"] == "OBSERVED" for item in observed_tools.values())
+    all_match = all_observed and all(
+        item["matches_historical_receipt_version_package_build"] for item in observed_tools.values()
+    )
+    if all_match:
+        overall_status = "OBSERVED_MATCHES_HISTORICAL_RECEIPTS"
+    elif any(item["status"] == "BUILD_NOT_OBSERVED" for item in observed_tools.values()):
+        overall_status = "BUILD_NOT_OBSERVED"
+    else:
+        overall_status = "BUILD_DIVERGENCE_DETECTED_REUSE_BLOCKED"
+
+    return {
+        "historical_receipt_reference": {
+            "tool_version": expected_version,
+            "package_version": expected_package,
+            "build_date": expected_build_date,
+            "makeblastdb_raw_tool_field": expected_makeblastdb_raw,
+            "retrospective_executable_sha256_in_receipts": None,
+            "receipts_by_resource": receipt_builds,
+        },
+        "observed_tools": observed_tools,
+        "all_tools_observed": all_observed,
+        "all_tools_match_historical_receipts": all_match,
+        "equivalent_build_reuse_blocked": not all_match,
+        "reuse_block_reasons": reuse_block_reasons,
+        "overall_status": overall_status,
+        "section_6_4_note": (
+            "Historical database_build.json receipts record makeblastdb version, package, and build "
+            "date without a retrospective executable hash; prospective executable SHA256 hashes are "
+            "pinned here for current tools without retrospectively attributing binary hashes to "
+            "historical builds (plan_v003.md section 6.4)."
+        ),
+    }
+
+
+def build_execution_scope_artifact(root: Path) -> dict[str, Any]:
+    """Build the deterministic E01 execution scope artifact (data/reference/nb04_calibration_execution_scope.json)."""
+    root = root.resolve()
+    _, g0_summary = verify_g0_certified_artifacts_inventory(root)
+    _, resources_summary = verify_cp1_resources_and_manifests(root)
+    ratio_summary = compute_index_size_ratio_summary(resources_summary)
+
+    return {
+        "schema_version": 1,
+        "artifact_id": "NB04_CALIBRATION_EXECUTION_SCOPE_V1",
+        "stage": "NB04_CP1_E01_PREFREEZE_PREPARATION_SCOPE",
+        "authority_bindings": {
+            "plan_path": PLAN_V003_PATH,
+            "plan_sha256": PLAN_V003_SHA256,
+            "evaluator_opinion_path": EVALUATOR_OPINION_V003_PATH,
+            "evaluator_opinion_sha256": EVALUATOR_OPINION_V003_SHA256,
+            "g0_certificate_path": G0_PATH,
+            "g0_certificate_sha256": g0_summary["observed_certificate_sha256"],
+            "cp1_resources_manifest_path": MANIFEST,
+            "cp1_resources_manifest_sha256": resources_summary["reference_artifacts"][MANIFEST]["observed_sha256"],
+            "e01_gitignore_baseline_raw_sha256": E01_BASELINE_GITIGNORE_RAW_SHA256,
+            "plan_section_2_gitignore_raw_sha256": PLAN_SECTION_2_GITIGNORE_RAW_SHA256,
+        },
+        "closed_preparation_dirty_allowlist": list(CLOSED_PREPARATION_DIRTY_ALLOWLIST),
+        "index_to_fasta_size_ratio": ratio_summary,
+        "phase_git_and_snapshot_policy": phase_git_and_snapshot_policy(),
+        "normative_corpus_declaration": normative_corpus_declaration(),
+        "blocked_operations": list(BLOCKED_OPERATIONS),
+        "state_declarations": {
+            "G0": "G0_PASS",
+            "G1": "NOT_DECLARED",
+            "b4_complete_prior_freeze": "NOT_DECLARED",
+            "synthetic_fixtures_materialized": False,
+            "informative_calibration": "NOT_EXECUTED",
+            "real_nto_searches": "NOT_EXECUTED",
+        },
+    }
+
+
+def write_execution_scope_artifact(
+    root: Path,
+    destination: Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    """Materialize the deterministic execution scope JSON artifact."""
+    root = root.resolve()
+    target = relative_path(root, EXECUTION_SCOPE_PATH) if destination is None else destination.resolve()
+    payload = build_execution_scope_artifact(root)
+    write_json(target, payload)
+    return target, payload
+
+
+def build_preservation_inventory(
+    root: Path,
+    corpus_directories: Mapping[str, Path],
+    *,
+    executed_utc: str | None = None,
+    which_resolver: Callable[[str], str | None] = shutil.which,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> dict[str, Any]:
+    """Execute all E01 preservation checks (items a through h) and return the inventory dict."""
+    root = root.resolve()
+    timestamp = executed_utc or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    git_state = verify_gitignore_and_git_state(root)
+    certificate, g0_artifacts = verify_g0_certified_artifacts_inventory(root)
+    normatives = verify_normative_documents(root, certificate, corpus_directories, strict=True)
+    manifest, resources_summary = verify_cp1_resources_and_manifests(root)
+    snapshots = verify_historical_snapshots(
+        root,
+        certificate,
+        working_tree_dirty=git_state["working_tree_dirty"],
+    )
+    tool_builds = observe_blast_tool_builds(
+        root,
+        manifest,
+        which_resolver=which_resolver,
+        runner=runner,
+    )
+    allowlist_control = verify_preparation_allowlist(root)
+
+    return {
+        "schema_version": 1,
+        "artifact_id": "NB04_CP1_E01_PRESERVATION_INVENTORY_V1",
+        "stage": "NB04_CP1_E01_PRESERVATION_CONTROL",
+        "executed_utc": timestamp,
+        "a_git_and_gitignore_state": git_state,
+        "b_g0_certified_artifacts": g0_artifacts,
+        "c_normative_documents": normatives,
+        "d_cp1_resources_and_manifests": resources_summary,
+        "e_reproducibility_snapshots": snapshots,
+        "f_observed_blast_tool_builds": tool_builds,
+        "g_preparation_allowlist_control": allowlist_control,
+        "h_file_classification_and_phase_policy": phase_git_and_snapshot_policy(),
+        "index_to_fasta_size_ratio_summary": compute_index_size_ratio_summary(resources_summary),
+        "scientific_execution_performed": False,
+        "searches_executed": False,
+        "fixtures_materialized": False,
+    }
+
+
+def write_preservation_inventory(
+    root: Path,
+    inventory: Mapping[str, Any],
+    *,
+    output_path: Path | None = None,
+) -> Path:
+    """Write the preservation inventory to a new timestamped path without overwriting any prior record."""
+    root = root.resolve()
+    if output_path is None:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        target = relative_path(
+            root,
+            f"{PRESERVATION_INVENTORY_DIR}/{stamp}/{PRESERVATION_INVENTORY_FILENAME}",
+        )
+    else:
+        target = output_path.resolve()
+        require(target.is_relative_to(root), f"preservation inventory path outside project root: {target}")
+    require(
+        not target.exists(),
+        f"preservation inventory destination already exists and must never be overwritten: {target}",
+    )
+    write_json(target, dict(inventory))
+    return target
