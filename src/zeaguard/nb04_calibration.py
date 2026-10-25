@@ -3762,7 +3762,8 @@ def validate_section7_payload(payload: Mapping[str, Any], *, allow_unresolved: b
     def check(value: Any, kind: str, path: str) -> None:
         if allow_unresolved and value is None:
             return
-        require(not _section7_unresolved(value), f"{path}: unresolved required value")
+        if kind != "prose":
+            require(not _section7_unresolved(value), f"{path}: unresolved required value")
         if kind in ("integer", "positive_integer"):
             valid = type(value) is int and value >= (1 if kind == "positive_integer" else 0)
         elif kind == "number":
@@ -3829,7 +3830,7 @@ def validate_section7_payload(payload: Mapping[str, Any], *, allow_unresolved: b
         for field in E05_SECTION7_CELL_FIELDS:
             check(cell[field], "sha256" if field == "descriptor_sha256" else "positive_integer", f"{path}.{field}")
     for value in domain["applicability_limitations"]:
-        check(value, "string", "technical_domain.applicability_limitations")
+        check(value, "prose", "technical_domain.applicability_limitations")
 
 
 def _section7_declared_values(
@@ -3899,6 +3900,10 @@ def evaluate_section7_closure(
     unresolved_fields: list[str] = []
 
     def walk(value: Any, path: str) -> None:
+        if path.startswith("technical_domain.applicability_limitations[") and isinstance(value, str):
+            if not value.strip():
+                unresolved_fields.append(path)
+            return
         if path in {f"tool_build.{tool}" for tool in E05_SECTION7_KEYS["tool_build"]} and value == "NOT_APPLICABLE":
             return
         if isinstance(value, Mapping):
@@ -4077,10 +4082,14 @@ def build_e05_section7_preparation(
     database_build = {"dbtype": dbtype, "parse_seqids": parse_seqids, "blastdb_version": version,
                       "max_file_sz_effective": historical_size, "volume_strategy": "ENGINE_MANAGED_VOLUMES",
                       "taxid_policy": "SOURCE_SPECIES_METADATA"}
+    parser_identity = nb04_parser_implementation_identity(root)
+    qa_path = corpus_directory / "09_b4_calibration_qa_matrix_v2.tsv"
+    require(digest(qa_path) == E05_NORMATIVE_DOCUMENTS_SHA256[qa_path.name], "QA matrix identity differs")
+    qa_i = _read_matrix_tsv(qa_path.read_text("utf-8"), E05_QA_MATRIX_HEADER, qa_path.name, "qa_id")["QA-I"]
     architecture = {"strategy": "INTEGRAL_REFERENCE_CALIBRATION", "canonical_record_order_rule": parameters["P30"]["effective_value"],
                     "qa_sharding_rule": "TWO_SHARDS_CANONICAL_ORDER_GREEDY_LEAST_CURRENT_BASE_SUM_WHOLE_RECORDS_TIES_FIRST", "qa_shard_count": 2,
                     "outfmt_fields": list(inspection["d_output_integrity_mechanism"]["adopted_tabular_specifiers"]),
-                    "authoritative_output_format": "11", "parser_contract_id": None, "parser_implementation_sha256": None,
+                    "authoritative_output_format": "11", "parser_contract_id": None, "parser_implementation_sha256": parser_identity["parser_implementation_sha256"],
                     "output_integrity_contract_id": None}
     domain = {"modality": "LOCAL_ALIGNMENT_CANONICAL", "analysis_role": "CALIBRATION",
               "resource_geometry_cells": sorted(cells, key=json_bytes), "applicability_limitations": limitations}
@@ -4111,12 +4120,148 @@ def build_e05_section7_preparation(
     return {"state": "OPEN", "design_space_complete": False, **E05_SECTION7_CLOSURE_QUALIFICATION,
             "determinate_sections": sections, "candidate_skeletons": skeletons,
             "candidate_set_closure": evaluate_section7_candidate_set(skeletons, rows),
-            "provenance": {"u03_inspection_sha256": E05_U03_R3_SHA256, "historical_database_build": receipts,
+            "provenance": {"parser_implementation": parser_identity, "u03_inspection_sha256": E05_U03_R3_SHA256, "historical_database_build": receipts,
                            "volume_evidence": volume_evidence, "geometry_derivations": derivations,
                            "geometry_cell_resource_links": [{"resource_id": r["resource_id"], "descriptor_sha256": derivations[r["resource_id"]]["descriptor_sha256"]} for r in manifest["resources"]],
                            "production_partition_plan": "POST_CALIBRATION_RESOURCE_SCOPED"},
+            "qa_i_parser_precondition": build_u05_parser_precondition(qa_i),
             "prospective_dependencies": {"candidate_design": "PRE_FREEZE_DOCUMENTARY_DECLARATIONS_E02_E03",
-                "parser_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED", "parser_implementation_sha256": "IMPLEMENTATION_NOT_ESTABLISHED",
+                "parser_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED",
                 "output_integrity_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED",
                 "derived_fields_E04_E06": ["low_complexity_overlap_fraction", "match_strand", "subject_coordinate_system", "transcript_strand", "guide_pairing_interpretation", "covered_nt", "best_local_identity", "longest_exact_match_in_reported_hsps", "n_hsps", "n_subject_records", "n_resolved_loci"],
                 "output_integrity_conditions": inspection["d_output_integrity_mechanism"]["export_path_default_cap_observation"]["conditions_to_verify"]}}
+
+# Strict nucleotide HSP parsing is software preparation. Its execution witness and QA fixtures are external inputs.
+from decimal import Decimal, InvalidOperation
+
+U05_PARSER_SOURCE_PATHS = ("src/zeaguard/nb04_calibration.py", "src/zeaguard/nb04_resources.py")
+U05_HSP_FIELDS = E05_OUTFMT_6_PRECEDENT + E05_OUTFMT_6_ADDITIONS
+
+
+def parse_nb04_btop(btop: str) -> tuple[int | str, ...]:
+    """Consume all BTOP tokens. Counts are canonical ASCII integers, including a literal zero run."""
+    require(isinstance(btop, str) and bool(btop), "BTOP must be a nonempty string")
+    tokens: list[int | str] = []
+    position = 0
+    while position < len(btop):
+        match = re.compile(r"[0-9]+|[ACGTRYSWKMBDHVN-]{2}").match(btop, position)
+        require(match is not None, f"BTOP illegal character or incomplete pair at offset {position}")
+        token = match.group()
+        if token[0] in "0123456789":
+            require(token == "0" or token[0] != "0", "BTOP count has a leading zero")
+            tokens.append(int(token))
+        else:
+            require(token != "--", "BTOP double-gap pair")
+            require(all(char in DNA or char == "-" for char in token), "BTOP pair outside nucleotide alphabet")
+            tokens.append(token)
+        position = match.end()
+    return tuple(tokens)
+
+
+def parse_nb04_hsp_table(table: bytes | str, *, expected_row_count: int | None = None) -> dict[str, Any]:
+    """Parse the adopted native fields atomically. An external row-count witness checks boundary cuts only within its scope.
+
+    Input uses ASCII and LF exclusively, including the last nonempty record terminator. Read files as bytes to retain
+    newline anomalies. No blank or comment record is skipped. Decimal fields retain exact Decimal values.
+    A matching supplied count establishes count agreement, while execution integrity and witness authority remain external.
+    """
+    require(isinstance(table, (bytes, str)), "HSP table must be bytes or text")
+    if isinstance(table, bytes):
+        try:
+            table = table.decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise ResourceContractError("HSP table contains a non-ASCII character") from exc
+    require(all(char in "\t\n" or 32 <= ord(char) <= 126 for char in table), "HSP table contains an illegal control, CR or non-ASCII character")
+    require(not table or table.endswith("\n"), "HSP table has no final LF terminator")
+    require(expected_row_count is None or (type(expected_row_count) is int and expected_row_count >= 0), "expected_row_count must be a nonnegative integer witness")
+    lines = table[:-1].split("\n") if table else []
+    rows: list[dict[str, Any]] = []
+    decimal_fields = {"pident", "evalue", "bitscore", "qcovs"}
+    positive_fields = {"length", "qlen", "slen", "qstart", "qend", "sstart", "send"}
+    for number, line in enumerate(lines, 1):
+        cells = line.split("\t")
+        require(len(cells) == len(U05_HSP_FIELDS), f"HSP line {number}: field count differs from the adopted schema")
+        row: dict[str, Any] = {}
+        for field, cell in zip(U05_HSP_FIELDS, cells, strict=True):
+            prefix = f"HSP line {number} field {field}"
+            if field in ("qseqid", "sseqid"):
+                require(bool(cell) and all(33 <= ord(char) <= 126 for char in cell), f"{prefix}: invalid identifier")
+                value: Any = cell
+            elif field == "sstrand":
+                require(cell in ("plus", "minus"), f"{prefix}: invalid strand")
+                value = cell
+            elif field == "btop":
+                parse_nb04_btop(cell)
+                value = cell
+            elif field in decimal_fields:
+                require(re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", cell) is not None, f"{prefix}: invalid unsigned decimal representation")
+                try:
+                    value = Decimal(cell)
+                except InvalidOperation as exc:
+                    raise ResourceContractError(f"{prefix}: decimal is not representable") from exc
+                require(value.is_finite() and value >= 0, f"{prefix}: decimal must be finite and nonnegative")
+                if field in ("pident", "qcovs"):
+                    require(value <= 100, f"{prefix}: percentage exceeds 100")
+            else:
+                require(re.fullmatch(r"0|[1-9][0-9]*", cell) is not None, f"{prefix}: invalid unsigned integer representation")
+                value = int(cell)
+                require(value >= (1 if field in positive_fields else 0), f"{prefix}: invalid integer domain")
+            row[field] = value
+        require(1 <= row["qstart"] <= row["qlen"] and 1 <= row["qend"] <= row["qlen"], f"HSP line {number}: query coordinates outside qlen")
+        require(1 <= row["sstart"] <= row["slen"] and 1 <= row["send"] <= row["slen"], f"HSP line {number}: subject coordinates outside slen")
+        require((row["sstrand"] == "plus" and row["sstart"] <= row["send"]) or (row["sstrand"] == "minus" and row["sstart"] >= row["send"]), f"HSP line {number}: strand and subject coordinates disagree")
+        columns = query_bases = subject_bases = mismatches = gaps = opens = 0
+        previous_gap = None
+        for token in parse_nb04_btop(row["btop"]):
+            if isinstance(token, int):
+                columns += token
+                query_bases += token
+                subject_bases += token
+                if token:
+                    previous_gap = None
+            else:
+                q, s = token
+                columns += 1
+                query_bases += q != "-"
+                subject_bases += s != "-"
+                side = "query" if q == "-" else "subject" if s == "-" else None
+                gaps += side is not None
+                mismatches += side is None
+                opens += side is not None and side != previous_gap
+                previous_gap = side
+        require(columns == row["length"] and query_bases == abs(row["qend"] - row["qstart"]) + 1 and subject_bases == abs(row["send"] - row["sstart"]) + 1, f"HSP line {number}: BTOP length or coordinate span mismatch")
+        require((mismatches, gaps, opens) == (row["mismatch"], row["gaps"], row["gapopen"]), f"HSP line {number}: BTOP replacement or gap counts disagree")
+        rows.append(row)
+    require(expected_row_count is None or len(rows) == expected_row_count, "HSP table row count differs from the supplied execution witness")
+    return {"rows": rows, "row_count": len(rows), "expected_row_count": expected_row_count,
+            "completeness_state": "EXPECTED_ROW_COUNT_MATCHED" if expected_row_count is not None else "COMPLETENESS_WITNESS_REQUIRED",
+            "line_boundary_truncation_checked": expected_row_count is not None,
+            "execution_integrity_established": False,
+            "completeness_dependency": "EXTERNAL_EXECUTION_EXPECTED_ROW_COUNT_AND_WITNESS_AUTHORITY",
+            "completeness_limitations": "A count witness checks supplied row-count agreement only. Execution success, full output, query preservation and witness authority require the execution-level integrity contract."}
+
+
+def nb04_parser_implementation_identity(root: Path) -> dict[str, Any]:
+    """Coordinator scope decision: whole source files, LF-normalized, with the inventory serialized by json_bytes."""
+    inventory = {path: digest(relative_path(root.resolve(), path), normalized=True) for path in U05_PARSER_SOURCE_PATHS}
+    # ponytail: whole-file identity overcovers unrelated edits; upgrade to a declared narrower scope with dependency guards if post-freeze churn becomes a real constraint.
+    return {"parser_implementation_sha256": hashlib.sha256(json_bytes(inventory)).hexdigest(),
+            "implementation_sha256_lf": inventory,
+            "scope": {"source_files": list(U05_PARSER_SOURCE_PATHS), "normalization": "CRLF_TO_LF",
+                      "hash_input": "json_bytes of exactly the relative-path to LF-normalized SHA256 inventory",
+                      "decision_authority": "IMPLEMENTATION_COORDINATOR", "decision_status": "SUBJECT_TO_SCIENTIFIC_REVIEW_REVISABLE_BEFORE_FREEZE",
+                      "convention_references": ["src/zeaguard/nb03_manual_review.py:399", "src/zeaguard/nb03_selection.py:496", "src/zeaguard/nb03_specificity.py:502"],
+                      "overcoverage_limitation": "Any unrelated change in either whole file also changes parser identity and may require a new candidate. A narrower scope requires an explicit dependency guard and a new scope decision."}}
+
+
+def build_u05_parser_precondition(qa_i_row: Mapping[str, str]) -> dict[str, Any]:
+    """Record software preparation without promoting the fixture-dependent campaign criterion."""
+    require(qa_i_row.get("qa_id") == "QA-I" and qa_i_row.get("criterion") == "STABLE_PARSING", "expected the QA-I stable-parsing row")
+    require(qa_i_row.get("biological_decision_role") == "false" and qa_i_row.get("blocks_configuration_freeze") == "YES", "QA-I role or freeze dependency differs")
+    return {"qa_id": "QA-I", "state": "NOT_TESTED", "configuration_preconditions_inspected": True,
+            "criterion": qa_i_row["criterion"], "metric": qa_i_row["metric"], "expected_behavior": qa_i_row["expected_behavior"],
+            "fixture_dependency": qa_i_row["fixture_dependency"], "fixtures_materialized": False,
+            "fixture_materialization_dependency": "E04_F01_F02_AND_CORRUPTED_VALID_OUTPUT_COPIES",
+            "behavior_verification_scope": "SYNTHETIC_TABLE_SOFTWARE_TESTS_ONLY",
+            "execution_completeness_dependency": "EXTERNAL_EXECUTION_EXPECTED_ROW_COUNT_AND_WITNESS_AUTHORITY",
+            "campaign_qa_approved": False, "biological_decision_role": False, "blocks_configuration_freeze": True}

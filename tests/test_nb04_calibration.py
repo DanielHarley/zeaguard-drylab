@@ -1640,7 +1640,7 @@ def synthetic_e05_env(synthetic_e01_env, monkeypatch: pytest.MonkeyPatch):
 
     param_bytes = ("\n".join(["\t".join(cal.E05_PARAMETER_MATRIX_HEADER)] + [parameter_row(*row) for row in _E05_MATRIX_ROWS]) + "\n").encode("utf-8")
     qa_lines = ["\t".join(cal.E05_QA_MATRIX_HEADER)] + [
-        "\t".join([qid, f"CRITERION_{qid}", f"fixtures_{qid}", f"metric_{qid}", f"expected_{qid}", f"failure_{qid}", "YES", "false", "NOT_TESTED"])
+        "\t".join([qid, "STABLE_PARSING" if qid == "QA-I" else f"CRITERION_{qid}", "F01, F02, plus deliberately corrupted copies of a valid output" if qid == "QA-I" else f"fixtures_{qid}", f"metric_{qid}", f"expected_{qid}", f"failure_{qid}", "YES", "false", "NOT_TESTED"])
         for qid in sorted(cal.E05_QA_SPEC)
     ]
     qa_bytes = ("\n".join(qa_lines) + "\n").encode("utf-8")
@@ -2407,11 +2407,17 @@ def test_section7_preparation_integrates_authenticated_geometry_and_keeps_drafts
     def runner(command, **kwargs):
         assert command[1:] == ["-db", str(root / resource["database_prefix"]), "-dbtype", "nucl", "-info"]
         return subprocess.CompletedProcess(command, 0, stdout="Database: TEST\n2 sequences; 24 total bases\nBLASTDB Version: 5\nVolumes:\nsequences\n", stderr="")
+    _put(root / "src/zeaguard/nb04_calibration.py", b"# directly constructed implementation identity input\n")
     result = cal.build_e05_section7_preparation(root, env["corpus_dirs"]["NB04_B5_INPUTS"],
         accepted_geometry_record_sha256=cal.EXPECTED_GEOMETRY_RECORD_SHA256, runner=runner, which_resolver=env["fake_which"])
     assert len(geometry_calls) == 1
     assert result["state"] == "OPEN" and result["design_space_complete"] is False
     assert result["candidate_set_closure"]["state"] == "OPEN"
+    assert result["qa_i_parser_precondition"]["state"] == "NOT_TESTED"
+    assert result["qa_i_parser_precondition"]["campaign_qa_approved"] is False
+    identity = cal.nb04_parser_implementation_identity(root)
+    assert result["determinate_sections"]["execution_architecture"]["parser_implementation_sha256"] == identity["parser_implementation_sha256"]
+    assert result["provenance"]["parser_implementation"] == identity
     assert result["closure_scope"] == "COMPUTATIONAL_PREDICATES_ON_SUPPLIED_DECLARATIONS"
     assert result["authority_verification"] == "EXTERNAL_DOCUMENTARY_E02_E03_REQUIRED"
     assert result["g1_certification"] == "NOT_EVALUATED"
@@ -2595,3 +2601,152 @@ def test_u04_f01_declarations_preserve_canonical_value_types(state):
         blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == pid)
         assert path in blocker["declaration_mismatch_fields"]
         assert blocker["declaration_error"] == "DECLARATION_PAYLOAD_MISMATCH"
+
+# These are hand-constructed HSP tables, with no BLAST query, fixture B4 or recovery observation.
+def _u05_table(**overrides):
+    row = dict(zip(cal.U05_HSP_FIELDS, ("Q", "S", "100.000", "4", "4", "4", "1", "4", "1", "4",
+                                       "plus", "0.0", "8.0", "0", "0", "0", "100", "4", "8"), strict=True))
+    row.update(overrides)
+    return ("\t".join(row[field] for field in cal.U05_HSP_FIELDS) + "\n").encode("ascii")
+
+
+@pytest.mark.parametrize("btop", ["", "10!!5", "4A", "4AC!", "4AX2", "4A*2", "4--2", "01", "00", "4aC2", "4A\x002", "٤"])
+def test_u05_btop_total_consumption_and_nucleotide_alphabet(btop):
+    with pytest.raises(r.ResourceContractError):
+        cal.parse_nb04_btop(btop)
+
+
+def test_u05_btop_counts_pairs_zero_runs_and_no_column_expansion():
+    assert cal.parse_nb04_btop("2AG0-A1T-") == (2, "AG", 0, "-A", 1, "T-")
+    assert cal.parse_nb04_btop("0ACGT0") == (0, "AC", "GT", 0)
+    assert cal.parse_nb04_btop("1000000000") == (1000000000,)
+
+
+def test_u05_literal_qa_i_cases_and_explicit_completeness_boundary():
+    valid = _u05_table()
+    result = cal.parse_nb04_hsp_table(valid, expected_row_count=1)
+    assert result["row_count"] == 1 and result["completeness_state"] == "EXPECTED_ROW_COUNT_MATCHED"
+    assert result["execution_integrity_established"] is False
+    assert result["rows"][0]["pident"] == cal.Decimal("100.000")
+    assert tuple(result["rows"][0]) == cal.U05_HSP_FIELDS
+    for corrupt in (valid[:-3], _u05_table(btop="2!!2"), _u05_table(qseqid="Q\x00")):
+        with pytest.raises(r.ResourceContractError):
+            cal.parse_nb04_hsp_table(corrupt, expected_row_count=1)
+    two = valid + _u05_table(qseqid="Q2")
+    assert cal.parse_nb04_hsp_table(two, expected_row_count=2)["row_count"] == 2
+    with pytest.raises(r.ResourceContractError, match="witness"):
+        cal.parse_nb04_hsp_table(valid, expected_row_count=2)
+    unwitnessed = cal.parse_nb04_hsp_table(valid)
+    assert unwitnessed["completeness_state"] == "COMPLETENESS_WITNESS_REQUIRED"
+    assert unwitnessed["line_boundary_truncation_checked"] is False
+    assert unwitnessed["execution_integrity_established"] is False
+    assert "WITNESS_AUTHORITY" in unwitnessed["completeness_dependency"]
+    assert cal.parse_nb04_hsp_table(b"", expected_row_count=0)["rows"] == []
+    assert cal.parse_nb04_hsp_table(b"")["completeness_state"] == "COMPLETENESS_WITNESS_REQUIRED"
+    with pytest.raises(r.ResourceContractError):
+        cal.parse_nb04_hsp_table(b"", expected_row_count=1)
+
+
+@pytest.mark.parametrize("witness", [-1, True, "1", 1.0])
+def test_u05_witness_type_and_domain(witness):
+    with pytest.raises(r.ResourceContractError, match="witness"):
+        cal.parse_nb04_hsp_table(_u05_table(), expected_row_count=witness)
+
+
+@pytest.mark.parametrize("corrupt", [
+    lambda t: t[:-1], lambda t: t + b"\n", lambda t: t.replace(b"\n", b"\r\n"),
+    lambda t: t + b"\r", lambda t: t.replace(b"Q", b"Q\x00", 1),
+    lambda t: t.replace(b"Q", b"Q\x7f", 1), lambda t: t.replace(b"Q", b"Q\x0b", 1),
+    lambda t: t.replace(b"Q", b"Q\xff", 1), lambda t: t.replace(b"Q", b"Q\tEXTRA", 1),
+    lambda t: t.replace(b"\t", b"", 1), lambda t: b"# comment\n" + t,
+])
+def test_u05_newline_control_and_field_count_failures(corrupt):
+    with pytest.raises(r.ResourceContractError):
+        cal.parse_nb04_hsp_table(corrupt(_u05_table()), expected_row_count=1)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("qseqid", ""), ("sseqid", "S P"), ("sstrand", "UNKNOWN"), ("sstrand", "Plus"),
+    ("length", "0"), ("qlen", "0"), ("slen", "0"), ("qstart", "0"), ("qend", "5"),
+    ("sstart", "0"), ("send", "5"), ("length", "04"), ("score", "1.0"), ("score", "-1"),
+    ("mismatch", "-1"), ("gapopen", "1_0"), ("gaps", "+0"), ("pident", "100.001"),
+    ("qcovs", "101"), ("evalue", "NaN"), ("bitscore", "Infinity"), ("evalue", "-0.1"),
+    ("pident", " 100"), ("pident", "100 "), ("bitscore", ".5"), ("btop", "3"),
+    ("mismatch", "1"), ("gapopen", "1"), ("gaps", "1"),
+])
+def test_u05_exact_field_domains_and_structural_invariants(field, value):
+    with pytest.raises(r.ResourceContractError):
+        cal.parse_nb04_hsp_table(_u05_table(**{field: value}), expected_row_count=1)
+
+
+def test_u05_illegal_character_in_each_native_field_raises():
+    for field in cal.U05_HSP_FIELDS:
+        with pytest.raises(r.ResourceContractError):
+            cal.parse_nb04_hsp_table(_u05_table(**{field: "\x00"}), expected_row_count=1)
+
+
+def test_u05_gaps_replacements_minus_coordinates_and_exact_decimal_values():
+    row = cal.parse_nb04_hsp_table(_u05_table(pident="80", length="5", slen="5", send="5", btop="2-A2", gapopen="1", gaps="1"), expected_row_count=1)["rows"][0]
+    assert row["length"] == 5 and row["qlen"] == 4 and row["gaps"] == 1
+    row = cal.parse_nb04_hsp_table(_u05_table(pident="80", length="5", qlen="5", slen="5", qend="5", send="5", btop="2AG2", mismatch="1"), expected_row_count=1)["rows"][0]
+    assert row["mismatch"] == 1
+    row = cal.parse_nb04_hsp_table(_u05_table(sstart="4", send="1", sstrand="minus", evalue="1e-999", bitscore="8.123456789123456789"), expected_row_count=1)["rows"][0]
+    assert row["sstart"] == 4 and row["send"] == 1
+    assert row["evalue"] == cal.Decimal("1e-999") and row["evalue"] != 0
+    assert row["bitscore"] == cal.Decimal("8.123456789123456789")
+    with pytest.raises(r.ResourceContractError, match="strand"):
+        cal.parse_nb04_hsp_table(_u05_table(sstart="4", send="1", sstrand="plus"))
+
+
+def test_u05_parser_identity_scope_is_exact_and_lf_normalized(tmp_path):
+    expected_paths = ("src/zeaguard/nb04_calibration.py", "src/zeaguard/nb04_resources.py")
+    assert cal.U05_PARSER_SOURCE_PATHS == expected_paths
+    raw = {expected_paths[0]: b"parser\nhelper\n", expected_paths[1]: b"DNA\nrequire\n"}
+    for path, content in raw.items():
+        _put(tmp_path / path, content)
+    identity = cal.nb04_parser_implementation_identity(tmp_path)
+    expected = {path: hashlib.sha256(content).hexdigest() for path, content in raw.items()}
+    assert identity["implementation_sha256_lf"] == expected
+    assert identity["parser_implementation_sha256"] == hashlib.sha256(r.json_bytes(expected)).hexdigest()
+    assert identity["scope"]["source_files"] == list(expected_paths)
+    assert identity["scope"]["normalization"] == "CRLF_TO_LF"
+    for path, content in raw.items():
+        _put(tmp_path / path, content.replace(b"\n", b"\r\n"))
+    assert cal.nb04_parser_implementation_identity(tmp_path) == identity
+    for path in expected_paths:
+        saved = (tmp_path / path).read_bytes()
+        (tmp_path / path).write_bytes(saved + b"unrelated change\r\n")
+        assert cal.nb04_parser_implementation_identity(tmp_path)["parser_implementation_sha256"] != identity["parser_implementation_sha256"]
+        (tmp_path / path).write_bytes(saved)
+
+
+def test_u05_qa_i_precondition_preserves_not_tested_and_fixture_dependency():
+    source = {"qa_id": "QA-I", "criterion": "STABLE_PARSING", "metric": "synthetic metric text",
+              "expected_behavior": "synthetic expected text", "fixture_dependency": "F01, F02, plus deliberately corrupted copies of a valid output",
+              "biological_decision_role": "false", "blocks_configuration_freeze": "YES"}
+    result = cal.build_u05_parser_precondition(source)
+    assert result["state"] == "NOT_TESTED" and result["configuration_preconditions_inspected"] is True
+    assert result["fixtures_materialized"] is False and result["campaign_qa_approved"] is False
+    assert result["fixture_dependency"] == source["fixture_dependency"]
+    assert result["metric"] == source["metric"] and result["expected_behavior"] == source["expected_behavior"]
+
+
+@pytest.mark.parametrize("prose", [
+    "The limitation contains UNKNOWN and remains explicit.",
+    "the severity of the 2018 behaviour in a 2026 build is unknown to this work",
+])
+def test_u05_s02_prose_with_uncertainty_does_not_resolve_contract_markers(prose):
+    payload = _section7_test_payload()
+    payload["technical_domain"]["applicability_limitations"] = [prose]
+    rows, records = _section7_test_declarations(payload)
+    cal.validate_section7_payload(payload)
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+    for marker in ("UNKNOWN", "unknown", "NORMATIVE_BINDING_NOT_ESTABLISHED", "X_PENDING", "NOT_APPLICABLE"):
+        for field in ("parser_contract_id", "output_integrity_contract_id"):
+            bad = json.loads(r.json_bytes(payload))
+            bad["execution_architecture"][field] = marker
+            rr, dd = _section7_test_declarations(bad)
+            result = cal.evaluate_section7_closure(bad, rr, dd)
+            assert result["state"] == "OPEN" and "P31" in [b["parameter_id"] for b in result["blocking_parameters"]]
+            with pytest.raises(r.ResourceContractError):
+                cal.section7_payload_bytes(bad)
