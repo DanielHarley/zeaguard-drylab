@@ -1705,6 +1705,8 @@ def synthetic_e05_env(synthetic_e01_env, monkeypatch: pytest.MonkeyPatch):
         expected_resource_count=1,
         expected_resource_ids=("R1_RNA",),
     )
+    geometry_path = root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json"
+    monkeypatch.setattr(cal, "EXPECTED_GEOMETRY_RECORD_SHA256", {"R1_RNA": _sha256_raw(geometry_path.read_bytes())})
 
     help_map = {
         "blastn": _FAKE_BLASTN_HELP, "makeblastdb": _FAKE_MAKEBLASTDB_HELP,
@@ -1942,6 +1944,28 @@ def test_e05_output_integrity_export_caps_and_qa_state(synthetic_e05_env):
     assert cap["blastn_search_stage_max_target_seqs"]["present_in_build_help"] is True
     assert "Truncation is not asserted" in cap["not_established"] and cap["destination"] == "E04 and E06"
     assert len(cap["conditions_to_verify"]) == 2 and "output_integrity_contract_id" in cap["payload_boundary"]
+    joined = " ".join(cap["conditions_to_verify"])
+    assert "loss of HSPs and loss of queries" in joined and "legitimately empty output" in joined and "line boundary" in joined
+    assert "respects the constraints recorded above" in joined and "three parameters" not in joined
+    assert cap["established"].startswith("The inspected blast_formatter help documents a default for -max_target_seqs, -num_descriptions, -num_alignments")
+
+    # U03_S01: the narrative follows the evidence actually present in the help (no defaults; tool unavailable).
+    no_defaults_help = "\n".join(l for l in env["help_map"]["blast_formatter"].splitlines() if "Default =" not in l) + "\n"
+    absent_cap = _e05_inspect(env, runner=lambda cmd, **kw: (
+        subprocess.CompletedProcess(cmd, 0, stdout=no_defaults_help, stderr="")
+        if Path(cmd[0]).name == "blast_formatter" and cmd[1] == "-help" else env["fake_e05_runner"](cmd, **kw)
+    ))["d_output_integrity_mechanism"]["export_path_default_cap_observation"]
+    assert all(v["documented_default_in_build_help"] == "NOT_DOCUMENTED_IN_BUILD_HELP" for v in absent_cap["blast_formatter_flags"].values())
+    assert absent_cap["established"] == "The inspected blast_formatter help documents no default for -max_target_seqs, -num_descriptions or -num_alignments."
+    unavailable_cap = _e05_inspect(env, which_resolver=lambda name: None if name == "blast_formatter" else env["fake_which"](name))[
+        "d_output_integrity_mechanism"]["export_path_default_cap_observation"]
+    assert unavailable_cap["established"] == "blast_formatter help was not inspected; nothing is established about export-path default caps."
+    partial_help = env["help_map"]["blast_formatter"].replace("   Default = `250'\n", "")
+    partial_cap = _e05_inspect(env, runner=lambda cmd, **kw: (
+        subprocess.CompletedProcess(cmd, 0, stdout=partial_help, stderr="")
+        if Path(cmd[0]).name == "blast_formatter" and cmd[1] == "-help" else env["fake_e05_runner"](cmd, **kw)
+    ))["d_output_integrity_mechanism"]["export_path_default_cap_observation"]
+    assert partial_cap["established"].endswith("it documents none for -num_alignments.")
 
     # Without the archive input or an adopted specifier the mechanism is insufficient and QA-I stays pending.
     no_archive = _e05_inspect(env, runner=lambda cmd, **kw: (
@@ -1958,30 +1982,118 @@ def test_e05_output_integrity_export_caps_and_qa_state(synthetic_e05_env):
     assert no_score["selected_mechanism"] == "INSUFFICIENT_BUILD_SUPPORT_QA_I_PENDING"
 
     sec_e = insp["e_configuration_qa_matrix_status"]
-    assert sec_e["total_criteria"] == 19 and sec_e["no_qa_metric_computable_without_search"] is True
-    assert (sec_e["preconditions_inspected_count"], sec_e["preconditions_not_inspectable_count"]) == (11, 8)
+    assert sec_e["total_criteria"] == 19
+    assert (sec_e["preconditions_inspected_count"], sec_e["preconditions_not_inspected_count"]) == (11, 8)
     for qid, item in sec_e["criteria"].items():
         assert item["metric_computed_in_e05_part1"] is False and item["state_after_e05_part1"] == "NOT_TESTED"
     assert "verifiable_by_configuration_inspection_without_query" not in sec_e["criteria"]["QA-C"]
+    # Only what was observed is stated; no universal impossibility is asserted (U03_F02).
+    assert "no_qa_metric_computable_without_search" not in sec_e
+    assert "no QA criterion was approved" in sec_e["observed_in_this_unit"]
+    assert "does not assert which QA metrics are computable without a search" in sec_e["scope_qualification"]
+    assert "structural" in sec_e["criteria"]["QA-P"]["precondition_note"] and "structural" in sec_e["criteria"]["QA-I"]["precondition_note"]
+    current = {key: value for key, value in insp.items() if key != "coordinator_instruction_corrections"}
+    assert not re.search(r"no QA metric .{0,40}computable", json.dumps(current), flags=re.IGNORECASE)
     notes = " ".join(c["precondition_note"] for c in sec_e["criteria"].values())
     assert not any(token in notes for token in ("Default", "500", "250", "megablast"))  # no build values in static text
 
 
-def test_e05_canonical_record_order_is_computed_not_asserted(synthetic_e05_env):
-    """P30: the ascending ASCII record_id check is computed from each E03 geometry record."""
-    root = synthetic_e05_env["root"]
+def test_e05_canonical_record_order_is_computed_from_an_authenticated_geometry_record(synthetic_e05_env):
+    """P30 check on an accepted record: identity-bound, content-checked against the manifest, order and cardinality computed."""
     sec_b = _e05_inspect(synthetic_e05_env)["b_build_comparison_with_cp1_receipts_and_derivations"]
-    check = sec_b["current_e03_geometry_derivations"]["R1_RNA"]["canonical_record_order_check"]
+    derivation = sec_b["current_e03_geometry_derivations"]["R1_RNA"]
+    check = derivation["canonical_record_order_check"]
+    assert derivation["status"] == "VERIFIED_AGAINST_ACCEPTED_RECORD_IDENTITY_AND_AUTHORITATIVE_CP1_MANIFEST"
+    assert derivation["geometry_record_sha256"] == cal.EXPECTED_GEOMETRY_RECORD_SHA256["R1_RNA"]
+    assert derivation["total_bases"] == 24
     assert check["strictly_ascending_ascii_record_id"] is True and check["ordered_record_id_count"] == 2
-    assert check["fasta_sha256"]
-    # Out-of-order ids in the geometry record flip the computed check (the record hash is not what is under test).
+    assert check["ordered_record_id_count_matches_manifest_record_count"] is True and check["fasta_sha256"]
+
+
+def test_u03_f01_adulterated_geometry_is_refused_not_promoted_to_verified(synthetic_e05_env, monkeypatch):
+    """Reviewer counterexample (round 005): an adulterated geometry with a recomputed descriptor hash is refused."""
+    root = synthetic_e05_env["root"]
     geom_path = root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json"
-    record = json.loads(geom_path.read_text("utf-8"))
-    ids = record["canonical_order"]["ordered_analysis_ids"]
-    record["canonical_order"]["ordered_analysis_ids"] = ids[::-1]
-    geom_path.write_bytes(r.json_bytes(record))
-    flipped = _e05_inspect(synthetic_e05_env)["b_build_comparison_with_cp1_receipts_and_derivations"]
-    assert flipped["current_e03_geometry_derivations"]["R1_RNA"]["canonical_record_order_check"]["strictly_ascending_ascii_record_id"] is False
+    original = geom_path.read_bytes()
+    accepted = dict(cal.EXPECTED_GEOMETRY_RECORD_SHA256)
+
+    def rewrite(mutate):
+        record = json.loads(original.decode("utf-8"))
+        mutate(record)
+        record["descriptor_sha256"] = cal.compute_geometry_descriptor_sha256(record["architecture_descriptor"])
+        geom_path.write_bytes(r.json_bytes(record))
+
+    def counterexample(record):  # +100 on the first length and on total_bases, ID list reduced to one element
+        record["architecture_descriptor"]["ordered_record_lengths"][0] += 100
+        record["architecture_descriptor"]["total_bases"] += 100
+        record["canonical_order"]["ordered_analysis_ids"] = record["canonical_order"]["ordered_analysis_ids"][:1]
+        record["canonical_order"]["ordered_source_ids"] = record["canonical_order"]["ordered_source_ids"][:1]
+
+    def truncated_ids_only(record):  # descriptor untouched; only the ID list is incomplete
+        record["canonical_order"]["ordered_analysis_ids"] = record["canonical_order"]["ordered_analysis_ids"][:1]
+
+    def reversed_ids(record):
+        record["canonical_order"]["ordered_analysis_ids"] = record["canonical_order"]["ordered_analysis_ids"][::-1]
+
+    def lengths_swapped(record):  # same total, different vector
+        lengths = record["architecture_descriptor"]["ordered_record_lengths"]
+        lengths[0], lengths[1] = lengths[1], lengths[0]
+
+    try:
+        # Control 1: the whole-file identity refuses every mutation, even with a recomputed internal descriptor hash.
+        for mutate in (counterexample, truncated_ids_only, reversed_ids, lengths_swapped):
+            rewrite(mutate)
+            with pytest.raises(r.ResourceContractError, match="E03 geometry record identity mismatch for R1_RNA"):
+                _e05_inspect(synthetic_e05_env)
+        # A wrongly anchored identity (the tampered file registered as accepted) is still caught by control 2,
+        # which revalidates counts, totals, vectors and the ID list (order and cardinality) against the manifest.
+        for mutate in (counterexample, truncated_ids_only, reversed_ids, lengths_swapped):
+            rewrite(mutate)
+            monkeypatch.setattr(cal, "EXPECTED_GEOMETRY_RECORD_SHA256", {"R1_RNA": _sha256_raw(geom_path.read_bytes())})
+            with pytest.raises(r.ResourceContractError, match=r"inconsistent with the authoritative (CP1 manifest|identifier map) for R1_RNA"):
+                _e05_inspect(synthetic_e05_env)
+        # No accepted identity for a resource: not consumed as verified.
+        geom_path.write_bytes(original)
+        monkeypatch.setattr(cal, "EXPECTED_GEOMETRY_RECORD_SHA256", {})
+        with pytest.raises(r.ResourceContractError, match="no accepted E03 geometry record identity for R1_RNA"):
+            _e05_inspect(synthetic_e05_env)
+        # The unmodified accepted record is still verified, and an absent record is NOT_MATERIALIZED, never verified.
+        monkeypatch.setattr(cal, "EXPECTED_GEOMETRY_RECORD_SHA256", accepted)
+        assert _e05_inspect(synthetic_e05_env)["b_build_comparison_with_cp1_receipts_and_derivations"][
+            "current_e03_geometry_derivations"]["R1_RNA"]["total_bases"] == 24
+        geom_path.unlink()
+        with pytest.raises(r.ResourceContractError, match="required E03 geometry record missing for R1_RNA"):
+            _e05_inspect(synthetic_e05_env)
+        absent = _e05_inspect(synthetic_e05_env, require_e03_geometry=False)
+        assert absent["b_build_comparison_with_cp1_receipts_and_derivations"]["current_e03_geometry_derivations"]["R1_RNA"] == {
+            "geometry_record_path": "data/external/nto/cp1_20261015/geometry/R1_RNA.json", "status": "NOT_MATERIALIZED"}
+    finally:
+        geom_path.write_bytes(original)
+    assert _sha256_raw(geom_path.read_bytes()) == accepted["R1_RNA"]
+
+
+def test_u03_s02_receipt_provenance_of_max_file_size_is_structured(synthetic_e05_env):
+    """P29 stays pending; the historical size limit is recorded as reported by makeblastdb, not as a passed flag."""
+    section = _e05_inspect(synthetic_e05_env)["b_build_comparison_with_cp1_receipts_and_derivations"]["historical_makeblastdb_receipt_options"]
+    assert section["p29_status"] == "PENDING_NO_VALUE_ASSIGNED" and "must not be promoted" in section["statement"]
+    assert set(section["receipts_by_resource"]) == {"R1_RNA"}
+    assert cal._receipt_max_file_size({"command": ["makeblastdb", "-dbtype", "nucl"], "stdout": "Maximum file size: 3000000000B\n"}) == {
+        "max_file_sz_flag_passed_in_recorded_command": False, "stdout_reported_maximum_file_size_bytes": 3000000000}
+    assert cal._receipt_max_file_size({"command": ["makeblastdb", "-max_file_sz", "1GB"], "stdout": ""}) == {
+        "max_file_sz_flag_passed_in_recorded_command": True, "stdout_reported_maximum_file_size_bytes": None}
+    assert cal._receipt_max_file_size({}) == {"max_file_sz_flag_passed_in_recorded_command": False, "stdout_reported_maximum_file_size_bytes": None}
+
+
+def test_u03_coordinator_instruction_corrections_and_p30_classification_are_recorded(synthetic_e05_env):
+    insp = _e05_inspect(synthetic_e05_env)
+    ids = [item["correction_id"] for item in insp["coordinator_instruction_corrections"]]
+    assert ids == [
+        "COORDINATOR_ERROR_1_QA_METRIC_COMPUTABILITY",
+        "COORDINATOR_ERROR_2_EXPORT_COMMAND_THREE_PARAMETERS",
+        "COORDINATOR_ERROR_3_EXPORT_INTEGRITY_ONLY_SUBJECT_COUNT",
+    ]
+    p30 = insp["c_parameter_matrix_inspection"]["parameters"]["P30"]["coordinator_decision"]
+    assert p30["classification_basis"].startswith("Conformance to the contract plus technical instantiation")
 
 
 def test_e05_destination_protection_determinism_and_cli(synthetic_e05_env, monkeypatch, capsys):

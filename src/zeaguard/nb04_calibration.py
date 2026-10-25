@@ -2710,6 +2710,10 @@ E05_COORDINATOR_DECISIONS: dict[str, dict[str, Any]] = {
         "decided_by": "IMPLEMENTATION_COORDINATOR",
         "decision_date": "2026-10-25",
         "decision": E05_P30_RULE_TOKEN,
+        "classification_basis": (
+            "Conformance to the contract plus technical instantiation: the matrix requires a declared, hashed "
+            "canonical record order (status REQUIRES_DESIGN) and does not literally write the ASCII rule."
+        ),
         "scope": (
             "Fixes canonical_record_order_rule (plan_v003.md section 7) for the six certified CP1 resources and "
             "for future E04 synthetic fixtures. It does not decide the HSP tie-break in the output."
@@ -2739,6 +2743,38 @@ E05_COORDINATOR_DECISIONS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Corrections issued by the Coordinator to its own earlier instructions (U03 correction round, Coordinator message
+# 028). They are recorded so the history does not attribute these premises to the Programmer.
+E05_COORDINATOR_INSTRUCTION_CORRECTIONS: tuple[dict[str, str], ...] = (
+    {
+        "correction_id": "COORDINATOR_ERROR_1_QA_METRIC_COMPUTABILITY",
+        "earlier_instruction": "Condition 6: state that no QA metric is computable without a search.",
+        "correction": (
+            "Withdrawn. It generalized 'no QA metric of this campaign was computed in U03' into an impossibility the "
+            "matrix does not support (for example QA-P defines a set intersection of identifiers and QA-I defines parser "
+            "outcomes on valid and corrupted tables). The record now states only what was observed and qualifies the rest."
+        ),
+    },
+    {
+        "correction_id": "COORDINATOR_ERROR_2_EXPORT_COMMAND_THREE_PARAMETERS",
+        "earlier_instruction": "Precision 3: the export command must be reconstructible with the three formatter parameters explicit.",
+        "correction": (
+            "Withdrawn. The help declares -max_target_seqs incompatible with -num_descriptions and -num_alignments, and "
+            "-num_descriptions not applicable to outfmt greater than 4, so passing all three would be illegal. Correct "
+            "formulation: a reconstructible record of values or of explicit not-applied states in a legal combination."
+        ),
+    },
+    {
+        "correction_id": "COORDINATOR_ERROR_3_EXPORT_INTEGRITY_ONLY_SUBJECT_COUNT",
+        "earlier_instruction": "Precision 2: the verification must compare, per query, the subject count of the derived tabular export with that of the archive.",
+        "correction": (
+            "Insufficient. A subject count alone does not demonstrate preservation of every HSP and every query. The "
+            "future integrity contract must also cover loss of HSPs and queries, the semantic equality required of the "
+            "export, a legitimately empty output and cuts at a line boundary."
+        ),
+    },
+)
+
 # QA criteria: (configuration preconditions inspected in E05 Part 1, deferred to, note). No QA metric is
 # computed here; every note avoids numbers read from the build so that it cannot drift from the observed help.
 _E05_EXEC = "E04 fixtures and E08 search execution"
@@ -2752,14 +2788,14 @@ E05_QA_SPEC: dict[str, tuple[bool, str, str]] = {
     "QA-F2": (True, "E08 search execution", "Inspected: -dbsize and -searchsp are documented by the build (P23 record). The normalized comparison requires a frozen reference value and search execution."),
     "QA-G": (True, "E02 (PC13 versus QA-G is reserved), E04 and E08", "Inspected: documented build defaults recorded for P13 and P14 without assigning values; P15-P20 recorded as unapplied; export-path default caps recorded (section d). Saturation indicators require search execution. The PC13 versus QA-G tension is a reserved E02 decision and is not resolved here."),
     "QA-H": (True, "E08 search execution", "Inspected: P04, P23, P25 and P26 records. Score and E-value series require search execution."),
-    "QA-I": (True, "E04/E06 parser tests and E08", "Inspected: archive output availability in blastn and archive input in blast_formatter (section d). Parser behaviour on valid, truncated, malformed and corrupted tables requires the parser and corrupted copies."),
+    "QA-I": (True, "E04/E06 parser tests and E08", "Inspected: archive output availability in blastn and archive input in blast_formatter (section d). Evaluating parser outcomes on valid, truncated, malformed and corrupted tables needs the parser and those tables; this metric is structural and does not by definition need a search, and it is not evaluated in this unit."),
     "QA-J": (False, _E05_EXEC, "Requires repeated process invocations."),
     "QA-K": (True, "E08 calibration artifacts", "Inspected: tool name, version, package build and prospective executable SHA256 for each tool (section a) and a state for each of the 31 parameters (section c). Fixture hashes, database binary hashes, command line and UTC date belong to later artifacts."),
     "QA-L": (True, "E02 scale cells (reserved), E04 and E08", "Inspected: exact total_bases and record_count of the six real resources from the E03 geometry records (section b). Class envelopes require reserved scale-cell decisions and fixtures."),
     "QA-M": (True, "E06 harness and E08 execution", "Inspected: each of the 31 matrix parameters has a state, value or documented-default status (section c). The matrix does not enumerate every build option (section c, build_help_flags_outside_matrix); enlarging the parameter set would be a normative change outside the scope of any agent. Comparing reconstructed and executed command lines requires the harness and executions."),
     "QA-N": (False, _E05_EXEC, "Requires no-planted-alignment background fixtures and search execution."),
     "QA-O": (True, "E08 search execution", "Inspected: P24 recorded as unapplied and P07/P08 recorded as pending. Gapped recovery requires search execution."),
-    "QA-P": (False, "E02/E04 fixture-role partitioning and E08 selection records", "Requires fixture roles and selection records."),
+    "QA-P": (False, "E02/E04 fixture-role partitioning and E08 selection records", "Needs the campaign's fixture roles and selection records, which do not exist yet. The metric (set intersection of identifiers) is structural and does not by definition need a search; it is not evaluated in this unit."),
     "QA-Q": (True, "E08 search execution", "Inspected: the P27 record. Result-set invariance across thread counts requires search execution."),
     "QA-R": (False, _E05_EXEC, "Requires timing and memory measurements during executions."),
 }
@@ -2983,10 +3019,31 @@ def _e05_not_applicable_tool(tool: str, reason: str) -> dict[str, Any]:
     }
 
 
+# Accepted whole-file identities of the six E03 geometry records closed in U02 (coordination.md section 17.4;
+# the files are under the Git-ignored data/external/nto/). A geometry record is consumed by E05 only if its
+# whole-file SHA256 equals the accepted identity; an internally consistent descriptor hash is not enough.
+EXPECTED_GEOMETRY_RECORD_SHA256: dict[str, str] = {
+    "AM_GCF003254395_2_RNA": "59053ae756ed96b13bca9d6fb41ced3df57e69e8e4c4c01921fa4a13c71ef655",
+    "OI_GCYL01_TSA": "3db2cf98c3457a44c49ee004dd72f23b8f3c86a589169dcfa3e470d43df01ff9",
+    "PM_GKDL01_TSA": "18de969107295f1a9313884de3bdd88d5cccfd30bd718d45b36939b032d9d632",
+    "RM_GCF003676215_2_RNA": "1025de99050f1eff490ee78993701378d67eb00f6fa79d8f363739aa2af78f04",
+    "TA_GCA036937485_2_CDS": "b1dc59a7f1ae40f03223c3e9624692a0b7cd4f90c60288c59fd7bf94091a3bec",
+    "ZM_GCF902167145_1_RNA": "cc572d3cb424b205f85f6f2833ba932f3b93902a5ea455a1fb20b01442d53ae7",
+}
+
+
 def _e05_geometry_derivations(
-    root: Path, manifest: Mapping[str, Any], campaign_id: str, require_e03_geometry: bool
+    root: Path,
+    manifest: Mapping[str, Any],
+    campaign_id: str,
+    require_e03_geometry: bool,
+    accepted_record_sha256: Mapping[str, str],
 ) -> dict[str, dict[str, Any]]:
-    """Verify each E03 geometry record against the authoritative manifest and check the P30 record order."""
+    """Consume each E03 geometry record only after its whole-file identity and its content match the authoritative sources.
+
+    A record that fails either control is refused (the inspection stops); it is never reported as verified and none
+    of its quantities reaches the inspection record.
+    """
     derivations: dict[str, dict[str, Any]] = {}
     for resource in sorted(manifest.get("resources", []), key=lambda item: item["resource_id"]):
         rid = resource["resource_id"]
@@ -2996,29 +3053,84 @@ def _e05_geometry_derivations(
             require(not require_e03_geometry, f"required E03 geometry record missing for {rid}: {geom_rel}")
             derivations[rid] = {"geometry_record_path": geom_rel, "status": "NOT_MATERIALIZED"}
             continue
+        # Control 1: whole-file identity against the accepted U02 identity.
+        accepted = accepted_record_sha256.get(rid)
+        require(accepted, f"no accepted E03 geometry record identity for {rid}; it is not consumed as verified")
+        record_sha256 = digest(geom_path)
+        require(
+            record_sha256 == accepted,
+            f"E03 geometry record identity mismatch for {rid}: accepted={accepted} observed={record_sha256}",
+        )
+        # Control 2: content against the authoritative manifest, scalars, vectors and the ID list (order and cardinality).
         record = json.loads(geom_path.read_text("utf-8"))
+        descriptor = validate_geometry_descriptor(record.get("architecture_descriptor"))
         descriptor_sha = extract_geometry_descriptor_sha256_from_record(record)
         source = record.get("source_fasta", {})
+        quality = resource["quality"]
+        ids = record["canonical_order"]["ordered_analysis_ids"]
+        count = descriptor["record_count"]
+        lengths = descriptor["ordered_record_lengths"]
         require(
             record.get("resource_id") == rid
-            and source.get("observed_fasta_sha256") == resource["quality"]["fasta_sha256"]
-            and source.get("observed_identifier_map_sha256") == resource["quality"]["identifier_map_sha256"],
-            f"E03 geometry record out of sync with authoritative CP1 manifest for {rid}",
+            and source.get("observed_fasta_sha256") == quality["fasta_sha256"]
+            and source.get("observed_identifier_map_sha256") == quality["identifier_map_sha256"]
+            and count == quality["record_count"]
+            and descriptor["total_bases"] == quality["total_bases"]
+            and sum(descriptor["ordered_ambiguous_base_counts"]) == quality["ambiguous_bases"]
+            and min(lengths) == quality["minimum_length"]
+            and max(lengths) == quality["maximum_length"]
+            and ids == [f"{rid}__{index:08d}" for index in range(1, count + 1)],
+            f"E03 geometry record content inconsistent with the authoritative CP1 manifest for {rid}",
         )
-        ids = record["canonical_order"]["ordered_analysis_ids"]
+        # The identifier map is hash-bound by the authoritative manifest barrier above; the vectors must agree with it.
+        with relative_path(root, resource["identifier_map_path"]).open("r", encoding="utf-8", newline="") as stream:
+            map_rows = list(csv.DictReader(stream, delimiter="\t"))
+        require(
+            [row["analysis_id"] for row in map_rows] == ids
+            and [int(row["length_nt"]) for row in map_rows] == lengths
+            and [row["source_id"] for row in map_rows] == record["canonical_order"]["ordered_source_ids"],
+            f"E03 geometry record vectors inconsistent with the authoritative identifier map for {rid}",
+        )
         derivations[rid] = {
             "canonical_record_order_check": {
                 "fasta_sha256": source["observed_fasta_sha256"],
                 "ordered_record_id_count": len(ids),
+                "ordered_record_id_count_matches_manifest_record_count": len(ids) == quality["record_count"],
                 "strictly_ascending_ascii_record_id": all(a < b for a, b in zip(ids, ids[1:])),
             },
             "descriptor_sha256": descriptor_sha,
             "geometry_record_path": geom_rel,
-            "geometry_record_sha256": digest(geom_path),
-            "status": "VERIFIED_AGAINST_AUTHORITATIVE_CP1_MANIFEST",
-            "total_bases": record["architecture_descriptor"]["total_bases"],
+            "geometry_record_sha256": record_sha256,
+            "status": "VERIFIED_AGAINST_ACCEPTED_RECORD_IDENTITY_AND_AUTHORITATIVE_CP1_MANIFEST",
+            "total_bases": descriptor["total_bases"],
         }
     return derivations
+
+
+def _receipt_max_file_size(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    """Whether -max_file_sz was passed in a makeblastdb receipt command, and the size its stdout reported."""
+    reported = re.search(r"Maximum file size:\s*(\d+)B", str(receipt.get("stdout", "")))
+    return {
+        "max_file_sz_flag_passed_in_recorded_command": "-max_file_sz" in receipt.get("command", []),
+        "stdout_reported_maximum_file_size_bytes": int(reported.group(1)) if reported else None,
+    }
+
+
+def _e05_receipt_makeblastdb_options(root: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Structured provenance for P29: the historical size limit was reported by makeblastdb, not passed by the project."""
+    by_resource: dict[str, dict[str, Any]] = {}
+    for resource in sorted(manifest.get("resources", []), key=lambda item: item["resource_id"]):
+        receipt_path = relative_path(root, resource["fasta_path"]).parent / "database_build.json"
+        by_resource[resource["resource_id"]] = _receipt_max_file_size(json.loads(receipt_path.read_text("utf-8")))
+    return {
+        "p29_status": "PENDING_NO_VALUE_ASSIGNED",
+        "receipts_by_resource": by_resource,
+        "statement": (
+            "Where max_file_sz_flag_passed_in_recorded_command is false, the size in the receipt stdout is the value "
+            "makeblastdb reported, not an option passed by the project. It must not be promoted to an explicitly passed "
+            "flag in U04. P29 stays pending and no value is assigned here."
+        ),
+    }
 
 
 def inspect_e05_tool_builds_and_help(
@@ -3029,9 +3141,11 @@ def inspect_e05_tool_builds_and_help(
     which_resolver: Callable[[str], str | None] = _default_tool_which,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     require_e03_geometry: bool = True,
+    expected_geometry_record_sha256: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
     """Observe `-version`/`-help` of the 5 tools (reusing E01 observation) and compare with receipts and E03 records."""
     root = root.resolve()
+    accepted_geometry = EXPECTED_GEOMETRY_RECORD_SHA256 if expected_geometry_record_sha256 is None else expected_geometry_record_sha256
     observation = observe_blast_tool_builds(
         root, manifest, tool_names=E05_REQUIRED_TOOLS, which_resolver=which_resolver, runner=runner
     )
@@ -3090,9 +3204,12 @@ def inspect_e05_tool_builds_and_help(
     }
     section_b = {
         "comparison_status": comparison,
-        "current_e03_geometry_derivations": _e05_geometry_derivations(root, manifest, campaign_id, require_e03_geometry),
+        "current_e03_geometry_derivations": _e05_geometry_derivations(
+            root, manifest, campaign_id, require_e03_geometry, accepted_geometry
+        ),
         "equivalent_build_reuse_blocked": not all_match,
         "historical_cp1_database_build_receipts": observation["historical_receipt_reference"],
+        "historical_makeblastdb_receipt_options": _e05_receipt_makeblastdb_options(root, manifest),
         "receipt_coverage_declaration": {
             "covered_by_database_build_receipts": [
                 "makeblastdb tool_version and package build (the `tool` field)",
@@ -3114,6 +3231,25 @@ def inspect_e05_tool_builds_and_help(
         "reuse_block_reasons": reuse_block_reasons,
     }
     return section_a, section_b, help_texts
+
+
+def _export_cap_established(formatter_flags: Mapping[str, Mapping[str, Any]]) -> str:
+    """State only what the inspected blast_formatter help actually shows for the export-path cap flags."""
+    if not formatter_flags:
+        return "blast_formatter help was not inspected; nothing is established about export-path default caps."
+    documented = [
+        flag for flag in E05_EXPORT_PATH_CAP_FLAGS
+        if formatter_flags.get(flag, {}).get("documented_default_in_build_help", "NOT_DOCUMENTED_IN_BUILD_HELP")
+        != "NOT_DOCUMENTED_IN_BUILD_HELP"
+    ]
+    if not documented:
+        return "The inspected blast_formatter help documents no default for -max_target_seqs, -num_descriptions or -num_alignments."
+    undocumented = [flag for flag in E05_EXPORT_PATH_CAP_FLAGS if flag not in documented]
+    return (
+        f"The inspected blast_formatter help documents a default for {', '.join(documented)}, independent of the "
+        "blastn search flag"
+        + (f"; it documents none for {', '.join(undocumented)}." if undocumented else ".")
+    )
 
 
 def inspect_e05_output_integrity_mechanism(
@@ -3167,15 +3303,23 @@ def inspect_e05_output_integrity_mechanism(
                 "The blastn -max_target_seqs (search stage, parameter P13) and the blast_formatter -max_target_seqs "
                 "(export stage) are distinct caps of distinct tools at distinct stages, whatever their documented defaults."
             ),
-            "established": "The build help documents a default for blast_formatter -max_target_seqs, -num_descriptions and -num_alignments (above), independent of the blastn search flag.",
+            "established": _export_cap_established(formatter_flags),
             "not_established": (
                 "Whether this default truncates the tabular export of an archive holding more subjects per query "
                 "than the default. Verifying it requires running blast_formatter on an archive, which requires a "
                 "search and is forbidden in this unit. Truncation is not asserted."
             ),
             "conditions_to_verify": [
-                "The integrity verification must compare, per query, the subject count of the derived tabular export with that of the authoritative archive.",
-                "The export command must be reconstructible with these three parameters explicit, not dependent on blast_formatter defaults. No values are fixed here.",
+                (
+                    "The future output-integrity contract must cover loss of HSPs and loss of queries, the semantic "
+                    "equality required of the export, a legitimately empty output and cuts at a line boundary. "
+                    "Comparing per-query subject counts alone does not demonstrate that every HSP and every query was preserved."
+                ),
+                (
+                    "The export command must be reconstructible from a record of values, or of explicit not-applied "
+                    "states, for these options, in a combination that respects the constraints recorded above "
+                    "(options the help declares incompatible cannot all be passed). No values and no combination are fixed here."
+                ),
             ],
             "payload_boundary": (
                 "No field is added to the section 7 payload: its schema is closed and these caps do not belong to "
@@ -3408,18 +3552,23 @@ def build_e05_qa_configuration_inspection(
     inspected_ids = [q for q, c in criteria.items() if c["configuration_preconditions_inspected_in_e05_part1"]]
     return {
         "criteria": criteria,
-        "no_qa_metric_computable_without_search": True,
+        "observed_in_this_unit": (
+            "No QA metric of the campaign was evaluated in E05 Part 1 and no QA criterion was approved; all 19 "
+            "criteria remain NOT_TESTED. For the criteria marked as preconditions inspected, only configuration "
+            "preconditions were inspected."
+        ),
         "qa_i_linked_output_integrity_status": output_integrity["qa_i_mechanism_status"],
-        "statement": (
-            "No QA metric of the 19 criteria is computable without a search. The criteria below marked as "
-            "preconditions inspected had only their configuration preconditions inspected; every criterion remains "
-            "NOT_TESTED."
+        "scope_qualification": (
+            "This record does not assert which QA metrics are computable without a search. Some metric components "
+            "are structural (for example a set operation on declared identifier sets, or parser outcomes on supplied "
+            "tables) and do not by definition need a search; they were not evaluated here. Evaluating the criteria for "
+            "the campaign needs the campaign's fixtures and, for the recovery-type criteria, search results."
         ),
         "total_criteria": len(criteria),
         "preconditions_inspected_count": len(inspected_ids),
         "preconditions_inspected_ids": inspected_ids,
-        "preconditions_not_inspectable_count": len(criteria) - len(inspected_ids),
-        "preconditions_not_inspectable_ids": [q for q in criteria if q not in inspected_ids],
+        "preconditions_not_inspected_count": len(criteria) - len(inspected_ids),
+        "preconditions_not_inspected_ids": [q for q in criteria if q not in inspected_ids],
     }
 
 
@@ -3455,6 +3604,7 @@ def build_e05_configuration_inspection(
     which_resolver: Callable[[str], str | None] = _default_tool_which,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     require_e03_geometry: bool = True,
+    expected_geometry_record_sha256: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Execute the E05 Part 1 read-only configuration inspection and assemble the deterministic record."""
     root = root.resolve()
@@ -3471,7 +3621,7 @@ def build_e05_configuration_inspection(
     )
     section_a, section_b, help_texts = inspect_e05_tool_builds_and_help(
         root, manifest, campaign_id=campaign_id, which_resolver=which_resolver, runner=runner,
-        require_e03_geometry=require_e03_geometry,
+        require_e03_geometry=require_e03_geometry, expected_geometry_record_sha256=expected_geometry_record_sha256,
     )
     section_c = build_e05_parameter_matrix_inspection(
         normative["parameter_matrix_rows"], section_a["tools"], help_texts, normative["excluded_passage"]
@@ -3508,6 +3658,7 @@ def build_e05_configuration_inspection(
         "design_questions_decided_by_coordinator": build_e05_design_decisions(
             normative["parameter_matrix_rows"], normative["qa_matrix_rows"]
         ),
+        "coordinator_instruction_corrections": E05_COORDINATOR_INSTRUCTION_CORRECTIONS,
         "simplification_s02_declaration": {
             "simplification_id": "S02",
             "statement": (
