@@ -2340,12 +2340,12 @@ def test_section7_closure_requires_declarations_and_every_required_field():
         assert "P29" in [b["parameter_id"] for b in result["blocking_parameters"]]
         assert f"technical_domain.resource_geometry_cells[0].{field}" in result["unresolved_payload_fields"]
     rows, records = _section7_test_declarations(payload)
-    candidates = [{"payload": payload}]
-    assert cal.evaluate_section7_candidate_set(candidates, rows, records)["state"] == "OPEN"
-    assert cal.evaluate_section7_candidate_set([], rows, records, design_space_declaration="TEST_ONLY")["state"] == "OPEN"
-    assert cal.evaluate_section7_candidate_set(candidates, rows, records, design_space_declaration="TEST_ONLY")["state"] == "CLOSED"
+    candidates = [{"payload": payload, "parameter_records": records}]
+    assert cal.evaluate_section7_candidate_set(candidates, rows)["state"] == "OPEN"
+    assert cal.evaluate_section7_candidate_set([], rows, design_space_declaration="TEST_ONLY")["state"] == "OPEN"
+    assert cal.evaluate_section7_candidate_set(candidates, rows, design_space_declaration="TEST_ONLY")["state"] == "CLOSED"
     payload["execution_architecture"]["parser_contract_id"] = None
-    assert cal.evaluate_section7_candidate_set(candidates, rows, records, design_space_declaration="TEST_ONLY")["state"] == "OPEN"
+    assert cal.evaluate_section7_candidate_set(candidates, rows, design_space_declaration="TEST_ONLY")["state"] == "OPEN"
 
 
 def test_section7_volume_enumeration_cross_checks_metadata_without_queries(tmp_path):
@@ -2412,6 +2412,9 @@ def test_section7_preparation_integrates_authenticated_geometry_and_keeps_drafts
     assert len(geometry_calls) == 1
     assert result["state"] == "OPEN" and result["design_space_complete"] is False
     assert result["candidate_set_closure"]["state"] == "OPEN"
+    assert result["closure_scope"] == "COMPUTATIONAL_PREDICATES_ON_SUPPLIED_DECLARATIONS"
+    assert result["authority_verification"] == "EXTERNAL_DOCUMENTARY_E02_E03_REQUIRED"
+    assert result["g1_certification"] == "NOT_EVALUATED"
     assert result["determinate_sections"]["tool_build"]["dustmasker"]["tool_version"] == "1.0.0"
     assert result["determinate_sections"]["database_build"]["max_file_sz_effective"] == 3000000000
     assert result["determinate_sections"]["execution_architecture"]["outfmt_fields"] == list(cal.E05_OUTFMT_6_PRECEDENT + cal.E05_OUTFMT_6_ADDITIONS)
@@ -2433,3 +2436,145 @@ def test_section7_preparation_integrates_authenticated_geometry_and_keeps_drafts
     with pytest.raises(r.ResourceContractError, match="identity differs"):
         monkeypatch.setattr(cal, "E05_U03_R3_SHA256", "0" * 64)
         cal.build_e05_section7_preparation(root, env["corpus_dirs"]["NB04_B5_INPUTS"], accepted_geometry_record_sha256=cal.EXPECTED_GEOMETRY_RECORD_SHA256)
+
+@pytest.mark.parametrize("state", [cal.STATE_FIXED, cal.STATE_EXCLUDED, cal.STATE_DECIDED, "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE"])
+def test_u04_f01_all_accepted_states_compare_every_parameter_path(state):
+    payload = _section7_test_payload()
+    rows, original = _section7_test_declarations(payload)
+    for pid, paths in cal.E05_SECTION7_PARAMETER_PATHS.items():
+        records = json.loads(r.json_bytes(original))
+        records[pid]["effective_value_state"] = state
+        assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+        for path in paths:
+            bad = json.loads(r.json_bytes(records))
+            bad[pid]["effective_value"][path] = "CONTRADICTS_PAYLOAD"
+            result = cal.evaluate_section7_closure(payload, rows, bad)
+            assert result["state"] == "OPEN"
+            blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == pid)
+            assert path in blocker["declaration_mismatch_fields"]
+            assert blocker["declaration_error"] == "DECLARATION_PAYLOAD_MISMATCH"
+        for value in ("CONTRADICTS_PAYLOAD", {}):
+            bad = json.loads(r.json_bytes(records))
+            bad[pid]["effective_value"] = value
+            result = cal.evaluate_section7_closure(payload, rows, bad)
+            assert result["state"] == "OPEN"
+            blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == pid)
+            assert blocker["declaration_error"]
+
+
+def test_u04_f01_translates_only_unambiguous_legacy_declarations():
+    payload = _section7_test_payload()
+    rows, records = _section7_test_declarations(payload)
+    records["P01"] = {"effective_value_state": cal.STATE_FIXED, "effective_value": "blastn"}
+    records["P09"] = {"effective_value_state": cal.STATE_FIXED, "effective_value": "no"}
+    records["P15"] = {"effective_value_state": cal.STATE_EXCLUDED, "effective_value": "OPTION_NOT_APPLIED"}
+    records["P30"] = {"effective_value_state": cal.STATE_DECIDED, "effective_value": cal.E05_P30_RULE_TOKEN}
+    records["P23"] = {"effective_value_state": cal.STATE_DECIDED, "effective_value": dict(cal.E05_P23_EFFECTIVE_VALUE)}
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+    for field in cal.E05_P23_EFFECTIVE_VALUE:
+        bad = json.loads(r.json_bytes(records))
+        bad["P23"]["effective_value"][field] = "CONTRADICTS_PAYLOAD"
+        result = cal.evaluate_section7_closure(payload, rows, bad)
+        assert result["state"] == "OPEN"
+        blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == "P23")
+        assert blocker["declaration_error"] == "DECLARATION_REPRESENTATION_INCOMPLETE_OR_UNSUPPORTED"
+
+
+@pytest.mark.parametrize("marker", [
+    "NORMATIVE_BINDING_NOT_ESTABLISHED", "IMPLEMENTATION_NOT_ESTABLISHED", "NOT_APPLICABLE", "G1_NOT_EVALUATED",
+    "NOT_ESTABLISHED", "NOT_ESTABLISHED_SUFFIX", "X_NOT_ESTABLISHED_SUFFIX", "PENDING_CALIBRATION",
+    "X_PENDING", "X_PENDING_SUFFIX", "NOT_MATERIALIZED", "GEOMETRY_NOT_MATERIALIZED",
+    "GEOMETRY_NOT_MATERIALIZED_SUFFIX", "UNRESOLVED", "X_UNRESOLVED_SUFFIX", "X_NOT_APPLICABLE_SUFFIX",
+])
+def test_u04_f02_dependency_markers_cannot_become_contract_identities(marker):
+    assert cal._section7_unresolved(marker)
+    for field in ("parser_contract_id", "output_integrity_contract_id"):
+        payload = _section7_test_payload()
+        payload["execution_architecture"][field] = marker
+        rows, records = _section7_test_declarations(payload)
+        result = cal.evaluate_section7_closure(payload, rows, records)
+        assert result["state"] == "OPEN"
+        blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == "P31")
+        assert f"execution_architecture.{field}" in blocker["unresolved_payload_fields"]
+        assert f"execution_architecture.{field}" in result["unresolved_payload_fields"]
+        for operation in (cal.validate_section7_payload, cal.section7_payload_bytes,
+                          lambda p: cal.order_section7_payloads({"SYNTHETIC_TEST_ONLY": p})):
+            with pytest.raises(r.ResourceContractError):
+                operation(payload)
+
+
+def test_u04_f02_applicability_is_contextual_and_zero_is_resolved():
+    assert not cal._section7_unresolved(0)
+    assert not cal._section7_unresolved("OPTION_NOT_APPLIED")
+    assert not cal._section7_unresolved("SYNTHETIC_TEST_ONLY")
+    payload = _section7_test_payload()
+    payload["tool_build"]["blast_formatter"] = "NOT_APPLICABLE"
+    rows, records = _section7_test_declarations(payload)
+    cal.validate_section7_payload(payload)
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+
+
+@pytest.mark.parametrize("field", ["max_target_seqs", "record_count", "total_bases", "database_volume_count"])
+def test_u04_f03_required_positive_domains_and_valid_minimum(field):
+    for value in (-1, 0, 1):
+        payload = _section7_test_payload()
+        target = payload["search_parameters"] if field == "max_target_seqs" else payload["technical_domain"]["resource_geometry_cells"][0]
+        target[field] = value
+        rows, records = _section7_test_declarations(payload)
+        result = cal.evaluate_section7_closure(payload, rows, records)
+        if value == 1:
+            assert result["state"] == "CLOSED"
+            assert cal.section7_payload_bytes(payload)
+        else:
+            assert result["state"] == "OPEN" and result["schema_errors"]
+            with pytest.raises(r.ResourceContractError, match="positive_integer"):
+                cal.validate_section7_payload(payload)
+            with pytest.raises(r.ResourceContractError):
+                cal.section7_payload_bytes(payload)
+
+
+def test_u04_f03_zero_remains_valid_where_the_existing_domain_allows_it():
+    payload = _section7_test_payload()
+    for field in ("culling_limit", "perc_identity", "qcov_hsp_perc"):
+        payload["search_parameters"][field] = 0
+    rows, records = _section7_test_declarations(payload)
+    cal.validate_section7_payload(payload)
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+
+
+@pytest.mark.parametrize("tasks", [("blastn", "blastn-short"), ("blastn", "blastn-short", "dc-megablast")])
+def test_u04_f04_each_candidate_uses_its_corresponding_declarations(tasks):
+    candidates = []
+    for task in tasks:
+        payload = _section7_test_payload()
+        payload["search_parameters"]["task"] = task
+        rows, records = _section7_test_declarations(payload)
+        assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+        candidates.append({"payload": payload, "parameter_records": records})
+    result = cal.evaluate_section7_candidate_set(candidates, rows, design_space_declaration="SYNTHETIC_TEST_ONLY")
+    assert result["state"] == "CLOSED"
+    assert all(c["state"] == "CLOSED" for c in result["candidate_closures"])
+    assert cal.evaluate_section7_candidate_set(candidates, rows)["state"] == "OPEN"
+    for index in range(len(candidates)):
+        missing = json.loads(r.json_bytes(candidates))
+        del missing[index]["parameter_records"]
+        result = cal.evaluate_section7_candidate_set(missing, rows, design_space_declaration="SYNTHETIC_TEST_ONLY")
+        assert result["state"] == "OPEN"
+        assert "P02" in [b["parameter_id"] for b in result["candidate_closures"][index]["blocking_parameters"]]
+        mismatched = json.loads(r.json_bytes(candidates))
+        mismatched[index]["parameter_records"] = candidates[(index + 1) % len(candidates)]["parameter_records"]
+        result = cal.evaluate_section7_candidate_set(mismatched, rows, design_space_declaration="SYNTHETIC_TEST_ONLY")
+        assert result["state"] == "OPEN"
+        assert "P02" in [b["parameter_id"] for b in result["candidate_closures"][index]["blocking_parameters"]]
+
+
+def test_u04_s01_closed_explicitly_describes_computational_scope_and_external_authority():
+    payload = _section7_test_payload()
+    rows, records = _section7_test_declarations(payload)
+    candidate = {"payload": payload, "parameter_records": records}
+    for result in (cal.evaluate_section7_closure(payload, rows, records),
+                   cal.evaluate_section7_candidate_set([candidate], rows, design_space_declaration="UNAUTHENTICATED_TEST_STRING")):
+        assert result["state"] == "CLOSED"
+        assert result["closure_scope"] == "COMPUTATIONAL_PREDICATES_ON_SUPPLIED_DECLARATIONS"
+        assert result["authority_verification"] == "EXTERNAL_DOCUMENTARY_E02_E03_REQUIRED"
+        assert result["g1_certification"] == "NOT_EVALUATED"

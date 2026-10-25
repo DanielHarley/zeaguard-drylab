@@ -3722,6 +3722,11 @@ E05_SECTION7_PARAMETER_PATHS.update({
 E05_U03_R3_PATH = f"{PRESERVATION_INVENTORY_DIR}/e05_configuration_inspection_r3.json"
 E05_U03_R3_SHA256 = "5fc259de14b51829f60cdf3ee8f21f0c9212e28c0373fb45efea8c658f8dd843"
 E05_SECTION7_TASKS = ("blastn", "blastn-short", "dc-megablast")
+E05_SECTION7_CLOSURE_QUALIFICATION = {
+    "closure_scope": "COMPUTATIONAL_PREDICATES_ON_SUPPLIED_DECLARATIONS",
+    "authority_verification": "EXTERNAL_DOCUMENTARY_E02_E03_REQUIRED",
+    "g1_certification": "NOT_EVALUATED",
+}
 
 
 def _section7_keys(value: Any, expected: Sequence[str], path: str) -> None:
@@ -3734,7 +3739,12 @@ def _section7_unresolved(value: Any) -> bool:
     if value is None:
         return True
     if isinstance(value, str):
-        return value in {"TODO", "TBD", "UNKNOWN", "NOT_MEASURED", "NAO_MEDIDO", "NAO MEDIDO"} or not value.strip() or value.startswith(("PENDING", "UNRESOLVED", "RECORDED_NOT_DECIDED", "NOT_ESTABLISHED", "NOT_DECLARED", "NOT_MATERIALIZED"))
+        # Administrative sentinels retain their meaning when a component prefixes or suffixes the marker.
+        return not value.strip() or re.search(
+            r"(?:^|[^A-Z0-9])(?:TODO|TBD|UNKNOWN|PENDING|UNRESOLVED|RECORDED_NOT_DECIDED|"
+            r"NOT_ESTABLISHED|NOT_DECLARED|NOT_MATERIALIZED|NOT_MEASURED|NOT_EVALUATED|NOT_APPLICABLE|NAO[ _]MEDIDO)(?:$|[^A-Z0-9])",
+            value.upper(),
+        ) is not None
     if isinstance(value, Mapping):
         return not value or any(_section7_unresolved(v) for v in value.values())
     if isinstance(value, (list, tuple)):
@@ -3753,8 +3763,8 @@ def validate_section7_payload(payload: Mapping[str, Any], *, allow_unresolved: b
         if allow_unresolved and value is None:
             return
         require(not _section7_unresolved(value), f"{path}: unresolved required value")
-        if kind == "integer":
-            valid = type(value) is int and value >= 0
+        if kind in ("integer", "positive_integer"):
+            valid = type(value) is int and value >= (1 if kind == "positive_integer" else 0)
         elif kind == "number":
             valid = type(value) in (int, float) and float('-inf') < value < float('inf')
         elif kind == "boolean":
@@ -3793,7 +3803,7 @@ def validate_section7_payload(payload: Mapping[str, Any], *, allow_unresolved: b
         elif field == "penalty":
             require(type(value) is int or (allow_unresolved and value is None), f"{path}: invalid integer")
         else:
-            check(value, "integer" if field in integer_fields else "number", path)
+            check(value, "positive_integer" if field == "max_target_seqs" else "integer" if field in integer_fields else "number", path)
 
     db = payload["database_build"]
     for field in E05_SECTION7_KEYS["database_build"]:
@@ -3817,16 +3827,34 @@ def validate_section7_payload(payload: Mapping[str, Any], *, allow_unresolved: b
         path = f"technical_domain.resource_geometry_cells[{index}]"
         _section7_keys(cell, E05_SECTION7_CELL_FIELDS, path)
         for field in E05_SECTION7_CELL_FIELDS:
-            check(cell[field], "sha256" if field == "descriptor_sha256" else "integer", f"{path}.{field}")
+            check(cell[field], "sha256" if field == "descriptor_sha256" else "positive_integer", f"{path}.{field}")
     for value in domain["applicability_limitations"]:
         check(value, "string", "technical_domain.applicability_limitations")
 
+
+def _section7_declared_values(
+    pid: str, record: Mapping[str, Any], paths: Sequence[str],
+) -> Mapping[str, Any] | None:
+    """Normalize complete path maps or explicitly supported legacy representations."""
+    value = record.get("effective_value")
+    state = record.get("effective_value_state")
+    if isinstance(value, Mapping) and set(value) == set(paths):
+        return value
+    if state == "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE":
+        return None
+    if pid == "P01" and state == STATE_FIXED and value == "blastn":
+        return {"technical_domain.modality": "LOCAL_ALIGNMENT_CANONICAL"}
+    if pid == "P23" and state == STATE_DECIDED and value == E05_P23_EFFECTIVE_VALUE:
+        return {path: "OPTION_NOT_APPLIED" for path in paths}
+    if len(paths) == 1 and not isinstance(value, Mapping):
+        return {paths[0]: value}
+    return None
 
 def evaluate_section7_closure(
     payload: Mapping[str, Any], parameter_rows: Mapping[str, Mapping[str, str]],
     parameter_records: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """A declaration gate, not a calibration result. Missing fields and missing decisions both block closure."""
+    """Evaluate computational consistency. Authority, preregistration and G1 require external documentary review."""
     require(set(parameter_rows) == set(E05_PARAMETER_IDS), "closure requires the complete parameter matrix")
     schema_errors: list[str] = []
     try:
@@ -3853,24 +3881,23 @@ def evaluate_section7_closure(
         state = record.get("effective_value_state")
         # A prospective, explicit candidate-design declaration can precede the empirical adoption decision.
         declared_states = {STATE_FIXED, STATE_EXCLUDED, STATE_DECIDED, "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE"}
-        declaration_mismatch = False
-        if state in {STATE_FIXED, STATE_EXCLUDED, STATE_DECIDED} and len(paths) == 1 and pid != "P01":
-            declaration_mismatch = record.get("effective_value") != at(paths[0])
-        if pid == "P23" and state == STATE_DECIDED:
-            declaration_mismatch = any(at(path) != "OPTION_NOT_APPLIED" for path in paths)
-        if state == "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE":
-            values = record.get("effective_value")
-            declaration_mismatch = not (
-                isinstance(values, Mapping) and set(values) == set(paths)
-                and all(values[path] == at(path) for path in paths)
-            )
-        if unresolved or declaration_mismatch or state not in declared_states or record.get("effective_value") is None:
+        values = _section7_declared_values(pid, record, paths)
+        mismatched = [path for path in paths if values is not None and values[path] != at(path)]
+        declaration_error = (
+            "DECLARATION_STATE_UNRESOLVED_OR_UNSUPPORTED" if state not in declared_states else
+            "DECLARATION_REPRESENTATION_INCOMPLETE_OR_UNSUPPORTED" if values is None else
+            "DECLARATION_PAYLOAD_MISMATCH" if mismatched else None
+        )
+        if unresolved or declaration_error or record.get("effective_value") is None:
             row = parameter_rows[pid]
             blockers.append({"parameter_id": pid, "status": row["status"], "candidate_design_space": row["candidate_design_space"],
-                             "unresolved_payload_fields": unresolved, "declaration_state": state})
+                             "unresolved_payload_fields": unresolved, "declaration_state": state,
+                             "declaration_error": declaration_error, "declaration_mismatch_fields": mismatched})
     unresolved_fields: list[str] = []
 
     def walk(value: Any, path: str) -> None:
+        if path in {f"tool_build.{tool}" for tool in E05_SECTION7_KEYS["tool_build"]} and value == "NOT_APPLICABLE":
+            return
         if isinstance(value, Mapping):
             for key, child in value.items():
                 walk(child, f"{path}.{key}" if path else key)
@@ -3904,17 +3931,19 @@ def evaluate_section7_closure(
         validate_section7_payload(payload)
     return {"state": "CLOSED" if closed else "OPEN", "blocking_parameters": blockers,
             "unresolved_payload_fields": unresolved_fields, "schema_errors": schema_errors,
-            "closure_dependency": "PRE_FREEZE_DOCUMENTARY_CANDIDATE_DESIGN_DECLARATION_E02_E03"}
+            "closure_dependency": "PRE_FREEZE_DOCUMENTARY_CANDIDATE_DESIGN_DECLARATION_E02_E03",
+            **E05_SECTION7_CLOSURE_QUALIFICATION}
 
 
 def evaluate_section7_candidate_set(
     candidates: Sequence[Mapping[str, Any]], parameter_rows: Mapping[str, Mapping[str, str]],
-    parameter_records: Mapping[str, Mapping[str, Any]], *, design_space_declaration: str | None = None,
+    *, design_space_declaration: str | None = None,
 ) -> dict[str, Any]:
-    """Completeness must be explicitly declared outside the payload, in addition to each candidate closing."""
-    closures = [evaluate_section7_closure(candidate["payload"], parameter_rows, parameter_records) for candidate in candidates]
+    """Check each payload against its attached declarations. Completeness and authority are supplied externally."""
+    closures = [evaluate_section7_closure(candidate["payload"], parameter_rows, candidate.get("parameter_records") or {}) for candidate in candidates]
     return {"state": "CLOSED" if candidates and design_space_declaration and design_space_declaration.strip() and all(c["state"] == "CLOSED" for c in closures) else "OPEN",
-            "design_space_declaration": design_space_declaration, "candidate_closures": closures}
+            "design_space_declaration": design_space_declaration, "candidate_closures": closures,
+            **E05_SECTION7_CLOSURE_QUALIFICATION}
 
 
 def section7_payload_bytes(payload: Mapping[str, Any]) -> bytes:
@@ -4065,7 +4094,8 @@ def build_e05_section7_preparation(
         # The observed historical default is evidence, while P29's future candidate design remains undeclared.
         payload["database_build"]["max_file_sz_effective"] = None
         payload["database_build"]["taxid_policy"] = "OMIT_FOR_SYNTHETIC_NO_TAXONOMIC_FILTER"
-        candidate_records = dict(parameters)
+        candidate_records = {pid: {"effective_value_state": record["effective_value_state"], "effective_value": record["effective_value"]}
+                             for pid, record in parameters.items()}
         for pid in ("P26", "P28"):
             values = {}
             for path in E05_SECTION7_PARAMETER_PATHS[pid]:
@@ -4073,10 +4103,11 @@ def build_e05_section7_preparation(
                 values[path] = payload[section][field]
             candidate_records[pid] = {"effective_value_state": "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE", "effective_value": values}
         validate_section7_payload(payload, allow_unresolved=True)
-        skeletons.append({"task": task, "task_flag_explicit": True, "payload": payload,
+        skeletons.append({"task": task, "task_flag_explicit": True, "payload": payload, "parameter_records": candidate_records,
                           "closure": evaluate_section7_closure(payload, rows, candidate_records)})
-    return {"state": "OPEN", "design_space_complete": False, "determinate_sections": sections, "candidate_skeletons": skeletons,
-            "candidate_set_closure": evaluate_section7_candidate_set(skeletons, rows, candidate_records),
+    return {"state": "OPEN", "design_space_complete": False, **E05_SECTION7_CLOSURE_QUALIFICATION,
+            "determinate_sections": sections, "candidate_skeletons": skeletons,
+            "candidate_set_closure": evaluate_section7_candidate_set(skeletons, rows),
             "provenance": {"u03_inspection_sha256": E05_U03_R3_SHA256, "historical_database_build": receipts,
                            "volume_evidence": volume_evidence, "geometry_derivations": derivations,
                            "geometry_cell_resource_links": [{"resource_id": r["resource_id"], "descriptor_sha256": derivations[r["resource_id"]]["descriptor_sha256"]} for r in manifest["resources"]],
