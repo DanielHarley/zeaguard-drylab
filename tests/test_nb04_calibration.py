@@ -2578,3 +2578,20 @@ def test_u04_s01_closed_explicitly_describes_computational_scope_and_external_au
         assert result["closure_scope"] == "COMPUTATIONAL_PREDICATES_ON_SUPPLIED_DECLARATIONS"
         assert result["authority_verification"] == "EXTERNAL_DOCUMENTARY_E02_E03_REQUIRED"
         assert result["g1_certification"] == "NOT_EVALUATED"
+
+@pytest.mark.parametrize("state", [cal.STATE_FIXED, cal.STATE_EXCLUDED, cal.STATE_DECIDED, "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE"])
+def test_u04_f01_declarations_preserve_canonical_value_types(state):
+    payload = _section7_test_payload()
+    rows, records = _section7_test_declarations(payload)
+    for pid, path, value in (("P28", "database_build.parse_seqids", 1),
+                             ("P27", "search_parameters.num_threads", True),
+                             ("P07", "search_parameters.gapopen", 5.0),
+                             ("P26", "execution_architecture.outfmt_fields", {"qseqid"})):
+        bad = json.loads(r.json_bytes(records))
+        bad[pid]["effective_value_state"] = state
+        bad[pid]["effective_value"][path] = value
+        result = cal.evaluate_section7_closure(payload, rows, bad)
+        assert result["state"] == "OPEN"
+        blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == pid)
+        assert path in blocker["declaration_mismatch_fields"]
+        assert blocker["declaration_error"] == "DECLARATION_PAYLOAD_MISMATCH"

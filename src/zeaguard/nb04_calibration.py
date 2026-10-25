@@ -3882,7 +3882,10 @@ def evaluate_section7_closure(
         # A prospective, explicit candidate-design declaration can precede the empirical adoption decision.
         declared_states = {STATE_FIXED, STATE_EXCLUDED, STATE_DECIDED, "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE"}
         values = _section7_declared_values(pid, record, paths)
-        mismatched = [path for path in paths if values is not None and values[path] != at(path)]
+        try:
+            mismatched = [path for path in paths if values is not None and json_bytes(values[path]) != json_bytes(at(path))]
+        except (TypeError, ValueError):
+            mismatched = list(paths)
         declaration_error = (
             "DECLARATION_STATE_UNRESOLVED_OR_UNSUPPORTED" if state not in declared_states else
             "DECLARATION_REPRESENTATION_INCOMPLETE_OR_UNSUPPORTED" if values is None else
