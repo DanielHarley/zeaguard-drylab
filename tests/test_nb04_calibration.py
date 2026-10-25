@@ -2173,3 +2173,263 @@ def test_e05_parser_and_mechanism_against_the_real_pinned_build_help():
         {"blastn": {"status": "OBSERVED"}, "blast_formatter": {"status": "OBSERVED"}}, helps)
     assert mechanism["selected_mechanism"] == "IDENTIFIED_BLAST_ASN1_ARCHIVE_WITH_VERIFIABLE_BLAST_FORMATTER_TABULAR_EXPORT"
     assert mechanism["available_not_adopted_specifiers"] == {"nident": True, "qcovhsp": True}
+
+# Section 7 tests use declared scalar inputs and simulated metadata, with no search-recovery information.
+def _section7_test_payload():
+    search = {name: "OPTION_NOT_APPLIED" for name in cal.E05_SECTION7_SEARCH_FIELDS}
+    search.update(task="blastn", word_size=11, evalue_reporting_limit=10.0, reward=2, penalty=-3,
+                  gapopen=5, gapextend=2, dust="no", soft_masking="false", lcase_masking="false",
+                  strand="both", max_target_seqs=100, num_threads=1)
+    return {
+        "schema_version": 1,
+        "tool_build": {name: {"tool_name": name, "tool_version": "TEST_ONLY", "package_build": "TEST_ONLY",
+                              "executable_sha256": "a" * 64} for name in cal.E05_SECTION7_KEYS["tool_build"]},
+        "search_parameters": search,
+        "database_build": {"dbtype": "nucl", "parse_seqids": True, "blastdb_version": 5,
+                           "max_file_sz_effective": 1000, "volume_strategy": "TEST_ONLY",
+                           "taxid_policy": "OMIT_FOR_SYNTHETIC_NO_TAXONOMIC_FILTER"},
+        "execution_architecture": {
+            "strategy": "TEST_ONLY", "canonical_record_order_rule": cal.E05_P30_RULE_TOKEN,
+            "qa_sharding_rule": "TEST_ONLY", "qa_shard_count": 2,
+            "outfmt_fields": list(cal.E05_OUTFMT_6_PRECEDENT + cal.E05_OUTFMT_6_ADDITIONS),
+            "authoritative_output_format": "11", "parser_contract_id": "SYNTHETIC_TEST_ONLY",
+            "parser_implementation_sha256": "b" * 64, "output_integrity_contract_id": "SYNTHETIC_TEST_ONLY"},
+        "technical_domain": {"modality": "LOCAL_ALIGNMENT_CANONICAL", "analysis_role": "CALIBRATION",
+            "resource_geometry_cells": [{"total_bases": 7, "record_count": 2, "descriptor_sha256": "c" * 64,
+                                         "database_volume_count": 1}],
+            "applicability_limitations": ["SYNTHETIC_SOFTWARE_TEST_ONLY"]}}
+
+
+def _section7_test_declarations(payload):
+    rows, records = {}, {}
+    for pid in cal.E05_PARAMETER_IDS:
+        rows[pid] = {"status": f"verbatim status {pid}", "candidate_design_space": f"verbatim space {pid}; unchanged"}
+        values = {}
+        for path in cal.E05_SECTION7_PARAMETER_PATHS[pid]:
+            section, field = path.split(".")
+            values[path] = payload[section][field]
+        records[pid] = {"effective_value_state": "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE", "effective_value": values}
+    return rows, records
+
+
+def test_section7_literal_schema_and_every_key_boundary():
+    payload = _section7_test_payload()
+    assert cal.E05_SECTION7_SEARCH_FIELDS == (
+        "task", "word_size", "evalue_reporting_limit", "reward", "penalty", "gapopen", "gapextend", "dust",
+        "soft_masking", "lcase_masking", "strand", "max_target_seqs", "max_hsps", "perc_identity", "qcov_hsp_perc",
+        "culling_limit", "best_hit_overhang", "best_hit_score_edge", "subject_besthit", "xdrop_ungap", "xdrop_gap",
+        "xdrop_gap_final", "window_size", "dbsize", "searchsp", "ungapped", "sum_stats", "num_threads")
+    cal.validate_section7_payload(payload)
+    paths = [()] + [(name,) for name in cal.E05_SECTION7_KEYS]
+    paths += [("tool_build", name) for name in payload["tool_build"]]
+    paths += [("technical_domain", "resource_geometry_cells", 0)]
+    for path in paths:
+        obj = payload
+        for part in path:
+            obj = obj[part]
+        for key in tuple(obj):
+            for rename in (False, True):
+                mutated = json.loads(r.json_bytes(payload))
+                target = mutated
+                for part in path:
+                    target = target[part]
+                value = target.pop(key)
+                if rename:
+                    target[key + "_renamed"] = value
+                with pytest.raises(r.ResourceContractError, match="keys differ"):
+                    cal.validate_section7_payload(mutated, allow_unresolved=True)
+        for forbidden in ("free_name", "administrative_id", "notes", "date", "local_path", "discovery_order", "results", "observed_metrics", "production_partition_plan"):
+            mutated = json.loads(r.json_bytes(payload))
+            target = mutated
+            for part in path:
+                target = target[part]
+            target[forbidden] = "forbidden envelope metadata"
+            with pytest.raises(r.ResourceContractError, match="keys differ"):
+                cal.validate_section7_payload(mutated, allow_unresolved=True)
+
+
+@pytest.mark.parametrize("section,field,value", [
+    ("search_parameters", "task", "megablast"),
+    ("search_parameters", "max_target_seqs", "OPTION_NOT_APPLIED"),
+    ("search_parameters", "word_size", True),
+    ("search_parameters", "word_size", "PENDING_CALIBRATION"),
+    ("search_parameters", "evalue_reporting_limit", float("nan")),
+    ("search_parameters", "evalue_reporting_limit", float("inf")),
+    ("execution_architecture", "outfmt_fields", [{"notes": "metadata"}]),
+    ("execution_architecture", "outfmt_fields", ["qseqid", "qseqid"]),
+    ("execution_architecture", "parser_contract_id", "/tmp/local-contract"),
+    ("execution_architecture", "qa_shard_count", 3),
+    ("database_build", "taxid_policy", "ARBITRARY_TAXID"),
+])
+def test_section7_value_shapes_reject_unresolved_and_nontechnical_values(section, field, value):
+    payload = _section7_test_payload()
+    payload[section][field] = value
+    with pytest.raises(r.ResourceContractError):
+        cal.validate_section7_payload(payload)
+
+
+def test_section7_serialization_hash_and_open_identity_barrier(monkeypatch):
+    payload = _section7_test_payload()
+    original = r.json_bytes
+    calls = []
+    monkeypatch.setattr(cal, "json_bytes", lambda obj: (calls.append(obj), original(obj))[1])
+    raw = cal.section7_payload_bytes(payload)
+    assert raw == original(payload) and raw.endswith(b"\n") and b"\r\n" not in raw
+    assert cal.section7_payload_sha256(payload) == hashlib.sha256(raw).hexdigest()
+    assert len(calls) == 2
+    payload["search_parameters"]["word_size"] = None
+    cal.validate_section7_payload(payload, allow_unresolved=True)
+    for operation in (cal.section7_payload_bytes, cal.section7_payload_sha256, lambda p: cal.order_section7_payloads({"draft": p})):
+        with pytest.raises(r.ResourceContractError):
+            operation(payload)
+
+
+def test_section7_full_hash_order_aliases_threads_build_and_collisions():
+    first = _section7_test_payload()
+    second = json.loads(r.json_bytes(first))
+    second["search_parameters"]["num_threads"] = 2
+    third = json.loads(r.json_bytes(first))
+    third["tool_build"]["blastn"]["package_build"] = "OTHER_TEST_BUILD"
+    # The entire prefix agrees. Alias order and input order deliberately oppose the digest suffix order.
+    hashes = {1: "a" * 63 + "f", 2: "a" * 63 + "0"}
+    ordered = cal.order_section7_payloads({"a": first, "z": second, "alias": json.loads(r.json_bytes(first))},
+        hash_function=lambda raw: hashes[json.loads(raw)["search_parameters"]["num_threads"]])
+    assert [entry["payload_sha256"] for entry in ordered] == [hashes[2], hashes[1]]
+    assert ordered[1]["aliases"] == ["a", "alias"]
+    real = cal.order_section7_payloads({"first": first, "threads": second, "build": third})
+    assert len(real) == 3 and [e["payload_sha256"] for e in real] == sorted(cal.section7_payload_sha256(p) for p in (first, second, third))
+    with pytest.raises(r.ResourceContractError, match="collision"):
+        cal.order_section7_payloads({"first": first, "threads": second}, hash_function=lambda raw: "0" * 64)
+
+
+def test_section7_closure_requires_declarations_and_every_required_field():
+    payload = _section7_test_payload()
+    rows, records = _section7_test_declarations(payload)
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "CLOSED"
+    for field in cal.E05_SECTION7_SEARCH_FIELDS:
+        pid = next(pid for pid, paths in cal.E05_SECTION7_PARAMETER_PATHS.items() if f"search_parameters.{field}" in paths)
+        for missing in (False, True):
+            draft = json.loads(r.json_bytes(payload))
+            if missing:
+                del draft["search_parameters"][field]
+            else:
+                draft["search_parameters"][field] = None
+            result = cal.evaluate_section7_closure(draft, rows, records)
+            assert result["state"] == "OPEN"
+            blocker = next(b for b in result["blocking_parameters"] if b["parameter_id"] == pid)
+            assert blocker["status"] == rows[pid]["status"]
+            assert blocker["candidate_design_space"] == rows[pid]["candidate_design_space"]
+    for pid in cal.E05_PARAMETER_IDS:
+        missing_record = dict(records)
+        del missing_record[pid]
+        assert pid in [b["parameter_id"] for b in cal.evaluate_section7_closure(payload, rows, missing_record)["blocking_parameters"]]
+    records["P26"]["effective_value_state"] = cal.STATE_HYPOTHESIS
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "OPEN"
+    rows, records = _section7_test_declarations(payload)
+    records["P13"] = {"effective_value_state": cal.STATE_PENDING, "effective_value": None}
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "OPEN"
+    rows, records = _section7_test_declarations(payload)
+    records["P13"]["effective_value"]["search_parameters.max_target_seqs"] += 1
+    assert cal.evaluate_section7_closure(payload, rows, records)["state"] == "OPEN"
+    for field in cal.E05_SECTION7_CELL_FIELDS:
+        malformed = json.loads(r.json_bytes(payload))
+        del malformed["technical_domain"]["resource_geometry_cells"][0][field]
+        malformed_rows, malformed_records = _section7_test_declarations(malformed)
+        result = cal.evaluate_section7_closure(malformed, malformed_rows, malformed_records)
+        assert result["state"] == "OPEN"
+        assert "P29" in [b["parameter_id"] for b in result["blocking_parameters"]]
+        assert f"technical_domain.resource_geometry_cells[0].{field}" in result["unresolved_payload_fields"]
+    rows, records = _section7_test_declarations(payload)
+    candidates = [{"payload": payload}]
+    assert cal.evaluate_section7_candidate_set(candidates, rows, records)["state"] == "OPEN"
+    assert cal.evaluate_section7_candidate_set([], rows, records, design_space_declaration="TEST_ONLY")["state"] == "OPEN"
+    assert cal.evaluate_section7_candidate_set(candidates, rows, records, design_space_declaration="TEST_ONLY")["state"] == "CLOSED"
+    payload["execution_architecture"]["parser_contract_id"] = None
+    assert cal.evaluate_section7_candidate_set(candidates, rows, records, design_space_declaration="TEST_ONLY")["state"] == "OPEN"
+
+
+def test_section7_volume_enumeration_cross_checks_metadata_without_queries(tmp_path):
+    prefix = tmp_path / "db" / "sequences"
+    for volume in ("sequences.00", "sequences.01"):
+        for suffix in (".nin", ".nhr", ".nsq"):
+            _put(prefix.with_name(volume + suffix), b"constructed metadata-test component")
+    resource = {"database_prefix": "db/sequences", "quality": {"record_count": 2, "total_bases": 7}}
+    stdout = f"Database: TEST\n2 sequences; 7 total bases\nBLASTDB Version: 5\nVolumes:\n{prefix}.00\n{prefix}.01\n"
+    calls = []
+    def runner(command, **kwargs):
+        assert command == ["SIMULATED", "-db", str(prefix), "-dbtype", "nucl", "-info"]
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+    result = cal.inspect_section7_database_volumes(tmp_path, resource, executable="SIMULATED", runner=runner)
+    assert result["database_volume_count"] == 2 and len(calls) == 1
+    for corrupted in (stdout.replace("sequences.01", "sequences.02"), stdout.replace("2 sequences", "3 sequences"), stdout.replace("BLASTDB Version: 5", "")):
+        with pytest.raises(r.ResourceContractError):
+            cal.inspect_section7_database_volumes(tmp_path, resource, runner=lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout=corrupted, stderr=""))
+    with pytest.raises(r.ResourceContractError, match="metadata failed"):
+        cal.inspect_section7_database_volumes(tmp_path, resource, runner=lambda *a, **k: subprocess.CompletedProcess(a[0], 1, stdout="", stderr="simulated failure"))
+    prefix.with_name("sequences.01.nhr").unlink()
+    with pytest.raises(r.ResourceContractError, match="components incomplete"):
+        cal.inspect_section7_database_volumes(tmp_path, resource, runner=lambda *a, **k: pytest.fail("engine must not be invoked"))
+
+
+def test_section7_preparation_integrates_authenticated_geometry_and_keeps_drafts_open(synthetic_e05_env, monkeypatch):
+    env = synthetic_e05_env
+    root = env["root"]
+    inspection = _e05_inspect(env)
+    path = _put(root / cal.E05_U03_R3_PATH, r.json_bytes(inspection))
+    monkeypatch.setattr(cal, "E05_U03_R3_SHA256", _sha256_raw(path.read_bytes()))
+    manifest = json.loads((root / r.MANIFEST).read_text())
+    resource = manifest["resources"][0]
+    receipt_path = (root / resource["fasta_path"]).with_name("database_build.json")
+    receipt = json.loads(receipt_path.read_text())
+    receipt["command"] = ["makeblastdb", "-dbtype", "nucl", "-parse_seqids", "-blastdb_version", "5", "-taxid", str(resource["taxid"])]
+    receipt["stdout"] = "Maximum file size: 3000000000B\n"
+    _put((root / resource["database_prefix"]).with_suffix(".nhr"), b"constructed header component")
+    r.write_json(receipt_path, receipt)
+    resource["artifacts_sha256"][receipt_path.relative_to(root).as_posix()] = _sha256_raw(receipt_path.read_bytes())
+    r.write_json(root / r.MANIFEST, manifest)
+    monkeypatch.setattr(cal, "REAL_CP1_MANIFEST_SHA256", _sha256_raw((root / r.MANIFEST).read_bytes()))
+    starts = ("O descritor delimita arquitetura", "Registrar ENVELOPE_GEOMETRY_ONLY", "Magnitude aritmética de escala", "Simplificação S05", "OBSERVATION. Os seis database_build.json", "E01 e E05 compararão", "O caminho de código de fixtures", "A arquitetura preferida é um banco")
+    plan = _put(root / cal.PLAN_V003_PATH, "\n\n".join(s + " SYNTHETIC TEST ONLY." for s in starts).encode())
+    monkeypatch.setattr(cal, "PLAN_V003_SHA256", _sha256_raw(plan.read_bytes()))
+    original_geometry = cal._e05_geometry_derivations
+    geometry_calls = []
+    def geometry(*args):
+        assert args[3] is True and args[4] == cal.EXPECTED_GEOMETRY_RECORD_SHA256
+        geometry_calls.append(args)
+        return original_geometry(*args)
+    monkeypatch.setattr(cal, "_e05_geometry_derivations", geometry)
+    original_open = Path.open
+    def guarded_open(path, *args, **kwargs):
+        assert path.name != "normalized.fasta", "U04 must not read FASTA"
+        return original_open(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", guarded_open)
+    def runner(command, **kwargs):
+        assert command[1:] == ["-db", str(root / resource["database_prefix"]), "-dbtype", "nucl", "-info"]
+        return subprocess.CompletedProcess(command, 0, stdout="Database: TEST\n2 sequences; 24 total bases\nBLASTDB Version: 5\nVolumes:\nsequences\n", stderr="")
+    result = cal.build_e05_section7_preparation(root, env["corpus_dirs"]["NB04_B5_INPUTS"],
+        accepted_geometry_record_sha256=cal.EXPECTED_GEOMETRY_RECORD_SHA256, runner=runner, which_resolver=env["fake_which"])
+    assert len(geometry_calls) == 1
+    assert result["state"] == "OPEN" and result["design_space_complete"] is False
+    assert result["candidate_set_closure"]["state"] == "OPEN"
+    assert result["determinate_sections"]["tool_build"]["dustmasker"]["tool_version"] == "1.0.0"
+    assert result["determinate_sections"]["database_build"]["max_file_sz_effective"] == 3000000000
+    assert result["determinate_sections"]["execution_architecture"]["outfmt_fields"] == list(cal.E05_OUTFMT_6_PRECEDENT + cal.E05_OUTFMT_6_ADDITIONS)
+    assert "low_complexity_overlap_fraction" in result["prospective_dependencies"]["derived_fields_E04_E06"]
+    evidence = result["provenance"]["historical_database_build"]["R1_RNA"]
+    assert evidence["max_file_sz_flag_passed_in_recorded_command"] is False
+    assert evidence["max_file_sz_origin"] == "ENGINE_DEFAULT_REPORTED_IN_RECEIPT_STDOUT"
+    assert [s["task"] for s in result["candidate_skeletons"]] == ["blastn", "blastn-short", "dc-megablast"]
+    before = r.json_bytes(inspection["c_parameter_matrix_inspection"]["parameters"])
+    for skeleton in result["candidate_skeletons"]:
+        assert skeleton["task_flag_explicit"] is True and skeleton["payload"]["search_parameters"]["task"] == skeleton["task"]
+        assert skeleton["closure"]["state"] == "OPEN" and "payload_sha256" not in skeleton
+        assert skeleton["payload"]["database_build"]["max_file_sz_effective"] is None
+        assert skeleton["payload"]["database_build"]["taxid_policy"] == "OMIT_FOR_SYNTHETIC_NO_TAXONOMIC_FILTER"
+        blocked = {b["parameter_id"] for b in skeleton["closure"]["blocking_parameters"]}
+        assert {"P02", "P03", "P04", "P07", "P08", "P13", "P14", "P27", "P29", "P31"} <= blocked
+        assert skeleton["payload"]["execution_architecture"]["parser_contract_id"] is None
+    assert before == r.json_bytes(inspection["c_parameter_matrix_inspection"]["parameters"])
+    with pytest.raises(r.ResourceContractError, match="identity differs"):
+        monkeypatch.setattr(cal, "E05_U03_R3_SHA256", "0" * 64)
+        cal.build_e05_section7_preparation(root, env["corpus_dirs"]["NB04_B5_INPUTS"], accepted_geometry_record_sha256=cal.EXPECTED_GEOMETRY_RECORD_SHA256)

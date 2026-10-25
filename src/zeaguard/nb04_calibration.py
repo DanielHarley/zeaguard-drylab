@@ -3686,3 +3686,403 @@ def write_e05_configuration_inspection(
     payload = dict(inspection_payload)
     write_json(target, payload)
     return target, hashlib.sha256(json_bytes(payload)).hexdigest()
+
+# Section 7 is a closed technical payload. Administrative links and provenance stay in its envelope.
+E05_SECTION7_SEARCH_FIELDS = (
+    "task", "word_size", "evalue_reporting_limit", "reward", "penalty", "gapopen", "gapextend", "dust",
+    "soft_masking", "lcase_masking", "strand", "max_target_seqs", "max_hsps", "perc_identity", "qcov_hsp_perc",
+    "culling_limit", "best_hit_overhang", "best_hit_score_edge", "subject_besthit", "xdrop_ungap", "xdrop_gap",
+    "xdrop_gap_final", "window_size", "dbsize", "searchsp", "ungapped", "sum_stats", "num_threads",
+)
+E05_SECTION7_KEYS = {
+    "tool_build": ("blastn", "makeblastdb", "blastdbcmd", "blast_formatter", "dustmasker"),
+    "search_parameters": E05_SECTION7_SEARCH_FIELDS,
+    "database_build": ("dbtype", "parse_seqids", "blastdb_version", "max_file_sz_effective", "volume_strategy", "taxid_policy"),
+    "execution_architecture": (
+        "strategy", "canonical_record_order_rule", "qa_sharding_rule", "qa_shard_count", "outfmt_fields",
+        "authoritative_output_format", "parser_contract_id", "parser_implementation_sha256", "output_integrity_contract_id",
+    ),
+    "technical_domain": ("modality", "analysis_role", "resource_geometry_cells", "applicability_limitations"),
+}
+E05_SECTION7_TOOL_FIELDS = ("tool_name", "tool_version", "package_build", "executable_sha256")
+E05_SECTION7_CELL_FIELDS = ("total_bases", "record_count", "descriptor_sha256", "database_volume_count")
+E05_SECTION7_PARAMETER_PATHS = {
+    pid: tuple(f"search_parameters.{flag[1:] if flag != '-evalue' else 'evalue_reporting_limit'}" for flag in flags)
+    for pid, flags in E05_PARAMETER_FLAGS.items() if pid not in ("P26", "P28", "P29")
+}
+E05_SECTION7_PARAMETER_PATHS.update({
+    "P01": ("technical_domain.modality",),
+    "P26": ("execution_architecture.outfmt_fields", "execution_architecture.authoritative_output_format"),
+    "P28": ("database_build.dbtype", "database_build.parse_seqids", "database_build.blastdb_version", "database_build.taxid_policy"),
+    "P29": ("database_build.max_file_sz_effective", "database_build.volume_strategy", "technical_domain.resource_geometry_cells"),
+    "P30": ("execution_architecture.canonical_record_order_rule",),
+    "P31": ("execution_architecture.parser_contract_id", "execution_architecture.parser_implementation_sha256",
+            "execution_architecture.output_integrity_contract_id"),
+})
+E05_U03_R3_PATH = f"{PRESERVATION_INVENTORY_DIR}/e05_configuration_inspection_r3.json"
+E05_U03_R3_SHA256 = "5fc259de14b51829f60cdf3ee8f21f0c9212e28c0373fb45efea8c658f8dd843"
+E05_SECTION7_TASKS = ("blastn", "blastn-short", "dc-megablast")
+
+
+def _section7_keys(value: Any, expected: Sequence[str], path: str) -> None:
+    require(isinstance(value, Mapping), f"{path}: expected object")
+    require(all(isinstance(key, str) for key in value), f"{path}: object keys must be strings")
+    require(set(value) == set(expected), f"{path}: closed schema keys differ: missing={sorted(set(expected)-set(value))}, extra={sorted(set(value)-set(expected))}")
+
+
+def _section7_unresolved(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value in {"TODO", "TBD", "UNKNOWN", "NOT_MEASURED", "NAO_MEDIDO", "NAO MEDIDO"} or not value.strip() or value.startswith(("PENDING", "UNRESOLVED", "RECORDED_NOT_DECIDED", "NOT_ESTABLISHED", "NOT_DECLARED", "NOT_MATERIALIZED"))
+    if isinstance(value, Mapping):
+        return not value or any(_section7_unresolved(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return not value or any(_section7_unresolved(v) for v in value)
+    return False
+
+
+def validate_section7_payload(payload: Mapping[str, Any], *, allow_unresolved: bool = False) -> None:
+    """Validate exact keys and value kinds. Open drafts may contain None, never metadata or extra keys."""
+    _section7_keys(payload, ("schema_version", *E05_SECTION7_KEYS), "payload")
+    require(type(payload["schema_version"]) is int and payload["schema_version"] == 1, "schema_version: expected 1")
+    for section, keys in E05_SECTION7_KEYS.items():
+        _section7_keys(payload[section], keys, section)
+
+    def check(value: Any, kind: str, path: str) -> None:
+        if allow_unresolved and value is None:
+            return
+        require(not _section7_unresolved(value), f"{path}: unresolved required value")
+        if kind == "integer":
+            valid = type(value) is int and value >= 0
+        elif kind == "number":
+            valid = type(value) in (int, float) and float('-inf') < value < float('inf')
+        elif kind == "boolean":
+            valid = type(value) is bool
+        elif kind == "sha256":
+            valid = isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+        elif kind == "token":
+            valid = isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:#+ -]+", value) is not None
+        else:
+            valid = isinstance(value, str) and bool(value.strip())
+        require(valid, f"{path}: invalid {kind}")
+
+    for tool, entry in payload["tool_build"].items():
+        if entry == "NOT_APPLICABLE":
+            continue
+        _section7_keys(entry, E05_SECTION7_TOOL_FIELDS, f"tool_build.{tool}")
+        for field in E05_SECTION7_TOOL_FIELDS:
+            check(entry[field], "sha256" if field == "executable_sha256" else "string", f"tool_build.{tool}.{field}")
+        require(entry["tool_name"] == tool, f"tool_build.{tool}: tool_name differs")
+
+    integer_fields = {"word_size", "reward", "penalty", "gapopen", "gapextend", "max_target_seqs", "max_hsps", "culling_limit", "window_size", "dbsize", "searchsp", "num_threads"}
+    no_option_state = {"task", "word_size", "evalue_reporting_limit", "reward", "penalty", "gapopen", "gapextend", "max_target_seqs", "num_threads"}
+    for field, value in payload["search_parameters"].items():
+        path = f"search_parameters.{field}"
+        if value == "OPTION_NOT_APPLIED":
+            require(field not in no_option_state, f"{path}: omission would select an effective engine option")
+            continue
+        if field == "task":
+            require(value in E05_SECTION7_TASKS or (allow_unresolved and value is None), f"{path}: task must be explicit and admitted")
+        elif field in ("soft_masking", "lcase_masking", "subject_besthit", "ungapped", "sum_stats"):
+            require(value in ("true", "false") or (allow_unresolved and value is None), f"{path}: expected explicit boolean flag value")
+        elif field == "strand":
+            require(value in ("both", "plus", "minus") or (allow_unresolved and value is None), f"{path}: invalid strand")
+        elif field == "dust":
+            require(value in ("yes", "no") or (isinstance(value, str) and re.fullmatch(r"\d+ \d+ \d+", value)) or (allow_unresolved and value is None), f"{path}: invalid DUST value")
+        elif field == "penalty":
+            require(type(value) is int or (allow_unresolved and value is None), f"{path}: invalid integer")
+        else:
+            check(value, "integer" if field in integer_fields else "number", path)
+
+    db = payload["database_build"]
+    for field in E05_SECTION7_KEYS["database_build"]:
+        check(db[field], "boolean" if field == "parse_seqids" else "integer" if field in ("blastdb_version", "max_file_sz_effective") else "token", f"database_build.{field}")
+    if db["taxid_policy"] is not None:
+        require(db["taxid_policy"] in ("SOURCE_SPECIES_METADATA", "OMIT_FOR_SYNTHETIC_NO_TAXONOMIC_FILTER"), "database_build.taxid_policy: invalid policy")
+    arch = payload["execution_architecture"]
+    for field in E05_SECTION7_KEYS["execution_architecture"]:
+        if field == "outfmt_fields":
+            value = arch[field]
+            require((allow_unresolved and value is None) or (isinstance(value, list) and bool(value) and all(isinstance(v, str) and re.fullmatch(r"[a-z0-9_]+", v) for v in value) and len(value) == len(set(value))), "execution_architecture.outfmt_fields: expected distinct native specifiers")
+        else:
+            check(arch[field], "integer" if field == "qa_shard_count" else "sha256" if field == "parser_implementation_sha256" else "token", f"execution_architecture.{field}")
+    require(arch["qa_shard_count"] == 2 or (allow_unresolved and arch["qa_shard_count"] is None), "execution_architecture.qa_shard_count: section 7 requires 2")
+    domain = payload["technical_domain"]
+    check(domain["modality"], "token", "technical_domain.modality")
+    check(domain["analysis_role"], "token", "technical_domain.analysis_role")
+    for field in ("resource_geometry_cells", "applicability_limitations"):
+        require(isinstance(domain[field], list) and bool(domain[field]), f"technical_domain.{field}: expected nonempty array")
+    for index, cell in enumerate(domain["resource_geometry_cells"]):
+        path = f"technical_domain.resource_geometry_cells[{index}]"
+        _section7_keys(cell, E05_SECTION7_CELL_FIELDS, path)
+        for field in E05_SECTION7_CELL_FIELDS:
+            check(cell[field], "sha256" if field == "descriptor_sha256" else "integer", f"{path}.{field}")
+    for value in domain["applicability_limitations"]:
+        check(value, "string", "technical_domain.applicability_limitations")
+
+
+def evaluate_section7_closure(
+    payload: Mapping[str, Any], parameter_rows: Mapping[str, Mapping[str, str]],
+    parameter_records: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """A declaration gate, not a calibration result. Missing fields and missing decisions both block closure."""
+    require(set(parameter_rows) == set(E05_PARAMETER_IDS), "closure requires the complete parameter matrix")
+    schema_errors: list[str] = []
+    try:
+        validate_section7_payload(payload, allow_unresolved=True)
+    except ResourceContractError as exc:
+        schema_errors.append(str(exc))
+
+    def at(path: str) -> Any:
+        value: Any = payload
+        for part in path.split("."):
+            value = value.get(part) if isinstance(value, Mapping) else None
+        return value
+
+    blockers = []
+    for pid in E05_PARAMETER_IDS:
+        record = parameter_records.get(pid, {})
+        paths = E05_SECTION7_PARAMETER_PATHS[pid]
+        unresolved = [path for path in paths if _section7_unresolved(at(path))]
+        if pid == "P29":
+            cells = at("technical_domain.resource_geometry_cells")
+            if isinstance(cells, list) and any(not isinstance(cell, Mapping) or any(_section7_unresolved(cell.get(field)) for field in E05_SECTION7_CELL_FIELDS) for cell in cells):
+                if "technical_domain.resource_geometry_cells" not in unresolved:
+                    unresolved.append("technical_domain.resource_geometry_cells")
+        state = record.get("effective_value_state")
+        # A prospective, explicit candidate-design declaration can precede the empirical adoption decision.
+        declared_states = {STATE_FIXED, STATE_EXCLUDED, STATE_DECIDED, "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE"}
+        declaration_mismatch = False
+        if state in {STATE_FIXED, STATE_EXCLUDED, STATE_DECIDED} and len(paths) == 1 and pid != "P01":
+            declaration_mismatch = record.get("effective_value") != at(paths[0])
+        if pid == "P23" and state == STATE_DECIDED:
+            declaration_mismatch = any(at(path) != "OPTION_NOT_APPLIED" for path in paths)
+        if state == "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE":
+            values = record.get("effective_value")
+            declaration_mismatch = not (
+                isinstance(values, Mapping) and set(values) == set(paths)
+                and all(values[path] == at(path) for path in paths)
+            )
+        if unresolved or declaration_mismatch or state not in declared_states or record.get("effective_value") is None:
+            row = parameter_rows[pid]
+            blockers.append({"parameter_id": pid, "status": row["status"], "candidate_design_space": row["candidate_design_space"],
+                             "unresolved_payload_fields": unresolved, "declaration_state": state})
+    unresolved_fields: list[str] = []
+
+    def walk(value: Any, path: str) -> None:
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                walk(child, f"{path}.{key}" if path else key)
+        elif isinstance(value, list):
+            for i, child in enumerate(value):
+                walk(child, f"{path}[{i}]")
+            if not value:
+                unresolved_fields.append(path)
+        elif _section7_unresolved(value):
+            unresolved_fields.append(path)
+    walk(payload, "")
+    for section, keys in E05_SECTION7_KEYS.items():
+        value = payload.get(section, {}) if isinstance(payload, Mapping) else {}
+        for field in keys:
+            if not isinstance(value, Mapping) or field not in value:
+                unresolved_fields.append(f"{section}.{field}")
+    for tool in E05_SECTION7_KEYS["tool_build"]:
+        entry = at(f"tool_build.{tool}")
+        if entry != "NOT_APPLICABLE":
+            for field in E05_SECTION7_TOOL_FIELDS:
+                if not isinstance(entry, Mapping) or field not in entry:
+                    unresolved_fields.append(f"tool_build.{tool}.{field}")
+    cells = at("technical_domain.resource_geometry_cells")
+    if isinstance(cells, list):
+        for index, cell in enumerate(cells):
+            for field in E05_SECTION7_CELL_FIELDS:
+                if not isinstance(cell, Mapping) or field not in cell:
+                    unresolved_fields.append(f"technical_domain.resource_geometry_cells[{index}].{field}")
+    closed = not (blockers or unresolved_fields or schema_errors)
+    if closed:
+        validate_section7_payload(payload)
+    return {"state": "CLOSED" if closed else "OPEN", "blocking_parameters": blockers,
+            "unresolved_payload_fields": unresolved_fields, "schema_errors": schema_errors,
+            "closure_dependency": "PRE_FREEZE_DOCUMENTARY_CANDIDATE_DESIGN_DECLARATION_E02_E03"}
+
+
+def evaluate_section7_candidate_set(
+    candidates: Sequence[Mapping[str, Any]], parameter_rows: Mapping[str, Mapping[str, str]],
+    parameter_records: Mapping[str, Mapping[str, Any]], *, design_space_declaration: str | None = None,
+) -> dict[str, Any]:
+    """Completeness must be explicitly declared outside the payload, in addition to each candidate closing."""
+    closures = [evaluate_section7_closure(candidate["payload"], parameter_rows, parameter_records) for candidate in candidates]
+    return {"state": "CLOSED" if candidates and design_space_declaration and design_space_declaration.strip() and all(c["state"] == "CLOSED" for c in closures) else "OPEN",
+            "design_space_declaration": design_space_declaration, "candidate_closures": closures}
+
+
+def section7_payload_bytes(payload: Mapping[str, Any]) -> bytes:
+    validate_section7_payload(payload)
+    return json_bytes(payload)
+
+
+def section7_payload_sha256(payload: Mapping[str, Any]) -> str:
+    return hashlib.sha256(section7_payload_bytes(payload)).hexdigest()
+
+
+def order_section7_payloads(
+    payloads_by_alias: Mapping[str, Mapping[str, Any]], *,
+    hash_function: Callable[[bytes], str] = lambda data: hashlib.sha256(data).hexdigest(),
+) -> list[dict[str, Any]]:
+    """Only resolved payloads enter identity ordering. Same hash with unequal bytes always blocks."""
+    by_hash: dict[str, tuple[bytes, dict[str, Any]]] = {}
+    for alias, payload in payloads_by_alias.items():
+        require(isinstance(alias, str) and bool(alias.strip()), "alias must be documented in the envelope")
+        raw = section7_payload_bytes(payload)
+        sha = hash_function(raw)
+        require(isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha) is not None, "identity hash must be a full SHA256-shaped digest")
+        if sha in by_hash:
+            require(by_hash[sha][0] == raw, f"payload identity collision: hash equal with distinct bytes ({sha})")
+            by_hash[sha][1]["aliases"].append(alias)
+        else:
+            by_hash[sha] = (raw, {"payload": json.loads(raw), "payload_sha256": sha, "aliases": [alias]})
+    result = [by_hash[sha][1] for sha in sorted(by_hash)]
+    for entry in result:
+        entry["aliases"].sort()
+    return result
+
+
+def inspect_section7_database_volumes(
+    root: Path, resource: Mapping[str, Any], *, executable: str = "blastdbcmd",
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> dict[str, Any]:
+    """Enumerate index-volume triplets and cross-check read-only blastdbcmd -info metadata; never query."""
+    prefix = relative_path(root, resource["database_prefix"])
+    names_by_suffix = {
+        suffix: {p.name[:-len(suffix)] for p in prefix.parent.glob(prefix.name + "*" + suffix) if p.is_file()}
+        for suffix in (".nin", ".nhr", ".nsq")
+    }
+    volumes = names_by_suffix[".nin"]
+    require(volumes and all(names == volumes for names in names_by_suffix.values()), "database volume components incomplete")
+    require(all(re.fullmatch(re.escape(prefix.name) + r"(?:\.\d+)?", name) for name in volumes), "unexpected database volume basename")
+    require(not (prefix.name in volumes and len(volumes) > 1), "mixed single and numbered volume basenames")
+    command = [executable, "-db", str(prefix), "-dbtype", "nucl", "-info"]
+    done = runner(command, capture_output=True, text=True, check=False, timeout=30)
+    require(done.returncode == 0, f"blastdbcmd metadata failed: {done.stderr}")
+    match = re.search(r"([\d,]+) sequences;\s*([\d,]+) total bases", done.stdout)
+    version = re.search(r"BLASTDB Version:\s*(\d+)", done.stdout)
+    require(match is not None and version is not None and "Volumes:" in done.stdout, "incomplete blastdbcmd metadata")
+    metadata_volumes = [Path(line.strip()).name for line in done.stdout.split("Volumes:", 1)[1].splitlines() if line.strip()]
+    require(len(metadata_volumes) == len(set(metadata_volumes)) and set(metadata_volumes) == volumes, "enumeration and blastdbcmd volume metadata differ")
+    count, bases = (int(value.replace(",", "")) for value in match.groups())
+    require(count == resource["quality"]["record_count"] and bases == resource["quality"]["total_bases"], "blastdbcmd resource scalars differ from authenticated geometry")
+    return {"database_volume_count": len(volumes), "blastdb_version": int(version.group(1)),
+            "method": "INDEX_VOLUME_TRIPLET_ENUMERATION_CROSS_CHECKED_WITH_BLASTDBCMD_INFO",
+            "volume_basenames": sorted(volumes), "command": command, "metadata_stdout": done.stdout, "metadata_stderr": done.stderr}
+
+
+def build_e05_section7_preparation(
+    root: Path, corpus_directory: Path, *, accepted_geometry_record_sha256: Mapping[str, str],
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    which_resolver: Callable[[str], str | None] = _default_tool_which,
+) -> dict[str, Any]:
+    """Assemble open drafts from U03 and authenticated E03 records without reading or deriving FASTA geometry."""
+    root = root.resolve()
+    inspection_path = relative_path(root, E05_U03_R3_PATH)
+    require(digest(inspection_path) == E05_U03_R3_SHA256, "U03 r3 inspection identity differs")
+    inspection = json.loads(inspection_path.read_text("utf-8"))
+    manifest_path = relative_path(root, MANIFEST)
+    require(digest(manifest_path) == REAL_CP1_MANIFEST_SHA256, "authoritative CP1 manifest identity differs")
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    matrix_path = corpus_directory / "08_b4_calibration_parameter_matrix_v2_1.tsv"
+    require(digest(matrix_path) == E05_NORMATIVE_DOCUMENTS_SHA256[matrix_path.name], "parameter matrix identity differs")
+    rows = _read_matrix_tsv(matrix_path.read_text("utf-8"), E05_PARAMETER_MATRIX_HEADER, matrix_path.name, "parameter_id")
+    parameters = inspection["c_parameter_matrix_inspection"]["parameters"]
+    validate_e05_parameter_records(parameters)
+    require(set(rows) == set(E05_PARAMETER_IDS), "complete matrix is required")
+    for pid, row in rows.items():
+        require(parameters[pid]["status"] == row["status"] and parameters[pid]["candidate_design_space_in_matrix"] == row["candidate_design_space"], f"{pid}: U03 and matrix differ")
+    tools = {name: {field: inspection["a_observed_tool_builds"]["tools"][name][field] for field in E05_SECTION7_TOOL_FIELDS}
+             for name in E05_SECTION7_KEYS["tool_build"]}
+    executable = which_resolver("blastdbcmd")
+    require(executable is not None and digest(Path(executable)) == tools["blastdbcmd"]["executable_sha256"], "blastdbcmd executable differs from U03")
+    for resource in manifest["resources"]:
+        require(digest(relative_path(root, resource["identifier_map_path"])) == resource["quality"]["identifier_map_sha256"], "identifier map identity differs")
+    derivations = _e05_geometry_derivations(root, manifest, DEFAULT_GEOMETRY_CAMPAIGN_ID, True, accepted_geometry_record_sha256)
+    receipts, volume_evidence, cells = {}, {}, []
+    db_options = []
+    for resource in sorted(manifest["resources"], key=lambda r: r["resource_id"]):
+        rid = resource["resource_id"]
+        receipt_path = relative_path(root, resource["fasta_path"]).with_name("database_build.json")
+        rel = receipt_path.relative_to(root).as_posix()
+        require(digest(receipt_path) == resource["artifacts_sha256"][rel], "database receipt identity differs")
+        receipt = json.loads(receipt_path.read_text("utf-8"))
+        command = receipt["command"]
+        def option(flag: str) -> str:
+            require(command.count(flag) == 1 and command.index(flag) + 1 < len(command), f"receipt requires explicit {flag}")
+            return command[command.index(flag) + 1]
+        size = _receipt_max_file_size(receipt)
+        require(not size["max_file_sz_flag_passed_in_recorded_command"] and size["stdout_reported_maximum_file_size_bytes"] is not None, "historical default max_file_sz provenance differs")
+        require("-parse_seqids" in command and "-taxid" in command, "historical identifier or source-taxid policy differs")
+        require(option("-taxid") == str(resource["taxid"]), "receipt taxid differs from source species metadata")
+        probe = inspect_section7_database_volumes(root, resource, executable=executable, runner=runner)
+        require(probe["blastdb_version"] == int(option("-blastdb_version")), "database version and receipt differ")
+        for filename, expected in receipt["index_sha256"].items():
+            require(digest(relative_path(root, resource["database_prefix"]).parent / filename) == expected, "database index identity differs")
+        receipts[rid] = {**size, "max_file_sz_origin": "ENGINE_DEFAULT_REPORTED_IN_RECEIPT_STDOUT",
+                         "source_taxid": resource["taxid"], "receipt_sha256": digest(receipt_path)}
+        volume_evidence[rid] = probe
+        db_options.append((option("-dbtype"), True, probe["blastdb_version"], size["stdout_reported_maximum_file_size_bytes"]))
+        geometry = derivations[rid]
+        cells.append({"total_bases": geometry["total_bases"], "record_count": geometry["canonical_record_order_check"]["ordered_record_id_count"],
+                      "descriptor_sha256": geometry["descriptor_sha256"], "database_volume_count": probe["database_volume_count"]})
+    require(len(set(db_options)) == 1, "historical database build options differ across resources")
+    dbtype, parse_seqids, version, historical_size = db_options[0]
+    require(digest(relative_path(root, PLAN_V003_PATH)) == PLAN_V003_SHA256, "plan identity differs")
+    plan_text = relative_path(root, PLAN_V003_PATH).read_text("utf-8")
+    # Copy exact applicability paragraphs from the approved plan.
+    limitations = []
+    for start in ("O descritor delimita arquitetura", "Registrar ENVELOPE_GEOMETRY_ONLY", "Magnitude aritmética de escala", "Simplificação S05", "OBSERVATION. Os seis database_build.json", "E01 e E05 compararão", "O caminho de código de fixtures", "A arquitetura preferida é um banco"):
+        matches = [p for p in plan_text.split("\n\n") if p.startswith(start)]
+        require(len(matches) == 1, f"required limitation paragraph missing: {start}")
+        limitations.append(matches[0])
+    database_build = {"dbtype": dbtype, "parse_seqids": parse_seqids, "blastdb_version": version,
+                      "max_file_sz_effective": historical_size, "volume_strategy": "ENGINE_MANAGED_VOLUMES",
+                      "taxid_policy": "SOURCE_SPECIES_METADATA"}
+    architecture = {"strategy": "INTEGRAL_REFERENCE_CALIBRATION", "canonical_record_order_rule": parameters["P30"]["effective_value"],
+                    "qa_sharding_rule": "TWO_SHARDS_CANONICAL_ORDER_GREEDY_LEAST_CURRENT_BASE_SUM_WHOLE_RECORDS_TIES_FIRST", "qa_shard_count": 2,
+                    "outfmt_fields": list(inspection["d_output_integrity_mechanism"]["adopted_tabular_specifiers"]),
+                    "authoritative_output_format": "11", "parser_contract_id": None, "parser_implementation_sha256": None,
+                    "output_integrity_contract_id": None}
+    domain = {"modality": "LOCAL_ALIGNMENT_CANONICAL", "analysis_role": "CALIBRATION",
+              "resource_geometry_cells": sorted(cells, key=json_bytes), "applicability_limitations": limitations}
+    sections = {"tool_build": tools, "database_build": database_build, "execution_architecture": architecture, "technical_domain": domain}
+    search = dict.fromkeys(E05_SECTION7_SEARCH_FIELDS)
+    for pid in ("P09", "P11", "P12", "P15", "P16", "P17", "P18", "P19", "P20", "P24"):
+        field = E05_SECTION7_PARAMETER_PATHS[pid][0].split(".")[1]
+        search[field] = parameters[pid]["effective_value"]
+    search["dbsize"] = search["searchsp"] = "OPTION_NOT_APPLIED"
+    skeletons = []
+    for task in E05_SECTION7_TASKS:
+        payload = json.loads(json_bytes({"schema_version": 1, **sections, "search_parameters": search}))
+        payload["search_parameters"]["task"] = task
+        # The observed historical default is evidence, while P29's future candidate design remains undeclared.
+        payload["database_build"]["max_file_sz_effective"] = None
+        payload["database_build"]["taxid_policy"] = "OMIT_FOR_SYNTHETIC_NO_TAXONOMIC_FILTER"
+        candidate_records = dict(parameters)
+        for pid in ("P26", "P28"):
+            values = {}
+            for path in E05_SECTION7_PARAMETER_PATHS[pid]:
+                section, field = path.split(".")
+                values[path] = payload[section][field]
+            candidate_records[pid] = {"effective_value_state": "CANDIDATE_DESIGN_DECLARED_PRE_FREEZE", "effective_value": values}
+        validate_section7_payload(payload, allow_unresolved=True)
+        skeletons.append({"task": task, "task_flag_explicit": True, "payload": payload,
+                          "closure": evaluate_section7_closure(payload, rows, candidate_records)})
+    return {"state": "OPEN", "design_space_complete": False, "determinate_sections": sections, "candidate_skeletons": skeletons,
+            "candidate_set_closure": evaluate_section7_candidate_set(skeletons, rows, candidate_records),
+            "provenance": {"u03_inspection_sha256": E05_U03_R3_SHA256, "historical_database_build": receipts,
+                           "volume_evidence": volume_evidence, "geometry_derivations": derivations,
+                           "geometry_cell_resource_links": [{"resource_id": r["resource_id"], "descriptor_sha256": derivations[r["resource_id"]]["descriptor_sha256"]} for r in manifest["resources"]],
+                           "production_partition_plan": "POST_CALIBRATION_RESOURCE_SCOPED"},
+            "prospective_dependencies": {"candidate_design": "PRE_FREEZE_DOCUMENTARY_DECLARATIONS_E02_E03",
+                "parser_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED", "parser_implementation_sha256": "IMPLEMENTATION_NOT_ESTABLISHED",
+                "output_integrity_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED",
+                "derived_fields_E04_E06": ["low_complexity_overlap_fraction", "match_strand", "subject_coordinate_system", "transcript_strand", "guide_pairing_interpretation", "covered_nt", "best_local_identity", "longest_exact_match_in_reported_hsps", "n_hsps", "n_subject_records", "n_resolved_loci"],
+                "output_integrity_conditions": inspection["d_output_integrity_mechanism"]["export_path_default_cap_observation"]["conditions_to_verify"]}}
