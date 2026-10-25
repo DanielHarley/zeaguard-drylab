@@ -4126,6 +4126,7 @@ def build_e05_section7_preparation(
                            "production_partition_plan": "POST_CALIBRATION_RESOURCE_SCOPED"},
             "qa_i_parser_precondition": build_u05_parser_precondition(qa_i),
             "prospective_dependencies": {"candidate_design": "PRE_FREEZE_DOCUMENTARY_DECLARATIONS_E02_E03",
+                "producer_lexical_format": "APPLICABLE_PINNED_BUILD_FORMAT_EVIDENCE_BEFORE_CAMPAIGN_USE",
                 "parser_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED",
                 "output_integrity_contract_id": "NORMATIVE_BINDING_NOT_ESTABLISHED",
                 "derived_fields_E04_E06": ["low_complexity_overlap_fraction", "match_strand", "subject_coordinate_system", "transcript_strand", "guide_pairing_interpretation", "covered_nt", "best_local_identity", "longest_exact_match_in_reported_hsps", "n_hsps", "n_subject_records", "n_resolved_loci"],
@@ -4152,6 +4153,7 @@ def parse_nb04_btop(btop: str) -> tuple[int | str, ...]:
             tokens.append(int(token))
         else:
             require(token != "--", "BTOP double-gap pair")
+            require(token[0] != token[1], "BTOP identical letters must be represented by an identity run")
             require(all(char in DNA or char == "-" for char in token), "BTOP pair outside nucleotide alphabet")
             tokens.append(token)
         position = match.end()
@@ -4163,6 +4165,7 @@ def parse_nb04_hsp_table(table: bytes | str, *, expected_row_count: int | None =
 
     Input uses ASCII and LF exclusively, including the last nonempty record terminator. Read files as bytes to retain
     newline anomalies. No blank or comment record is skipped. Decimal fields retain exact Decimal values.
+    Numeric fields accept surrounding ASCII spaces only, preserving every original lexeme in raw_numeric_fields.
     A matching supplied count establishes count agreement, while execution integrity and witness authority remain external.
     """
     require(isinstance(table, (bytes, str)), "HSP table must be bytes or text")
@@ -4182,7 +4185,11 @@ def parse_nb04_hsp_table(table: bytes | str, *, expected_row_count: int | None =
         cells = line.split("\t")
         require(len(cells) == len(U05_HSP_FIELDS), f"HSP line {number}: field count differs from the adopted schema")
         row: dict[str, Any] = {}
+        raw_numeric_fields: dict[str, str] = {}
         for field, cell in zip(U05_HSP_FIELDS, cells, strict=True):
+            if field not in ("qseqid", "sseqid", "sstrand", "btop"):
+                raw_numeric_fields[field] = cell
+                cell = cell.strip(" ")
             prefix = f"HSP line {number} field {field}"
             if field in ("qseqid", "sseqid"):
                 require(bool(cell) and all(33 <= ord(char) <= 126 for char in cell), f"{prefix}: invalid identifier")
@@ -4191,7 +4198,7 @@ def parse_nb04_hsp_table(table: bytes | str, *, expected_row_count: int | None =
                 require(cell in ("plus", "minus"), f"{prefix}: invalid strand")
                 value = cell
             elif field == "btop":
-                parse_nb04_btop(cell)
+                btop_tokens = parse_nb04_btop(cell)
                 value = cell
             elif field in decimal_fields:
                 require(re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", cell) is not None, f"{prefix}: invalid unsigned decimal representation")
@@ -4212,7 +4219,7 @@ def parse_nb04_hsp_table(table: bytes | str, *, expected_row_count: int | None =
         require((row["sstrand"] == "plus" and row["sstart"] <= row["send"]) or (row["sstrand"] == "minus" and row["sstart"] >= row["send"]), f"HSP line {number}: strand and subject coordinates disagree")
         columns = query_bases = subject_bases = mismatches = gaps = opens = 0
         previous_gap = None
-        for token in parse_nb04_btop(row["btop"]):
+        for token in btop_tokens:
             if isinstance(token, int):
                 columns += token
                 query_bases += token
@@ -4231,9 +4238,13 @@ def parse_nb04_hsp_table(table: bytes | str, *, expected_row_count: int | None =
                 previous_gap = side
         require(columns == row["length"] and query_bases == abs(row["qend"] - row["qstart"]) + 1 and subject_bases == abs(row["send"] - row["sstart"]) + 1, f"HSP line {number}: BTOP length or coordinate span mismatch")
         require((mismatches, gaps, opens) == (row["mismatch"], row["gaps"], row["gapopen"]), f"HSP line {number}: BTOP replacement or gap counts disagree")
+        row["raw_numeric_fields"] = raw_numeric_fields
         rows.append(row)
     require(expected_row_count is None or len(rows) == expected_row_count, "HSP table row count differs from the supplied execution witness")
     return {"rows": rows, "row_count": len(rows), "expected_row_count": expected_row_count,
+            "producer_lexical_compatibility": "NOT_ESTABLISHED_FOR_PINNED_BUILD",
+            "producer_format_dependency": "APPLICABLE_PINNED_BUILD_FORMAT_EVIDENCE_BEFORE_CAMPAIGN_USE",
+            "numeric_lexical_policy": "SURROUNDING_ASCII_SPACES_ONLY_WITH_ORIGINAL_LEXEMES_PRESERVED",
             "completeness_state": "EXPECTED_ROW_COUNT_MATCHED" if expected_row_count is not None else "COMPLETENESS_WITNESS_REQUIRED",
             "line_boundary_truncation_checked": expected_row_count is not None,
             "execution_integrity_established": False,
@@ -4250,6 +4261,9 @@ def nb04_parser_implementation_identity(root: Path) -> dict[str, Any]:
             "scope": {"source_files": list(U05_PARSER_SOURCE_PATHS), "normalization": "CRLF_TO_LF",
                       "hash_input": "json_bytes of exactly the relative-path to LF-normalized SHA256 inventory",
                       "decision_authority": "IMPLEMENTATION_COORDINATOR", "decision_status": "SUBJECT_TO_SCIENTIFIC_REVIEW_REVISABLE_BEFORE_FREEZE",
+                      "convention_scope": "NB03_PRECEDENTS_SUPPORT_THE_FAMILY_OF_WHOLE_FILE_LF_IDENTITIES_THE_EXACT_PAIR_AND_AGGREGATE_ARE_THE_COORDINATOR_DECISION",
+                      "runtime_limitation": "Source identity does not certify the interpreter, standard library or execution environment and is not complete behavioral identity across runtimes.",
+                      "prefreeze_dependency": "RECOMPUTE_IDENTITIES_FROM_FINAL_SOURCE_BEFORE_FREEZING_AND_ORDERING_CANDIDATES",
                       "convention_references": ["src/zeaguard/nb03_manual_review.py:399", "src/zeaguard/nb03_selection.py:496", "src/zeaguard/nb03_specificity.py:502"],
                       "overcoverage_limitation": "Any unrelated change in either whole file also changes parser identity and may require a new candidate. A narrower scope requires an explicit dependency guard and a new scope decision."}}
 

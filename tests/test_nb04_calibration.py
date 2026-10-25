@@ -2414,6 +2414,7 @@ def test_section7_preparation_integrates_authenticated_geometry_and_keeps_drafts
     assert result["state"] == "OPEN" and result["design_space_complete"] is False
     assert result["candidate_set_closure"]["state"] == "OPEN"
     assert result["qa_i_parser_precondition"]["state"] == "NOT_TESTED"
+    assert result["prospective_dependencies"]["producer_lexical_format"] == "APPLICABLE_PINNED_BUILD_FORMAT_EVIDENCE_BEFORE_CAMPAIGN_USE"
     assert result["qa_i_parser_precondition"]["campaign_qa_approved"] is False
     identity = cal.nb04_parser_implementation_identity(root)
     assert result["determinate_sections"]["execution_architecture"]["parser_implementation_sha256"] == identity["parser_implementation_sha256"]
@@ -2628,7 +2629,7 @@ def test_u05_literal_qa_i_cases_and_explicit_completeness_boundary():
     assert result["row_count"] == 1 and result["completeness_state"] == "EXPECTED_ROW_COUNT_MATCHED"
     assert result["execution_integrity_established"] is False
     assert result["rows"][0]["pident"] == cal.Decimal("100.000")
-    assert tuple(result["rows"][0]) == cal.U05_HSP_FIELDS
+    assert tuple(result["rows"][0]) == (*cal.U05_HSP_FIELDS, "raw_numeric_fields")
     for corrupt in (valid[:-3], _u05_table(btop="2!!2"), _u05_table(qseqid="Q\x00")):
         with pytest.raises(r.ResourceContractError):
             cal.parse_nb04_hsp_table(corrupt, expected_row_count=1)
@@ -2671,7 +2672,7 @@ def test_u05_newline_control_and_field_count_failures(corrupt):
     ("sstart", "0"), ("send", "5"), ("length", "04"), ("score", "1.0"), ("score", "-1"),
     ("mismatch", "-1"), ("gapopen", "1_0"), ("gaps", "+0"), ("pident", "100.001"),
     ("qcovs", "101"), ("evalue", "NaN"), ("bitscore", "Infinity"), ("evalue", "-0.1"),
-    ("pident", " 100"), ("pident", "100 "), ("bitscore", ".5"), ("btop", "3"),
+    ("pident", "10 0"), ("pident", "100 .0"), ("bitscore", ".5"), ("btop", "3"),
     ("mismatch", "1"), ("gapopen", "1"), ("gaps", "1"),
 ])
 def test_u05_exact_field_domains_and_structural_invariants(field, value):
@@ -2750,3 +2751,108 @@ def test_u05_s02_prose_with_uncertainty_does_not_resolve_contract_markers(prose)
             assert result["state"] == "OPEN" and "P31" in [b["parameter_id"] for b in result["blocking_parameters"]]
             with pytest.raises(r.ResourceContractError):
                 cal.section7_payload_bytes(bad)
+
+_U05_REVISION_FIELDS = ("qseqid", "sseqid", "pident", "length", "qlen", "slen", "qstart", "qend", "sstart", "send",
+                        "sstrand", "evalue", "bitscore", "mismatch", "gapopen", "gaps", "qcovs", "btop", "score")
+_U05_REVISION_LITERAL = b"Q\tS\t100.000\t4\t4\t4\t1\t4\t1\t4\tplus\t0.0\t8.0\t0\t0\t0\t100\t4\t8\n"
+_U05_REVISION_NUMERIC = ("pident", "length", "qlen", "slen", "qstart", "qend", "sstart", "send", "evalue", "bitscore", "mismatch", "gapopen", "gaps", "qcovs", "score")
+
+
+def _u05_revision_table(**changes):
+    row = dict(zip(_U05_REVISION_FIELDS, _U05_REVISION_LITERAL.decode("ascii").removesuffix("\n").split("\t"), strict=True))
+    row.update(changes)
+    return ("\t".join(row[field] for field in _U05_REVISION_FIELDS) + "\n").encode("ascii")
+
+
+def test_u05_revision_f01_preserves_lexical_evidence_alongside_exact_values():
+    assert cal.U05_HSP_FIELDS == _U05_REVISION_FIELDS
+    a = cal.parse_nb04_hsp_table(_u05_revision_table(evalue="1e-3", bitscore="8e0", score=" 8 "), expected_row_count=1)
+    b = cal.parse_nb04_hsp_table(_u05_revision_table(evalue="0.001", bitscore="8", score="8"), expected_row_count=1)
+    assert a != b
+    first, second = a["rows"][0], b["rows"][0]
+    assert first["evalue"] == second["evalue"] == cal.Decimal("0.001")
+    assert first["bitscore"] == second["bitscore"] == cal.Decimal("8")
+    assert first["score"] == second["score"] == 8
+    assert {field: first["raw_numeric_fields"][field] for field in ("evalue", "bitscore", "score")} == {"evalue": "1e-3", "bitscore": "8e0", "score": " 8 "}
+    assert {field: second["raw_numeric_fields"][field] for field in ("evalue", "bitscore", "score")} == {"evalue": "0.001", "bitscore": "8", "score": "8"}
+    assert set(first["raw_numeric_fields"]) == set(_U05_REVISION_NUMERIC)
+    two = cal.parse_nb04_hsp_table(_u05_revision_table(evalue="1e-3") + _u05_revision_table(evalue="0.001"), expected_row_count=2)
+    assert [r["raw_numeric_fields"]["evalue"] for r in two["rows"]] == ["1e-3", "0.001"]
+    assert a["execution_integrity_established"] is False
+    assert cal.parse_nb04_hsp_table(_U05_REVISION_LITERAL)["completeness_state"] == "COMPLETENESS_WITNESS_REQUIRED"
+    with pytest.raises(r.ResourceContractError, match="witness"):
+        cal.parse_nb04_hsp_table(_U05_REVISION_LITERAL, expected_row_count=2)
+
+
+def test_u05_revision_f02_rejects_equal_letters_and_preserves_all_distinct_pairs():
+    alphabet = "ACGTRYSWKMBDHVN-"
+    accepted = []
+    for q in alphabet:
+        for s in alphabet:
+            if q != s:
+                pair = q + s
+                assert cal.parse_nb04_btop(pair) == (pair,)
+                accepted.append(pair)
+    assert len(accepted) == 240
+    for letter in "ACGTRYSWKMBDHVN":
+        pair = letter + letter
+        with pytest.raises(r.ResourceContractError, match="identical"):
+            cal.parse_nb04_btop(pair)
+        bad = _u05_revision_table(length="1", qlen="1", slen="1", qend="1", send="1", btop=pair, mismatch="1", pident="0", score="1", bitscore="1.0")
+        with pytest.raises(r.ResourceContractError, match="identical"):
+            cal.parse_nb04_hsp_table(bad, expected_row_count=1)
+    assert cal.parse_nb04_btop("0ACGT0") == (0, "AC", "GT", 0)
+    row = cal.parse_nb04_hsp_table(_u05_revision_table(length="6", slen="6", send="6", btop="2-A0-C2", gaps="2", gapopen="1", pident="66.667"), expected_row_count=1)["rows"][0]
+    assert row["gaps"] == 2 and row["gapopen"] == 1
+
+
+@pytest.mark.parametrize("field", _U05_REVISION_NUMERIC)
+def test_u05_revision_f03_accepts_only_surrounding_ascii_numeric_padding(field):
+    core = dict(zip(_U05_REVISION_FIELDS, _U05_REVISION_LITERAL.decode("ascii").removesuffix("\n").split("\t"), strict=True))[field]
+    padded = "  " + core + " "
+    result = cal.parse_nb04_hsp_table(_u05_revision_table(**{field: padded}), expected_row_count=1)
+    row = result["rows"][0]
+    assert row["raw_numeric_fields"][field] == padded
+    assert row[field] == (cal.Decimal(core) if field in ("pident", "evalue", "bitscore", "qcovs") else int(core))
+    assert result["producer_lexical_compatibility"] == "NOT_ESTABLISHED_FOR_PINNED_BUILD"
+    assert result["producer_format_dependency"] == "APPLICABLE_PINNED_BUILD_FORMAT_EVIDENCE_BEFORE_CAMPAIGN_USE"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("bitscore", " 8.0"), ("bitscore", "20.0 "), ("evalue", "  1e-05"), ("score", " 8 "),
+])
+def test_u05_revision_f03_reported_padding_examples_preserve_text(field, value):
+    row = cal.parse_nb04_hsp_table(_u05_revision_table(**{field: value}), expected_row_count=1)["rows"][0]
+    assert row["raw_numeric_fields"][field] == value
+
+
+@pytest.mark.parametrize("field,value", [
+    ("bitscore", " 8 .0 "), ("bitscore", " +8.0 "), ("bitscore", " 08.0 "), ("bitscore", " NaN "),
+    ("evalue", " 1e--3 "), ("score", " 8.0 "), ("score", " -8 "), ("score", " 08 "),
+    ("qseqid", " Q"), ("sseqid", "S "), ("sstrand", " plus "), ("btop", " 4 "),
+])
+def test_u05_revision_f03_keeps_numeric_core_and_nonnumeric_fields_strict(field, value):
+    with pytest.raises(r.ResourceContractError):
+        cal.parse_nb04_hsp_table(_u05_revision_table(**{field: value}), expected_row_count=1)
+
+
+def test_u05_revision_f03_rejects_controls_and_non_ascii_before_padding_handling():
+    for illegal in (b"\x00", b"\r", b"\x0b", b"\x7f", b"\xc2\xa0", b"\t"):
+        table = _U05_REVISION_LITERAL.replace(b"\t8.0\t", b"\t " + illegal + b"8.0 \t")
+        with pytest.raises(r.ResourceContractError):
+            cal.parse_nb04_hsp_table(table, expected_row_count=1)
+
+
+def test_u05_revision_identity_has_an_independent_canonical_oracle_and_scope_limits(tmp_path):
+    sources = {"src/zeaguard/nb04_calibration.py": b"calibration\r\n", "src/zeaguard/nb04_resources.py": b"resources\n"}
+    for path, raw in sources.items():
+        _put(tmp_path / path, raw)
+    inventory = {path: hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest() for path, raw in sources.items()}
+    canonical = (json.dumps(inventory, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+    identity = cal.nb04_parser_implementation_identity(tmp_path)
+    assert identity["parser_implementation_sha256"] == hashlib.sha256(canonical).hexdigest()
+    assert identity["implementation_sha256_lf"] == inventory
+    assert "interpreter" in identity["scope"]["runtime_limitation"]
+    assert "standard library" in identity["scope"]["runtime_limitation"]
+    assert identity["scope"]["prefreeze_dependency"] == "RECOMPUTE_IDENTITIES_FROM_FINAL_SOURCE_BEFORE_FREEZING_AND_ORDERING_CANDIDATES"
+    assert identity["scope"]["decision_authority"] == "IMPLEMENTATION_COORDINATOR"
