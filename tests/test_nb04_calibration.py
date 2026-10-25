@@ -756,10 +756,13 @@ def _build_synthetic_resource(
     campaign_id: str = "cp1_20261015",
     g0_sha: str = "0" * 64,
 ) -> dict:
-    """Create a tiny synthetic resource directory (normalized.fasta + identifier_map.tsv) using independent hashes."""
+    """Create a tiny synthetic resource directory (normalized.fasta + identifier_map.tsv + blastdb) using independent hashes."""
     res_dir = f"data/external/nto/{campaign_id}/{resource_id}"
     fasta_rel = f"{res_dir}/normalized.fasta"
     idmap_rel = f"{res_dir}/identifier_map.tsv"
+    nsq_rel = f"{res_dir}/blastdb/sequences.nsq"
+    nin_rel = f"{res_dir}/blastdb/sequences.nin"
+    db_build_rel = f"{res_dir}/database_build.json"
 
     fasta_lines: list[str] = []
     idmap_lines: list[str] = ["analysis_id\tsource_id\tsource_header\tlength_nt\tsequence_sha256\n"]
@@ -780,8 +783,26 @@ def _build_synthetic_resource(
 
     fasta_bytes = "".join(fasta_lines).encode("ascii")
     idmap_bytes = "".join(idmap_lines).encode("utf-8")
+    nsq_bytes = f"NSQ_INDEX_BYTES_{resource_id}".encode("ascii")
+    nin_bytes = f"NIN_INDEX_{resource_id}".encode("ascii")
     _put(root / fasta_rel, fasta_bytes)
     _put(root / idmap_rel, idmap_bytes)
+    _put(root / nsq_rel, nsq_bytes)
+    _put(root / nin_rel, nin_bytes)
+
+    tool_str = "makeblastdb: 2.17.0+\n Package: blast 2.17.0, build Aug 22 2026 11:52:50"
+    db_build_path = root / db_build_rel
+    r.write_json(
+        db_build_path,
+        {
+            "tool": tool_str,
+            "index_sha256": {
+                "sequences.nin": _sha256_raw(nin_bytes),
+                "sequences.nsq": _sha256_raw(nsq_bytes),
+            },
+            "searches_executed": False,
+        },
+    )
 
     fasta_sha = _sha256_raw(fasta_bytes)
     idmap_sha = _sha256_raw(idmap_bytes)
@@ -824,8 +845,45 @@ def _build_synthetic_resource(
         "artifacts_sha256": {
             fasta_rel: fasta_sha,
             idmap_rel: idmap_sha,
+            nsq_rel: _sha256_raw(nsq_bytes),
+            nin_rel: _sha256_raw(nin_bytes),
+            db_build_rel: _sha256_raw(db_build_path.read_bytes()),
         },
     }
+
+
+def _establish_synthetic_cp1_baseline(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    resources: list[dict],
+) -> tuple[dict[str, str], str]:
+    """Write synthetic manifest and run_manifest and freeze their hashes as the accepted U01/E03 baseline."""
+    manifest_path = root / r.MANIFEST
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    manifest["resources"] = resources
+    r.write_json(manifest_path, manifest)
+
+    expectations = dict(cal.EXPECTED_CP1_REFERENCE_SHA256)
+    expectations[r.MANIFEST] = _sha256_raw(manifest_path.read_bytes())
+    monkeypatch.setattr(cal, "EXPECTED_CP1_REFERENCE_SHA256", expectations)
+
+    run_path = root / cal.EXPECTED_CP1_RUN_MANIFEST_PATH
+    run_data = json.loads(run_path.read_text("utf-8"))
+    run_data["outputs_sha256"][r.MANIFEST] = expectations[r.MANIFEST]
+    r.write_json(run_path, run_data)
+    run_sha = _sha256_raw(run_path.read_bytes())
+    monkeypatch.setattr(cal, "EXPECTED_CP1_RUN_MANIFEST_SHA256", run_sha)
+
+    orig_verify_cp1 = cal.verify_cp1_resources_and_manifests.__wrapped__ if hasattr(cal.verify_cp1_resources_and_manifests, "__wrapped__") else cal.verify_cp1_resources_and_manifests
+    expected_count = len(resources)
+
+    def _wrapped_verify_cp1(rt, **kw):
+        kw.setdefault("expected_resource_count", expected_count)
+        return orig_verify_cp1(rt, **kw)
+
+    _wrapped_verify_cp1.__wrapped__ = orig_verify_cp1
+    monkeypatch.setattr(cal, "verify_cp1_resources_and_manifests", _wrapped_verify_cp1)
+    return expectations, run_sha
 
 
 def test_e03_descriptor_sha256_boundary_and_coverage_predicate():
@@ -883,6 +941,14 @@ def test_e03_descriptor_sha256_boundary_and_coverage_predicate():
     assert cal.extract_geometry_descriptor_sha256_from_record(rec_a) == expected_desc_sha
     assert cal.extract_geometry_descriptor_sha256_from_record(rec_b) == expected_desc_sha
     assert _sha256_raw(r.json_bytes(rec_a)) != _sha256_raw(r.json_bytes(rec_b))
+
+    # Injecting an administrative field inside architecture_descriptor during record extraction fails closed
+    rec_polluted = {
+        **rec_a,
+        "architecture_descriptor": {**base_descriptor, "administrative_id": "POLLUTED"},
+    }
+    with pytest.raises(r.ResourceContractError, match="extra=\\['administrative_id'\\]"):
+        cal.extract_geometry_descriptor_sha256_from_record(rec_polluted)
 
     # 2. Altering ANY of the 6 fields changes descriptor_sha256 (or fails validation if invalid policy/sum)
     mut_lengths_permuted = {
@@ -959,7 +1025,7 @@ def test_e03_descriptor_sha256_boundary_and_coverage_predicate():
     assert cal.geometry_cell_covers_resource(mut_ambig_value, base_descriptor) is False
 
 
-def test_e03_geometry_derivation_iupac_ambiguity_canonical_order_and_determinism(synthetic_e01_env, capsys):
+def test_e03_geometry_derivation_iupac_ambiguity_canonical_order_and_determinism(synthetic_e01_env, monkeypatch, capsys):
     """Verify IUPAC ambiguity counting (N and non-N IUPAC bases), canonical order, scientific limitations, and byte determinism."""
     import importlib.util
 
@@ -982,11 +1048,7 @@ def test_e03_geometry_derivation_iupac_ambiguity_canonical_order_and_determinism
         g0_sha=g0_sha,
     )
 
-    # Update manifest in synthetic workspace
-    manifest_path = root / r.MANIFEST
-    manifest = json.loads(manifest_path.read_text("utf-8"))
-    manifest["resources"] = [res_entry]
-    _put(manifest_path, r.json_bytes(manifest))
+    _establish_synthetic_cp1_baseline(root, monkeypatch, [res_entry])
 
     derived_1 = cal.derive_resource_geometry_record(root, res_entry)
     derived_2 = cal.derive_resource_geometry_record(root, res_entry)
@@ -1048,7 +1110,7 @@ def test_e03_geometry_derivation_iupac_ambiguity_canonical_order_and_determinism
     assert res_out["geometry_record_sha256"] != res_out["descriptor_sha256"]
 
 
-def test_e03_cross_check_failures_block_derivation(synthetic_e01_env):
+def test_e03_cross_check_failures_block_derivation(synthetic_e01_env, monkeypatch):
     """Verify that any mismatch in fasta_sha256, identifier_map.tsv, quality, or sequence alphabet blocks derivation."""
     root = synthetic_e01_env["root"]
     g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
@@ -1061,6 +1123,7 @@ def test_e03_cross_check_failures_block_derivation(synthetic_e01_env):
         ],
         g0_sha=g0_sha,
     )
+    _establish_synthetic_cp1_baseline(root, monkeypatch, [base_res])
     fasta_path = root / base_res["fasta_path"]
     idmap_path = root / base_res["identifier_map_path"]
     orig_fasta = fasta_path.read_bytes()
@@ -1078,7 +1141,7 @@ def test_e03_cross_check_failures_block_derivation(synthetic_e01_env):
         cal.derive_resource_geometry_record(root, base_res)
     idmap_path.write_bytes(orig_idmap)
 
-    # Helper to test post-hash checks by updating expected hashes in a copy of base_res
+    # Helper to test internal post-hash checks by updating synthetic baseline expectations for the mutated file
     def _with_current_hashes(res_copy: dict) -> dict:
         f_sha = _sha256_raw(fasta_path.read_bytes())
         i_sha = _sha256_raw(idmap_path.read_bytes())
@@ -1087,6 +1150,7 @@ def test_e03_cross_check_failures_block_derivation(synthetic_e01_env):
         res_copy["quality"]["identifier_map_sha256"] = i_sha
         res_copy["artifacts_sha256"][res_copy["fasta_path"]] = f_sha
         res_copy["artifacts_sha256"][res_copy["identifier_map_path"]] = i_sha
+        _establish_synthetic_cp1_baseline(root, monkeypatch, [res_copy])
         return res_copy
 
     # 3. Record count mismatch against identifier_map.tsv (fewer rows in map)
@@ -1114,32 +1178,47 @@ def test_e03_cross_check_failures_block_derivation(synthetic_e01_env):
         cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
     idmap_path.write_bytes(orig_idmap)
 
-    # 6. Ambiguity sum mismatch against manifest quality.ambiguous_bases
-    bad_ambig_res = _with_current_hashes(base_res)
+    # 6. Per-record sequence_sha256 mismatch in identifier_map.tsv (Reviewer gap from Round 003)
+    rec1_true_sha = hashlib.sha256(b"ACGTACGTNN").hexdigest()
+    bad_seq_sha_lines = [
+        lines[0],
+        lines[1].replace(rec1_true_sha, "f" * 64),
+        lines[2],
+    ]
+    idmap_path.write_bytes("".join(bad_seq_sha_lines).encode("utf-8"))
+    with pytest.raises(r.ResourceContractError, match="identifier_map sequence_sha256 mismatch at R1_RNA__00000001"):
+        cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
+    idmap_path.write_bytes(orig_idmap)
+
+    # 7. Ambiguity sum mismatch against manifest quality.ambiguous_bases
+    bad_ambig_res = json.loads(json.dumps(base_res))
     bad_ambig_res["quality"]["ambiguous_bases"] = 999
     with pytest.raises(r.ResourceContractError, match="ambiguous_bases sum mismatch against manifest quality"):
-        cal.derive_resource_geometry_record(root, bad_ambig_res)
+        cal.derive_resource_geometry_record(root, _with_current_hashes(bad_ambig_res))
 
-    # 7. Total bases mismatch against manifest quality.total_bases
-    bad_total_res = _with_current_hashes(base_res)
+    # 8. Total bases mismatch against manifest quality.total_bases
+    bad_total_res = json.loads(json.dumps(base_res))
     bad_total_res["quality"]["total_bases"] = 999
     with pytest.raises(r.ResourceContractError, match="total_bases mismatch against manifest quality"):
-        cal.derive_resource_geometry_record(root, bad_total_res)
+        cal.derive_resource_geometry_record(root, _with_current_hashes(bad_total_res))
 
-    # 8. Record count mismatch against manifest quality.record_count
-    bad_count_res = _with_current_hashes(base_res)
+    # 9. Record count mismatch against manifest quality.record_count
+    bad_count_res = json.loads(json.dumps(base_res))
     bad_count_res["quality"]["record_count"] = 99
     with pytest.raises(r.ResourceContractError, match="record_count mismatch against manifest quality"):
-        cal.derive_resource_geometry_record(root, bad_count_res)
+        cal.derive_resource_geometry_record(root, _with_current_hashes(bad_count_res))
 
-    # 9. Lowercase or non-IUPAC base in normalized.fasta rejected
+    # 10. Lowercase or non-IUPAC base ('Z') in normalized.fasta rejected
     fasta_path.write_bytes(orig_fasta.replace(b"ACGTACGTNN", b"acgtacgtnn"))
+    with pytest.raises(r.ResourceContractError, match="non-uppercase-IUPAC DNA"):
+        cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
+    fasta_path.write_bytes(orig_fasta.replace(b"ACGTACGTNN", b"ACGTACGTNZ"))
     with pytest.raises(r.ResourceContractError, match="non-uppercase-IUPAC DNA"):
         cal.derive_resource_geometry_record(root, _with_current_hashes(base_res))
     fasta_path.write_bytes(orig_fasta)
 
 
-def test_e03_destination_protection_and_atomic_batch_prewrite_validation(synthetic_e01_env):
+def test_e03_destination_protection_and_atomic_batch_prewrite_validation(synthetic_e01_env, monkeypatch):
     """Verify that protected or pre-existing destinations are rejected before any write and batch failure writes nothing."""
     root = synthetic_e01_env["root"]
     g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
@@ -1157,10 +1236,7 @@ def test_e03_destination_protection_and_atomic_batch_prewrite_validation(synthet
         g0_sha=g0_sha,
     )
 
-    manifest_path = root / r.MANIFEST
-    manifest = json.loads(manifest_path.read_text("utf-8"))
-    manifest["resources"] = [res1, res2]
-    _put(manifest_path, r.json_bytes(manifest))
+    _establish_synthetic_cp1_baseline(root, monkeypatch, [res1, res2])
 
     # 1. Protected in-root destination rejected before any write
     victim = root / "config/frozen.tsv"
@@ -1207,6 +1283,215 @@ def test_e03_destination_protection_and_atomic_batch_prewrite_validation(synthet
 
     with pytest.raises(r.ResourceContractError, match="already exists and must never be overwritten"):
         cal.derive_and_write_all_resources_geometry(root)
+
+
+def test_u02_f01_authoritative_manifest_trust_boundary_and_reviewer_counterexample(
+    synthetic_e01_env,
+    monkeypatch,
+):
+    """Verify U02_F01 resolution: E03 enforces the fixed authoritative CP1 manifest identity before derivation or write."""
+    root = synthetic_e01_env["root"]
+    g0_sha = _sha256_raw((root / r.G0_PATH).read_bytes())
+
+    # Build an accepted 2-resource baseline and freeze its expectations ONCE.
+    res1 = _build_synthetic_resource(
+        root,
+        "R1_RNA",
+        [("SRC1.1", "SRC1.1 synthetic", "ACGTACGTACGTACGT")],
+        g0_sha=g0_sha,
+    )
+    res2 = _build_synthetic_resource(
+        root,
+        "R2_RNA",
+        [("SRC2.1", "SRC2.1 synthetic", "ACGTRYSW")],
+        g0_sha=g0_sha,
+    )
+    baseline_expectations, baseline_run_sha = _establish_synthetic_cp1_baseline(
+        root,
+        monkeypatch,
+        [res1, res2],
+    )
+    manifest_path = root / r.MANIFEST
+    baseline_manifest_bytes = manifest_path.read_bytes()
+    r1_fasta_path = root / res1["fasta_path"]
+    r1_idmap_path = root / res1["identifier_map_path"]
+    baseline_r1_fasta = r1_fasta_path.read_bytes()
+    baseline_r1_idmap = r1_idmap_path.read_bytes()
+    r1_geom_path = root / "data/external/nto/cp1_20261015/geometry/R1_RNA.json"
+    r2_geom_path = root / "data/external/nto/cp1_20261015/geometry/R2_RNA.json"
+
+    # Confirm initial accepted baseline passes U01 and E03 read-only checks
+    _, accepted_u01 = cal.verify_cp1_resources_and_manifests(root)
+    assert accepted_u01["verdict"] == "PASS"
+    initial_geom = cal.derive_resource_geometry_record(root, res1)
+    assert initial_geom["architecture_descriptor"]["ordered_ambiguous_base_counts"] == [0]
+
+    # 1. Reviewer's exact Round 003 counterexample (U02_F01):
+    #    Replace base T -> N in FASTA, update sequence_sha256 in identifier_map.tsv, and update
+    #    fasta_sha256, identifier_map_sha256, ambiguous_bases=1, and artifacts_sha256 in manifest.json,
+    #    while preserving the prior accepted baseline expectations (baseline_expectations).
+    r1_fasta_path.write_bytes(baseline_r1_fasta.replace(b"ACGTACGTACGTACGT", b"ACGTACGTACGTACGN"))
+    orig_seq_sha = hashlib.sha256(b"ACGTACGTACGTACGT").hexdigest()
+    mod_seq_sha = hashlib.sha256(b"ACGTACGTACGTACGN").hexdigest()
+    r1_idmap_path.write_bytes(baseline_r1_idmap.replace(orig_seq_sha.encode("ascii"), mod_seq_sha.encode("ascii")))
+
+    mutated_res1 = json.loads(json.dumps(res1))
+    mutated_res1["quality"]["fasta_sha256"] = _sha256_raw(r1_fasta_path.read_bytes())
+    mutated_res1["quality"]["identifier_map_sha256"] = _sha256_raw(r1_idmap_path.read_bytes())
+    mutated_res1["quality"]["ambiguous_bases"] = 1
+    mutated_res1["artifacts_sha256"][res1["fasta_path"]] = mutated_res1["quality"]["fasta_sha256"]
+    mutated_res1["artifacts_sha256"][res1["identifier_map_path"]] = mutated_res1["quality"]["identifier_map_sha256"]
+
+    mutated_manifest = json.loads(baseline_manifest_bytes.decode("utf-8"))
+    mutated_manifest["resources"] = [mutated_res1, res2]
+    r.write_json(manifest_path, mutated_manifest)
+    assert _sha256_raw(manifest_path.read_bytes()) != baseline_expectations[r.MANIFEST]
+
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.verify_cp1_resources_and_manifests(root)
+
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.derive_resource_geometry_record(root, mutated_res1)
+
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.derive_and_write_all_resources_geometry(root)
+
+    assert not r1_geom_path.exists()
+    assert not r2_geom_path.exists()
+
+    # Restore R1 FASTA and ID map to baseline
+    r1_fasta_path.write_bytes(baseline_r1_fasta)
+    r1_idmap_path.write_bytes(baseline_r1_idmap)
+
+    # 2. Altered manifest metadata (without touching FASTA/ID map) rejected before any write
+    altered_meta_manifest = json.loads(baseline_manifest_bytes.decode("utf-8"))
+    altered_meta_manifest["resources"][0]["scientific_name"] = "Tampered species"
+    r.write_json(manifest_path, altered_meta_manifest)
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.derive_and_write_all_resources_geometry(root)
+    assert not r1_geom_path.exists()
+    assert not r2_geom_path.exists()
+
+    # 3. Resource reduction ([res1, res2] -> [res1]) with consistent internal hashes rejected before any write
+    reduced_manifest = json.loads(baseline_manifest_bytes.decode("utf-8"))
+    reduced_manifest["resources"] = [res1]
+    r.write_json(manifest_path, reduced_manifest)
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.derive_and_write_all_resources_geometry(root)
+    assert not r1_geom_path.exists()
+    assert not r2_geom_path.exists()
+
+    # Even if an caller passes updated reference/run_manifest hashes for the reduced manifest,
+    # the fixed expected_resource_count=2 and expected_resource_ids=("R1_RNA", "R2_RNA") reject the reduction.
+    reduced_ref = dict(baseline_expectations, **{r.MANIFEST: _sha256_raw(manifest_path.read_bytes())})
+    run_path = root / cal.EXPECTED_CP1_RUN_MANIFEST_PATH
+    orig_run_bytes = run_path.read_bytes()
+    reduced_run = json.loads(orig_run_bytes.decode("utf-8"))
+    reduced_run["outputs_sha256"][r.MANIFEST] = reduced_ref[r.MANIFEST]
+    r.write_json(run_path, reduced_run)
+    reduced_run_sha = _sha256_raw(run_path.read_bytes())
+    with pytest.raises(r.ResourceContractError, match="CP1 resource count mismatch: expected=2 observed=1"):
+        cal.derive_and_write_all_resources_geometry(
+            root,
+            expected_reference_sha256=reduced_ref,
+            expected_run_manifest_sha256=reduced_run_sha,
+            expected_resource_count=2,
+        )
+    with pytest.raises(r.ResourceContractError, match="CP1 authoritative resource_id sequence mismatch"):
+        cal.derive_and_write_all_resources_geometry(
+            root,
+            expected_reference_sha256=reduced_ref,
+            expected_run_manifest_sha256=reduced_run_sha,
+            expected_resource_count=1,
+            expected_resource_ids=("R1_RNA", "R2_RNA"),
+        )
+    run_path.write_bytes(orig_run_bytes)
+    assert not r1_geom_path.exists()
+    assert not r2_geom_path.exists()
+
+    # 4. Resource substitution ([res1, res2] -> [res1, res3]) with equal count=2 and internally consistent hashes rejected
+    res3 = _build_synthetic_resource(
+        root,
+        "R3_RNA",
+        [("SRC3.1", "SRC3.1 substituted", "ACGTNNNNACGT")],
+        g0_sha=g0_sha,
+    )
+    substituted_manifest = json.loads(baseline_manifest_bytes.decode("utf-8"))
+    substituted_manifest["resources"] = [res1, res3]
+    r.write_json(manifest_path, substituted_manifest)
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.derive_and_write_all_resources_geometry(root)
+
+    sub_ref = dict(baseline_expectations, **{r.MANIFEST: _sha256_raw(manifest_path.read_bytes())})
+    sub_run = json.loads(orig_run_bytes.decode("utf-8"))
+    sub_run["outputs_sha256"][r.MANIFEST] = sub_ref[r.MANIFEST]
+    r.write_json(run_path, sub_run)
+    sub_run_sha = _sha256_raw(run_path.read_bytes())
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 authoritative resource_id sequence mismatch: expected=\['R1_RNA', 'R2_RNA'\] observed=\['R1_RNA', 'R3_RNA'\]",
+    ):
+        cal.derive_and_write_all_resources_geometry(
+            root,
+            expected_reference_sha256=sub_ref,
+            expected_run_manifest_sha256=sub_run_sha,
+            expected_resource_count=2,
+            expected_resource_ids=("R1_RNA", "R2_RNA"),
+        )
+    run_path.write_bytes(orig_run_bytes)
+    assert not r1_geom_path.exists()
+    assert not r2_geom_path.exists()
+    assert not (root / "data/external/nto/cp1_20261015/geometry/R3_RNA.json").exists()
+
+    # 5. Direct call to derive_resource_geometry_record with a modified resource mapping while manifest on disk is untouched
+    manifest_path.write_bytes(baseline_manifest_bytes)
+    forged_res1 = json.loads(json.dumps(res1))
+    forged_res1["scientific_name"] = "Forged caller dict"
+    with pytest.raises(r.ResourceContractError, match="resource entry for R1_RNA diverges from authoritative CP1 manifest"):
+        cal.derive_resource_geometry_record(root, forged_res1)
+
+    # 6. Valid path on restored authoritative baseline succeeds and preserves pre-existing files on any subsequent failure
+    summary = cal.derive_and_write_all_resources_geometry(
+        root,
+        expected_reference_sha256=baseline_expectations,
+        expected_run_manifest_sha256=baseline_run_sha,
+        expected_resource_count=2,
+        expected_resource_ids=("R1_RNA", "R2_RNA"),
+    )
+    assert summary["resource_count"] == 2
+    assert r1_geom_path.is_file()
+    assert r2_geom_path.is_file()
+    r1_saved_bytes = r1_geom_path.read_bytes()
+    r2_saved_bytes = r2_geom_path.read_bytes()
+
+    # Subsequent tampered manifest fails before touching existing geometry records
+    r.write_json(manifest_path, mutated_manifest)
+    with pytest.raises(
+        r.ResourceContractError,
+        match=r"CP1 reference artifact hash mismatch for data/reference/nb04_nto_resources_manifest\.json",
+    ):
+        cal.derive_and_write_all_resources_geometry(root)
+    assert r1_geom_path.read_bytes() == r1_saved_bytes
+    assert r2_geom_path.read_bytes() == r2_saved_bytes
+
 
 
 

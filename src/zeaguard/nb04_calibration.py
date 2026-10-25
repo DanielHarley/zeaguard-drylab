@@ -8,7 +8,7 @@ No BLAST query, index build, fixture materialization, or calibration is executed
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 import csv
 from datetime import datetime, timezone
 import hashlib
@@ -50,12 +50,21 @@ PLAN_SECTION_2_GITIGNORE_RAW_SHA256 = "a40c0c295b5f1a6f31b8cd7f576307c0bc62aaa56
 E01_BASELINE_GITIGNORE_RAW_SHA256 = "2ed210bb34cedb631968097b078434ff4322a6cc6bdafcfbf6d34cf797fbce6a"
 
 EXPECTED_G0_CERTIFICATE_SHA256 = "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1"
+REAL_CP1_MANIFEST_SHA256 = "2988284ac3e8a5c790f820dab479dacd5c9834f434eda5c9f6b9076fa2a99c52"
 EXPECTED_CP1_REFERENCE_SHA256: dict[str, str] = {
-    MANIFEST: "2988284ac3e8a5c790f820dab479dacd5c9834f434eda5c9f6b9076fa2a99c52",
+    MANIFEST: REAL_CP1_MANIFEST_SHA256,
     INVENTORY: "f11ab874762ccd2b23fe8cbff0bdd2eaa4ead64d416893dcf4a6601aae13c027",
     REGISTRY: "fd4eb4f92898cbe7447c4c7f4ac7db2424613a1eba19f300e3bd559c13580a5a",
     ASSESSABILITY: "d81b50cb1da60f3692deb13c28912ad081f017e1deb1627cf0a4b927ef1807db",
 }
+EXPECTED_CP1_RESOURCE_IDS: tuple[str, ...] = (
+    "AM_GCF003254395_2_RNA",
+    "OI_GCYL01_TSA",
+    "PM_GKDL01_TSA",
+    "RM_GCF003676215_2_RNA",
+    "TA_GCA036937485_2_CDS",
+    "ZM_GCF902167145_1_RNA",
+)
 EXPECTED_CP1_RUN_MANIFEST_PATH = f"{CP1}/run_manifest.json"
 EXPECTED_CP1_RUN_MANIFEST_SHA256 = "b050ea0123a299c4516527d01279186306a2770470ad034455e8f2d7468440fb"
 EXPECTED_LATEST_POINTER_PATH = "artifacts/reproducibility/latest.json"
@@ -1946,12 +1955,137 @@ def validate_e03_geometry_destination(
     return target
 
 
+def verify_authoritative_cp1_manifest_for_e03(
+    root: Path,
+    *,
+    expected_reference_sha256: Any = _DEFAULT,
+    expected_run_manifest_sha256: Any = _DEFAULT,
+    expected_resource_count: Any = _DEFAULT,
+    expected_resource_ids: Sequence[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Verify the authoritative CP1 preservation contract before any E03 geometry derivation or write."""
+    root = root.resolve()
+    if expected_reference_sha256 is _DEFAULT:
+        expected_reference_sha256 = EXPECTED_CP1_REFERENCE_SHA256
+    if expected_run_manifest_sha256 is _DEFAULT:
+        expected_run_manifest_sha256 = EXPECTED_CP1_RUN_MANIFEST_SHA256
+
+    require(
+        isinstance(expected_reference_sha256, Mapping),
+        "expected_reference_sha256 must be a mapping of authoritative CP1 reference artifact SHA256 expectations",
+    )
+    for rel_path in (MANIFEST, INVENTORY, REGISTRY, ASSESSABILITY):
+        expected_sha = expected_reference_sha256.get(rel_path)
+        require(
+            isinstance(expected_sha, str) and bool(expected_sha),
+            f"missing authoritative SHA256 expectation for CP1 reference artifact: {rel_path}",
+        )
+        ref_path = relative_path(root, rel_path)
+        require(ref_path.is_file(), f"CP1 reference artifact missing: {rel_path}")
+        observed_sha = digest(ref_path)
+        require(
+            observed_sha == expected_sha,
+            f"CP1 reference artifact hash mismatch for {rel_path}: expected={expected_sha} observed={observed_sha}",
+        )
+
+    require(
+        isinstance(expected_run_manifest_sha256, str) and bool(expected_run_manifest_sha256),
+        "missing authoritative SHA256 expectation for CP1 run_manifest",
+    )
+    run_manifest_path = relative_path(root, EXPECTED_CP1_RUN_MANIFEST_PATH)
+    require(run_manifest_path.is_file(), f"CP1 run_manifest missing: {EXPECTED_CP1_RUN_MANIFEST_PATH}")
+    observed_run_manifest_sha = digest(run_manifest_path)
+    require(
+        observed_run_manifest_sha == expected_run_manifest_sha256,
+        f"CP1 run_manifest SHA256 mismatch: expected={expected_run_manifest_sha256} observed={observed_run_manifest_sha}",
+    )
+
+    verify_g0_certified_artifacts_inventory(root)
+
+    manifest_path = relative_path(root, MANIFEST)
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    resources = manifest.get("resources")
+    require(isinstance(resources, list) and len(resources) > 0, "CP1 manifest contains no resources")
+    observed_resource_ids = [r.get("resource_id") for r in resources]
+    require(
+        len(set(observed_resource_ids)) == len(observed_resource_ids),
+        "duplicate resource_id in CP1 manifest",
+    )
+
+    expected_manifest_sha256 = str(expected_reference_sha256[MANIFEST])
+    if expected_resource_ids is None and expected_manifest_sha256 == REAL_CP1_MANIFEST_SHA256:
+        expected_resource_ids = EXPECTED_CP1_RESOURCE_IDS
+    if expected_resource_ids is not None:
+        require(
+            tuple(observed_resource_ids) == tuple(expected_resource_ids),
+            f"CP1 authoritative resource_id sequence mismatch: expected={list(expected_resource_ids)} observed={observed_resource_ids}",
+        )
+
+    for res in resources:
+        rid = res.get("resource_id")
+        require(
+            isinstance(rid, str) and bool(RESOURCE_ID.fullmatch(rid)),
+            f"invalid resource_id: {rid!r}",
+        )
+        fasta_rel = res.get("fasta_path")
+        idmap_rel = res.get("identifier_map_path")
+        require(isinstance(fasta_rel, str) and bool(fasta_rel), f"missing fasta_path for {rid}")
+        require(isinstance(idmap_rel, str) and bool(idmap_rel), f"missing identifier_map_path for {rid}")
+        fasta_path = relative_path(root, fasta_rel)
+        idmap_path = relative_path(root, idmap_rel)
+        require(fasta_path.is_file(), f"normalized FASTA missing for {rid}: {fasta_rel}")
+        require(idmap_path.is_file(), f"identifier_map.tsv missing for {rid}: {idmap_rel}")
+        quality = res.get("quality")
+        artifacts_sha256 = res.get("artifacts_sha256")
+        require(isinstance(quality, Mapping), f"missing quality block for {rid}")
+        require(isinstance(artifacts_sha256, Mapping), f"missing artifacts_sha256 block for {rid}")
+        expected_fasta_sha256 = quality.get("fasta_sha256")
+        expected_idmap_sha256 = quality.get("identifier_map_sha256")
+        require(
+            isinstance(expected_fasta_sha256, str)
+            and bool(expected_fasta_sha256)
+            and artifacts_sha256.get(fasta_rel) == expected_fasta_sha256,
+            f"manifest fasta_sha256 binding inconsistent for {rid}",
+        )
+        require(
+            isinstance(expected_idmap_sha256, str)
+            and bool(expected_idmap_sha256)
+            and artifacts_sha256.get(idmap_rel) == expected_idmap_sha256,
+            f"manifest identifier_map_sha256 binding inconsistent for {rid}",
+        )
+        observed_fasta_sha256 = digest(fasta_path)
+        require(
+            observed_fasta_sha256 == expected_fasta_sha256,
+            f"certified fasta_sha256 mismatch before geometry derivation for {rid}: observed={observed_fasta_sha256} expected={expected_fasta_sha256}",
+        )
+        observed_idmap_sha256 = digest(idmap_path)
+        require(
+            observed_idmap_sha256 == expected_idmap_sha256,
+            f"certified identifier_map_sha256 mismatch before geometry derivation for {rid}: observed={observed_idmap_sha256} expected={expected_idmap_sha256}",
+        )
+
+    cp1_kwargs: dict[str, Any] = {
+        "expected_reference_sha256": expected_reference_sha256,
+        "expected_run_manifest_sha256": expected_run_manifest_sha256,
+    }
+    if expected_resource_count is not _DEFAULT:
+        cp1_kwargs["expected_resource_count"] = expected_resource_count
+    verified_manifest, cp1_summary = verify_cp1_resources_and_manifests(root, **cp1_kwargs)
+    manifest_sha256 = str(cp1_summary["reference_artifacts"][MANIFEST]["observed_sha256"])
+    return verified_manifest, cp1_summary, manifest_sha256
+
+
 def derive_resource_geometry_record(
     root: Path,
     resource: Mapping[str, Any],
     *,
     campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
     manifest_sha256: str | None = None,
+    expected_reference_sha256: Any = _DEFAULT,
+    expected_run_manifest_sha256: Any = _DEFAULT,
+    expected_resource_count: Any = _DEFAULT,
+    expected_resource_ids: Sequence[str] | None = None,
+    _verified_manifest_context: tuple[dict[str, Any], str] | None = None,
 ) -> dict[str, Any]:
     """Derive the E03 geometry record for one certified CP1 resource in a single read-only streaming pass."""
     root = root.resolve()
@@ -1961,6 +2095,41 @@ def derive_resource_geometry_record(
     require(
         isinstance(resource_id, str) and bool(RESOURCE_ID.fullmatch(resource_id)),
         f"invalid resource_id: {resource_id!r}",
+    )
+
+    if _verified_manifest_context is None:
+        auth_manifest, _, verified_manifest_sha256 = verify_authoritative_cp1_manifest_for_e03(
+            root,
+            expected_reference_sha256=expected_reference_sha256,
+            expected_run_manifest_sha256=expected_run_manifest_sha256,
+            expected_resource_count=expected_resource_count,
+            expected_resource_ids=expected_resource_ids,
+        )
+    else:
+        auth_manifest, verified_manifest_sha256 = _verified_manifest_context
+        require(
+            digest(relative_path(root, MANIFEST)) == verified_manifest_sha256,
+            "CP1 manifest changed on disk after authoritative pre-derivation verification",
+        )
+
+    if manifest_sha256 is not None:
+        require(
+            manifest_sha256 == verified_manifest_sha256,
+            f"supplied manifest_sha256 ({manifest_sha256}) diverges from authoritative CP1 manifest SHA256 ({verified_manifest_sha256})",
+        )
+
+    auth_matches = [
+        item
+        for item in auth_manifest.get("resources", [])
+        if isinstance(item, Mapping) and item.get("resource_id") == resource_id
+    ]
+    require(
+        len(auth_matches) == 1,
+        f"resource {resource_id!r} missing or duplicated in authoritative CP1 manifest",
+    )
+    require(
+        dict(resource) == dict(auth_matches[0]),
+        f"resource entry for {resource_id} diverges from authoritative CP1 manifest",
     )
 
     fasta_rel = resource.get("fasta_path")
@@ -2004,7 +2173,8 @@ def derive_resource_geometry_record(
         f"certified identifier_map_sha256 mismatch before geometry derivation for {resource_id}: observed={observed_idmap_sha256} expected={expected_idmap_sha256}",
     )
 
-    # Single read-only streaming pass over normalized.fasta (O(B) time, O(1) per-record accumulator state)
+    # Read-only line-by-line streaming pass over normalized.fasta without materializing full sequences in memory
+    # (O(B + R) time, O(R) per-resource vector/ID/hash state)
     ordered_analysis_ids: list[str] = []
     ordered_record_lengths: list[int] = []
     ordered_ambiguous_base_counts: list[int] = []
@@ -2160,11 +2330,7 @@ def derive_resource_geometry_record(
     )
     descriptor_sha256 = compute_geometry_descriptor_sha256(descriptor)
 
-    resolved_manifest_sha256 = (
-        manifest_sha256
-        if manifest_sha256 is not None
-        else digest(relative_path(root, MANIFEST))
-    )
+    resolved_manifest_sha256 = verified_manifest_sha256
 
     return {
         "schema_version": 1,
@@ -2325,37 +2491,30 @@ def derive_and_write_all_resources_geometry(
     *,
     campaign_id: str = DEFAULT_GEOMETRY_CAMPAIGN_ID,
     destination_overrides: Mapping[str, Path] | None = None,
+    expected_reference_sha256: Any = _DEFAULT,
+    expected_run_manifest_sha256: Any = _DEFAULT,
+    expected_resource_count: Any = _DEFAULT,
+    expected_resource_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Derive and write E03 geometry records for all certified CP1 resources atomically after full validation."""
+    """Derive and sequentially write E03 geometry records for all certified CP1 resources after full pre-write validation."""
     root = root.resolve()
     validate_geometry_campaign_id(campaign_id)
-    verify_g0(root)
 
-    manifest_path = relative_path(root, MANIFEST)
-    require(manifest_path.is_file(), f"CP1 resources manifest missing: {MANIFEST}")
-    manifest_sha256 = digest(manifest_path)
-    manifest = json.loads(manifest_path.read_text("utf-8"))
-    require(
-        manifest.get("g0_certificate_sha256") == digest(relative_path(root, G0_PATH)),
-        "CP1 manifest g0_certificate_sha256 mismatch",
+    # Step 1: Verify the authoritative CP1 preservation contract before inspecting resources or touching destinations
+    manifest, _, manifest_sha256 = verify_authoritative_cp1_manifest_for_e03(
+        root,
+        expected_reference_sha256=expected_reference_sha256,
+        expected_run_manifest_sha256=expected_run_manifest_sha256,
+        expected_resource_count=expected_resource_count,
+        expected_resource_ids=expected_resource_ids,
     )
-    require(
-        manifest.get("inventory_sha256") == digest(relative_path(root, INVENTORY)),
-        "CP1 manifest inventory_sha256 mismatch",
-    )
-    resources = manifest.get("resources")
-    require(isinstance(resources, list) and len(resources) > 0, "CP1 manifest contains no resources")
-
-    resource_ids = [r.get("resource_id") for r in resources]
-    require(
-        len(set(resource_ids)) == len(resource_ids),
-        "duplicate resource_id in CP1 manifest",
-    )
+    resources = manifest["resources"]
+    resource_ids = [r["resource_id"] for r in resources]
     if destination_overrides:
         unknown = sorted(set(destination_overrides.keys()) - set(resource_ids))
         require(not unknown, f"destination_overrides for unknown resource_id(s): {unknown}")
 
-    # Step 1: Validate all destination paths upfront before any derivation or write
+    # Step 2: Validate all destination paths upfront before any derivation or write
     validated_targets: dict[str, Path] = {}
     for res in resources:
         rid = res["resource_id"]
@@ -2367,7 +2526,7 @@ def derive_and_write_all_resources_geometry(
             resource_id=rid,
         )
 
-    # Step 2: Complete all read-only derivations and cross-checks in memory before any disk write
+    # Step 3: Complete all read-only derivations and cross-checks in memory before any disk write
     derived_records: list[tuple[str, Path, dict[str, Any]]] = []
     for res in resources:
         rid = res["resource_id"]
@@ -2376,10 +2535,11 @@ def derive_and_write_all_resources_geometry(
             res,
             campaign_id=campaign_id,
             manifest_sha256=manifest_sha256,
+            _verified_manifest_context=(manifest, manifest_sha256),
         )
         derived_records.append((rid, validated_targets[rid], record))
 
-    # Step 3: Materialize all validated geometry records
+    # Step 4: Sequentially materialize all validated geometry records via write_json
     summary_by_resource: dict[str, dict[str, Any]] = {}
     total_records = 0
     total_bases = 0
