@@ -4563,11 +4563,21 @@ E07_PRECEDENCE_EDGES = (
     ('VERIFIED_TRANSPORT', 'FIRST_INFORMATIVE_COMMAND'),
 )
 E07_PENDING_DECISION_IDS = ('I01', 'I02', 'I03', 'I04', 'PC13', 'F07', 'B4-8', 'B4-9')
+E07_DOCUMENTARY_INPUTS_SHA256 = '657861b2007251b0fe0ec53aa6b0b8f3099c8d4cbdeab523063dc786f1af34bb'
+E07_UNRESOLVED_DEPENDENCIES = {
+    'preparation_record_carriers_not_established': PREPARATION_REFERENCE_ARTIFACT_PATHS[1:],
+    'database_file_coverage': 'COMPLETE_DATABASE_FILE_LIST_WITH_CATALOG_LINK_NOT_ESTABLISHED',
+    'tolerance_representation': 'REQUIRED_INTERNAL_KEYS_NOT_ESTABLISHED',
+    'tolerance_applicability': 'APPLICABLE_INSTANCES_WITHOUT_TOLERANCE_REGISTER_NOT_ESTABLISHED',
+}
 E07_LIMITATIONS = (
     'Local declaration schema only. Component digests bind json_bytes of declarations, not a normative artifact or freeze identity.',
     'Matching supplied hashes, references and receipts does not verify actual files, transport, snapshot, authorization or chronology.',
     'Declared order is checked without a clock. Documentary authority and scientific justification require external review.',
-    'QA checks cover declarations of criteria only. QA-M and QA-I remain NOT_TESTED and no QA result is approved.',
+    'QA fidelity uses original_table_records from the hash-pinned, versioned data/reference/nb04_cp0_documentary_inputs.json. Missing or different sources remain blocked. Only literal documentary equality is checked, without interpreting or applying QA-G or any criterion. QA-M and QA-I remain NOT_TESTED and no QA result is approved.',
+    'The five preparation records named in unresolved_dependencies have no supported supplied carrier here. This evaluator does not infer their existence from other declarations. The real-state inspection reports their actual absence.',
+    'The complete database file list and its catalog link are not established. Declared -query coverage is checked literally; -db is a prefix whose full file coverage remains blocked without that catalog. -out is a future destination, never required as an input.',
+    'Tolerance declared contents are checked for internal absence, without inventing mandatory internal keys. Required representation and applicable instances remain unresolved without the tolerance register and catalog; tolerance_fields remains blocked. Empty arrays can explicitly declare no differences or gaps. Prose is not scanned for pending-state words.',
     'No freeze, UTC, freeze identifier, version, closed receipt, snapshot, transport or informative command is produced.',
     'Complete declarations do not satisfy E07, B4, G1 or any gate. Informative execution remains blocked.',
     'Scientific adequacy of supplied tolerance justifications, applicability and documentary dispositions is not established by matching declarations.',
@@ -4585,8 +4595,32 @@ def _e07_relative_input_path(value: Any) -> str:
     return path
 
 
-def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
-    """Check finite declared components. Even the complete branch cannot authorize or freeze."""
+def _e07_declared_content(value: Any, location: str) -> None:
+    """Require content for declared JSON members, without prescribing scientific keys."""
+    require(value is not None, f'{location}: declared structured value absent')
+    if isinstance(value, Mapping):
+        require(bool(value), f'{location}: declared object empty')
+        for key, item in value.items():
+            require(isinstance(key, str) and key.strip(), f'{location}: empty or invalid member name')
+            _e07_declared_content(item, f'{location}.{key}')
+    elif isinstance(value, list):
+        # Empty arrays explicitly declare zero items, including zero differences/gaps.
+        for index, item in enumerate(value):
+            _e07_declared_content(item, f'{location}[{index}]')
+    elif isinstance(value, str):
+        require(bool(value.strip()), f'{location}: declared text empty')
+    else:
+        require(type(value) in (bool, int, float), f'{location}: unsupported declared content')
+        if type(value) is float:
+            require(-float('inf') < value < float('inf'), f'{location}: nonfinite declared number')
+
+
+def evaluate_e07_preconditions(envelope: Mapping[str, Any], *, documentary_inputs_path: Path | None = None) -> dict[str, Any]:
+    """Check declarations against an explicitly supplied, hash-pinned QA source. Never authorize or freeze."""
+    qa_source = {'document': 'data/reference/nb04_cp0_documentary_inputs.json',
+                 'table': '09_b4_calibration_qa_matrix_v2.tsv',
+                 'expected_sha256': E07_DOCUMENTARY_INPUTS_SHA256,
+                 'verification': 'NOT_VERIFIED'}
     envelope_errors = []
     if not isinstance(envelope, Mapping):
         envelope_errors.append('envelope must be an object')
@@ -4654,6 +4688,8 @@ def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
                     require(isinstance(record, Mapping) and all(k in record and record[k] is not None for k in required), 'mandatory tolerance fields missing')
                     require(all(isinstance(record[k], str) and record[k].strip() for k in ('instance_id', 'comparison_object', 'fragmentation_rule')), 'required tolerance descriptors empty or invalid')
                     require(all(isinstance(record[k], Mapping) and record[k] for k in ('pattern', 'expected_coordinates')), 'required pattern or coordinate declaration empty')
+                    for field in ('pattern', 'expected_coordinates'):
+                        _e07_declared_content(record[field], f'tolerance.{record["instance_id"]}.{field}')
                     require(record['orientation'] in ('PLUS', 'MINUS'), 'tolerance orientation missing or invalid')
                     require(record['fixture_id'] in all_fixture_ids and record['candidate_payload_sha256'] in refs.get('candidate_payload_sha256s', []), 'tolerance references differ')
                     require(record['unit'] == 'nt' and isinstance(record['independent_justification'], str) and record['independent_justification'].strip(), 'unit or independent justification missing')
@@ -4662,11 +4698,25 @@ def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
                     require(all(type(n) in (int, float) and 0 <= n < float('inf') for n in numbers.values()), 'unresolved or invalid numerical tolerance')
                 declared = [(r['fixture_id'], r['instance_id'], r['candidate_payload_sha256']) for r in value]
                 require(len(declared) == len(set(declared)) and set(declared) == {tuple(row) for row in refs.get('applicable_tolerances', [])}, 'tolerance coverage of declared applicable instances incomplete')
+                # ponytail: keep this domain closed until E04/E06 supply the declared carriers.
+                # Upgrade by checking their identified representation and applicability, without guessing keys.
+                require(False, 'tolerance representation and applicability unresolved: data/reference/nb04_calibration_tolerances.json and data/reference/nb04_calibration_fixture_catalog.json have no established carrier')
             elif component == 'qa':
                 require(isinstance(value, Mapping) and set(value) == set(E05_QA_SPEC), 'complete QA criteria declarations required')
+                require(documentary_inputs_path is not None, 'QA normative source not identified: versioned documentary inputs path required')
+                documentary_bytes = Path(documentary_inputs_path).read_bytes()
+                require(hashlib.sha256(documentary_bytes).hexdigest() == qa_source['expected_sha256'], 'QA documentary carrier RAW identity differs')
+                source_rows = json.loads(documentary_bytes)['original_table_records'][qa_source['table']]
+                require(isinstance(source_rows, list) and all(isinstance(row, Mapping) for row in source_rows), 'QA source table malformed')
+                matrix = {row['qa_id']: row for row in source_rows}
+                require(len(source_rows) == len(matrix) and set(matrix) == set(E05_QA_SPEC), 'QA source criteria incomplete or repeated')
+                qa_source['verification'] = 'PINNED_RAW_SHA256_AND_CONTENT_READ'
+                normative_fields = ('criterion', 'metric', 'expected_behavior', 'fixture_dependency',
+                                    'failure_interpretation', 'biological_decision_role', 'blocks_configuration_freeze')
                 for qid, record in value.items():
                     require(isinstance(record, Mapping) and record.get('qa_id') == qid and all(isinstance(record.get(k), str) and record[k].strip() for k in ('criterion', 'metric', 'expected_behavior', 'fixture_dependency')), f'{qid}: criterion declaration incomplete')
-                    require(record.get('biological_decision_role') == 'false' and record.get('blocks_configuration_freeze') == ('NO' if qid in ('QA-H', 'QA-O', 'QA-R') else 'YES'), f'{qid}: criterion role missing')
+                    for field in normative_fields:
+                        require(record.get(field) == matrix[qid][field], f'{qid}.{field}: declaration differs from pinned QA matrix')
                     status_fields = [key for key in ('status', 'state_after_e05_part1', 'matrix_initial_status') if key in record]
                     require(status_fields and all(record[key] == 'NOT_TESTED' for key in status_fields), f'{qid}: this preparation evaluates declarations only, never QA outcomes')
             elif component == 'scale_decisions':
@@ -4692,6 +4742,17 @@ def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
                     require(entry['regime'] == ('VERIFIED_BYTE_COPY' if ignored else 'TRACKED_COMMIT_BLOB'), 'availability regime conflicts with declared phase file classification')
                     if entry['regime'] == 'TRACKED_COMMIT_BLOB':
                         require(entry.get('commit') == envelope.get('freeze_commit'), 'tracked commit reference differs')
+                parameters = envelope.get('parameters')
+                require(isinstance(parameters, Mapping) and isinstance(parameters.get('candidates'), list) and parameters['candidates'], 'command input dependencies unavailable')
+                database_prefixes = []
+                for candidate in parameters['candidates']:
+                    command = candidate.get('command_envelope') if isinstance(candidate, Mapping) else None
+                    require(isinstance(command, Mapping) and isinstance(command.get('paths'), Mapping), 'command input paths unavailable')
+                    paths = command['paths']
+                    query = _e07_relative_input_path(paths.get('-query'))
+                    database_prefixes.append(_e07_relative_input_path(paths.get('-db')))
+                    require(query in entries, f'required command input -query not enumerated: {query}')
+                require(False, 'complete database file coverage unresolved for -db ' + repr(database_prefixes) + ': catalog-linked file list unavailable in data/reference/nb04_calibration_fixture_catalog.json; no index extensions inferred')
             elif component == 'availability_regimes':
                 require(bool(entries) and value == {p: e.get('regime') for p, e in entries.items()}, 'per-file availability regimes differ from inventory')
             elif component == 'freeze_commit':
@@ -4707,7 +4768,7 @@ def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
                 require(json_bytes(value.get('files')) == json_bytes({p: {'sha256': e.get('sha256'), 'size_bytes': e.get('size_bytes')} for p, e in entries.items()}) and bool(entries), 'transport file declarations differ from finite inventory')
             elif component == 'allow_dirty':
                 require(value is False, 'transition requires explicitly declared allow_dirty=false')
-        except (ResourceContractError, KeyError, TypeError, ValueError) as exc:
+        except (ResourceContractError, KeyError, TypeError, ValueError, OSError, UnicodeError) as exc:
             blockers.append({'component': component, 'reason': str(exc)})
     if not isinstance(envelope.get('scale_decisions'), Mapping):
         unresolved_decisions = list(E07_PENDING_DECISION_IDS)
@@ -4715,7 +4776,9 @@ def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
             'blocking_components': blockers, 'envelope_errors': envelope_errors,
             'blocking_parameters': parameter_blockers, 'unresolved_decision_ids': unresolved_decisions,
             'freeze_produced': False, 'informative_command_allowed': False, 'authority_verified': False,
-            **E05_SECTION7_CLOSURE_QUALIFICATION, 'limitations': list(E07_LIMITATIONS)}
+            **E05_SECTION7_CLOSURE_QUALIFICATION, 'qa_source': qa_source,
+            'unresolved_dependencies': {k: list(v) if isinstance(v, tuple) else v for k, v in E07_UNRESOLVED_DEPENDENCIES.items()},
+            'limitations': list(E07_LIMITATIONS)}
 
 
 def inspect_e07_declared_state(root: Path, preservation_inventory_path: str, accepted_preservation_sha256: str) -> dict[str, Any]:
@@ -4752,7 +4815,7 @@ def inspect_e07_declared_state(root: Path, preservation_inventory_path: str, acc
     envelope['parameters'] = {'parameter_rows': rows, 'candidates': candidates, 'design_space_declaration': None}
     envelope['qa'] = inspection['e_configuration_qa_matrix_status']['criteria']
     envelope['hashes'] = {'components': {key: _e07_declaration_sha256(envelope[key]) for key in E07_COMPONENTS if key != 'hashes'}, 'files': {}}
-    result = evaluate_e07_preconditions(envelope)
+    result = evaluate_e07_preconditions(envelope, documentary_inputs_path=relative_path(root, 'data/reference/nb04_cp0_documentary_inputs.json'))
     result['preserved_source_evidence'] = {
         'preservation_inventory': {'path': preservation_inventory_path, 'sha256': accepted_preservation_sha256, 'stage': preservation['stage']},
         'geometry_records': {rid: {'path': r['geometry_record_path'], 'sha256': r['geometry_record_sha256']} for rid, r in geometry.items()},

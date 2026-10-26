@@ -3412,16 +3412,30 @@ def _u07_bind(envelope):
     return envelope
 
 
+_U07_DOCUMENTARY_PATH = Path(__file__).resolve().parents[1] / 'data/reference/nb04_cp0_documentary_inputs.json'
+
+
+def _u07_authentic_qa():
+    # Direct original records, independent of production loading and validation.
+    rows = json.loads(_U07_DOCUMENTARY_PATH.read_bytes())['original_table_records']['09_b4_calibration_qa_matrix_v2.tsv']
+    return {row['qa_id']: row for row in rows}
+
+
+def _u07_evaluate(envelope):
+    return cal.evaluate_e07_preconditions(envelope, documentary_inputs_path=_U07_DOCUMENTARY_PATH)
+
+
 def _u07_envelope():
     candidates = []
     for task in ('blastn', 'blastn-short', 'dc-megablast'):
         payload, rows, records, command_envelope = _u06_search_inputs()
+        command_envelope['paths'] = {'-query': 'data/external/nto/unit/query.fa', '-db': 'data/external/nto/unit/db', '-out': 'artifacts/unit/output.asn'}
         payload['search_parameters']['task'] = task
         rows, records = _section7_test_declarations(payload)
         candidates.append({'payload': payload, 'parameter_records': records, 'command_envelope': command_envelope, 'help_text': _U06_SEARCH_HELP})
     candidate_hashes = [_u07_hash(c['payload']) for c in candidates]
     commit = 'a' * 40
-    paths = ['docs/implementation/synthetic/authority.json', 'data/external/nto/synthetic/tuning.bin', 'data/external/nto/synthetic/validation.bin']
+    paths = ['docs/implementation/synthetic/authority.json', 'data/external/nto/synthetic/tuning.bin', 'data/external/nto/synthetic/validation.bin', 'data/external/nto/unit/query.fa']
     inventory = [{'path': path, 'role': 'SYNTHETIC_SOFTWARE_DECLARATION', 'size_bytes': 3,
                   'sha256': hashlib.sha256(b'{}\n').hexdigest(), 'regime': 'TRACKED_COMMIT_BLOB' if i == 0 else 'VERIFIED_BYTE_COPY',
                   **({'commit': commit} if i == 0 else {})} for i, path in enumerate(paths)]
@@ -3439,10 +3453,7 @@ def _u07_envelope():
         'roles': {'TUNING': ['FX_T'], 'VALIDATION': ['FX_V']},
         'parameters': {'parameter_rows': rows, 'candidates': candidates, 'design_space_declaration': 'COMPLETE_SYNTHETIC_SOFTWARE_TEST_ONLY'},
         'tolerance_fields': tolerances,
-        'qa': {qid: {'qa_id': qid, 'criterion': 'SYNTHETIC_CRITERION', 'metric': 'SYNTHETIC_METRIC',
-                     'expected_behavior': 'DECLARED_SOFTWARE_INPUT', 'fixture_dependency': 'FX_T, FX_V',
-                     'biological_decision_role': 'false', 'blocks_configuration_freeze': 'NO' if qid in ('QA-H', 'QA-O', 'QA-R') else 'YES',
-                     'status': 'NOT_TESTED'} for qid in cal.E05_QA_SPEC},
+        'qa': _u07_authentic_qa(),
         'scale_decisions': {name: {'state': 'DECLARED', 'reference': paths[0], 'disposition': 'SYNTHETIC_SOFTWARE_TEST_ONLY'}
                             for name in ('I01', 'I02', 'I03', 'I04', 'PC13', 'F07', 'B4-8', 'B4-9')},
         'authorization': {'authorized_stages': ['E08'], 'reference': paths[0]},
@@ -3460,7 +3471,7 @@ def _u07_envelope():
     return _u07_bind(envelope)
 
 
-def test_u07_complete_declarations_never_produce_freeze_or_authorization(monkeypatch):
+def test_u07_supported_declarations_never_bypass_unresolved_carriers_or_produce_freeze(monkeypatch):
     assert cal.E07_COMPONENTS == _U07_COMPONENT_NAMES
     envelope = _u07_envelope()
     before = r.json_bytes(envelope)
@@ -3469,9 +3480,10 @@ def test_u07_complete_declarations_never_produce_freeze_or_authorization(monkeyp
     monkeypatch.setattr(cal.subprocess, 'run', forbidden)
     monkeypatch.setattr(cal, 'write_json', forbidden)
     monkeypatch.setattr(cal, 'datetime', None)
-    result = cal.evaluate_e07_preconditions(envelope)
-    assert result['state'] == 'PRECONDICOES_DECLARADAS_COMPLETAS', result
-    assert result['blocking_components'] == [] and result['blocking_parameters'] == []
+    result = _u07_evaluate(envelope)
+    assert result['state'] == 'RECUSADO', result
+    assert {b['component'] for b in result['blocking_components']} == {'finite_input_inventory', 'tolerance_fields'}
+    assert result['blocking_parameters'] == []
     assert result['freeze_produced'] is False and result['informative_command_allowed'] is False and result['authority_verified'] is False
     assert result['closure_scope'] == 'COMPUTATIONAL_PREDICATES_ON_SUPPLIED_DECLARATIONS'
     assert result['limitations'] and r.json_bytes(envelope) == before
@@ -3486,7 +3498,7 @@ def test_u07_every_required_component_removal_and_alteration_refuses(component, 
         del envelope[component]
     else:
         envelope[component] = True if component == 'allow_dirty' else {'ALTERED': True}
-    result = cal.evaluate_e07_preconditions(envelope)
+    result = _u07_evaluate(envelope)
     assert result['state'] == 'RECUSADO'
     assert component in {b['component'] for b in result['blocking_components']}
     assert result['freeze_produced'] is False and result['informative_command_allowed'] is False
@@ -3522,13 +3534,13 @@ def test_u07_inconsistencies_still_refuse_after_rebinding_component_hashes(case,
     elif case == 'unlisted_file': e['cross_references']['required_paths'].append('data/external/nto/synthetic/unlisted.bin')
     _u07_bind(e)
     if case == 'file_hash_changed': e['hashes']['files'][e['finite_input_inventory'][0]['path']] = '0' * 64
-    result = cal.evaluate_e07_preconditions(e)
+    result = _u07_evaluate(e)
     assert result['state'] == 'RECUSADO' and component in {b['component'] for b in result['blocking_components']}, result
     assert result['freeze_produced'] is False and result['authority_verified'] is False
 
 
 def test_u07_empty_envelope_enumerates_every_missing_component():
-    result = cal.evaluate_e07_preconditions({})
+    result = _u07_evaluate({})
     assert {b['component'] for b in result['blocking_components']} == set(_U07_COMPONENT_NAMES)
     assert result['state'] == 'RECUSADO' and result['freeze_produced'] is False
 
@@ -3560,7 +3572,7 @@ def test_u07_actual_declared_state_refuses_without_opening_cp1_sequences_or_invo
 
 @pytest.mark.parametrize('invalid', [None, [], {'extra': True}, {1: 'invalid key'}])
 def test_u07_malformed_envelope_refuses_and_still_enumerates_components(invalid):
-    result = cal.evaluate_e07_preconditions(invalid)
+    result = _u07_evaluate(invalid)
     assert result['state'] == 'RECUSADO' and result['envelope_errors']
     assert {b['component'] for b in result['blocking_components']} == set(_U07_COMPONENT_NAMES)
     assert result['freeze_produced'] is False
@@ -3571,7 +3583,7 @@ def test_u07_invalid_numeric_tolerance_refuses_even_with_matching_bindings(numbe
     envelope = _u07_envelope()
     envelope['tolerance_fields'][0]['numeric_by_endpoint']['qstart'] = number
     _u07_bind(envelope)
-    result = cal.evaluate_e07_preconditions(envelope)
+    result = _u07_evaluate(envelope)
     assert result['state'] == 'RECUSADO'
     assert 'tolerance_fields' in {b['component'] for b in result['blocking_components']}
 
@@ -3581,8 +3593,9 @@ def test_u07_independent_declared_events_can_exchange_order(swap):
     first, second = swap
     e['precedence'][first], e['precedence'][second] = e['precedence'][second], e['precedence'][first]
     _u07_bind(e)
-    result = cal.evaluate_e07_preconditions(e)
-    assert result['state'] == 'PRECONDICOES_DECLARADAS_COMPLETAS', result
+    result = _u07_evaluate(e)
+    assert result['state'] == 'RECUSADO', result
+    assert {b['component'] for b in result['blocking_components']} == {'finite_input_inventory', 'tolerance_fields'}
     assert result['freeze_produced'] is False and result['informative_command_allowed'] is False
 
 @pytest.mark.parametrize('field,empty', [('instance_id', ''), ('comparison_object', ' '), ('fragmentation_rule', ''),
@@ -3591,7 +3604,7 @@ def test_u07_required_tolerance_descriptors_cannot_be_empty(field, empty):
     envelope = _u07_envelope()
     envelope['tolerance_fields'][0][field] = empty
     _u07_bind(envelope)
-    result = cal.evaluate_e07_preconditions(envelope)
+    result = _u07_evaluate(envelope)
     assert result['state'] == 'RECUSADO'
     assert 'tolerance_fields' in {b['component'] for b in result['blocking_components']}
 
@@ -3603,7 +3616,7 @@ def test_u07_regime_cannot_bypass_the_existing_phase_file_classification(index, 
     entry['commit'] = e['freeze_commit']
     e['availability_regimes'][entry['path']] = regime
     _u07_bind(e)
-    result = cal.evaluate_e07_preconditions(e)
+    result = _u07_evaluate(e)
     assert result['state'] == 'RECUSADO'
     assert 'finite_input_inventory' in {b['component'] for b in result['blocking_components']}
 
@@ -3617,6 +3630,180 @@ def test_u07_conflicting_or_differently_typed_declarations_refuse(case, componen
         e['finite_input_inventory'][1]['size_bytes'] = 1
         e['verified_transport']['files'][path]['size_bytes'] = True
     _u07_bind(e)
-    result = cal.evaluate_e07_preconditions(e)
+    result = _u07_evaluate(e)
     assert result['state'] == 'RECUSADO'
     assert component in {b['component'] for b in result['blocking_components']}
+
+
+@pytest.mark.parametrize('qid', ('QA-A', 'QA-B', 'QA-C', 'QA-D', 'QA-E', 'QA-F1', 'QA-F2', 'QA-G', 'QA-H', 'QA-I', 'QA-J', 'QA-K', 'QA-L', 'QA-M', 'QA-N', 'QA-O', 'QA-P', 'QA-Q', 'QA-R'))
+@pytest.mark.parametrize('field', ('criterion', 'metric', 'expected_behavior', 'fixture_dependency', 'failure_interpretation'))
+def test_u07_f03_normative_substitution_refuses_even_after_rebinding(qid, field):
+    e = _u07_envelope()
+    e['qa'][qid][field] = 'ARBITRARY_REPLACEMENT'
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert result['state'] == 'RECUSADO'
+    assert any(b['component'] == 'qa' and f'{qid}.{field}' in b['reason'] for b in result['blocking_components'])
+
+
+def test_u07_f03_qa_g_counterexample_has_literal_independent_oracle():
+    e = _u07_envelope()
+    expected = 'no saturation indicator is at its ceiling, AND QA-E and QA-F1 both hold, AND QA-F2 holds under its declared normalization. A parameter value alone never satisfies this criterion, and an unset flag is not an absent ceiling'
+    assert e['qa']['QA-G']['expected_behavior'] == expected
+    assert not any(b['component'] == 'qa' for b in _u07_evaluate(e)['blocking_components'])
+    e['qa']['QA-G']['expected_behavior'] = 'SATURATION_ACCEPTED'
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert result['state'] == 'RECUSADO'
+    assert any(b['component'] == 'qa' and 'QA-G.expected_behavior' in b['reason'] for b in result['blocking_components'])
+    assert all(row['status'] == 'NOT_TESTED' for row in e['qa'].values())
+
+
+@pytest.mark.parametrize('source', ('absent', 'missing', 'changed'))
+def test_u07_f03_source_is_required_and_raw_identity_is_fixed(source, tmp_path):
+    path = None
+    if source != 'absent':
+        path = tmp_path / 'documentary.json'
+        if source == 'changed':
+            path.write_bytes(_U07_DOCUMENTARY_PATH.read_bytes().replace(b'NO_SILENT_TRUNCATION', b'ARBITRARY_CRITERION'))
+    result = cal.evaluate_e07_preconditions(_u07_envelope(), documentary_inputs_path=path)
+    assert result['state'] == 'RECUSADO'
+    assert any(b['component'] == 'qa' for b in result['blocking_components'])
+    assert result['qa_source']['verification'] == 'NOT_VERIFIED'
+
+
+def _u07_remove_input_and_rebind(envelope, path):
+    envelope['finite_input_inventory'] = [entry for entry in envelope['finite_input_inventory'] if entry['path'] != path]
+    envelope['cross_references']['required_paths'].remove(path)
+    del envelope['availability_regimes'][path]
+    del envelope['verified_transport']['files'][path]
+    return _u07_bind(envelope)
+
+
+def test_u07_f01_query_coherently_omitted_still_refuses():
+    e = _u07_envelope()
+    path = 'data/external/nto/unit/query.fa'
+    _u07_remove_input_and_rebind(e, path)
+    result = _u07_evaluate(e)
+    assert any(b['component'] == 'finite_input_inventory' and '-query not enumerated' in b['reason'] and path in b['reason'] for b in result['blocking_components'])
+    assert result['state'] == 'RECUSADO'
+
+
+def test_u07_f01_database_file_coherently_omitted_remains_blocked_without_catalog():
+    e = _u07_envelope()
+    # Explicit harness literal, never a production inference about BLAST extensions.
+    path = 'data/external/nto/unit/db.nsq'
+    e['finite_input_inventory'].append({'path': path, 'role': 'SYNTHETIC_DECLARED_INDEX', 'size_bytes': 3,
+                                      'sha256': 'd' * 64, 'regime': 'VERIFIED_BYTE_COPY'})
+    e['cross_references']['required_paths'].append(path)
+    e['availability_regimes'][path] = 'VERIFIED_BYTE_COPY'
+    e['verified_transport']['files'][path] = {'sha256': 'd' * 64, 'size_bytes': 3}
+    _u07_bind(e)
+    before = _u07_evaluate(e)
+    _u07_remove_input_and_rebind(e, path)
+    after = _u07_evaluate(e)
+    for result in (before, after):
+        assert result['state'] == 'RECUSADO'
+        assert any(b['component'] == 'finite_input_inventory' and 'catalog-linked file list unavailable' in b['reason'] for b in result['blocking_components'])
+        assert result['unresolved_dependencies']['database_file_coverage'] == 'COMPLETE_DATABASE_FILE_LIST_WITH_CATALOG_LINK_NOT_ESTABLISHED'
+
+
+def test_u07_f01_no_validation_tolerance_after_rebinding_remains_explicitly_unresolved():
+    e = _u07_envelope()
+    e['tolerance_fields'] = [r for r in e['tolerance_fields'] if r['fixture_id'] != 'FX_V']
+    e['cross_references']['applicable_tolerances'] = [r for r in e['cross_references']['applicable_tolerances'] if r[0] != 'FX_V']
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert result['state'] == 'RECUSADO'
+    assert any(b['component'] == 'tolerance_fields' and 'applicability unresolved' in b['reason'] for b in result['blocking_components'])
+    assert result['unresolved_dependencies']['tolerance_applicability'] == 'APPLICABLE_INSTANCES_WITHOUT_TOLERANCE_REGISTER_NOT_ESTABLISHED'
+
+
+def test_u07_f02_expected_coordinates_counterexample_refuses_after_rebinding():
+    e = _u07_envelope()
+    e['tolerance_fields'][0]['expected_coordinates'] = {'query': None}
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert any(b['component'] == 'tolerance_fields' and 'expected_coordinates.query: declared structured value absent' in b['reason'] for b in result['blocking_components'])
+    assert result['state'] == 'RECUSADO'
+
+
+def test_u07_f02_pattern_counterexample_refuses_after_rebinding():
+    e = _u07_envelope()
+    e['tolerance_fields'][0]['pattern'] = {'bases': None}
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert any(b['component'] == 'tolerance_fields' and 'pattern.bases: declared structured value absent' in b['reason'] for b in result['blocking_components'])
+    assert result['state'] == 'RECUSADO'
+
+
+@pytest.mark.parametrize('field', ('pattern', 'expected_coordinates'))
+@pytest.mark.parametrize('content', ({'inner': ''}, {'inner': '  '}, {'inner': {}}, {'inner': {'value': None}}, {'inner': [1, None]}, {'inner': [{'value': ''}]}, {'': 'value'}))
+def test_u07_f02_internal_absence_recurses_without_prescribing_member_names(field, content):
+    e = _u07_envelope()
+    e['tolerance_fields'][0][field] = content
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert result['state'] == 'RECUSADO'
+    assert any(b['component'] == 'tolerance_fields' and f'.{field}' in b['reason'] and any(message in b['reason'] for message in ('declared text empty', 'declared object empty', 'declared structured value absent', 'empty or invalid member name')) for b in result['blocking_components'])
+
+
+@pytest.mark.parametrize('orientation', ('PLUS', 'MINUS'))
+def test_u07_f02_legitimate_declared_details_survive_structural_check(orientation):
+    e = _u07_envelope()
+    e['tolerance_fields'][0].update({
+        'orientation': orientation,
+        'pattern': {'bases': 'ACGT', 'differences': [], 'gaps': [],
+                    'explanation': 'unknown applicability is stated, not resolved'},
+        'expected_coordinates': {'query': [1, 4], 'subject': [4, 1] if orientation == 'MINUS' else [1, 4],
+                                 'additional_case': {'state': 'NOT_APPLICABLE', 'contractual_reason': 'Synthetic explanation only; authority unknown'}},
+    })
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert {b['component'] for b in result['blocking_components']} == {'finite_input_inventory', 'tolerance_fields'}
+    assert any(b['component'] == 'tolerance_fields' and b['reason'].startswith('tolerance representation and applicability unresolved:') for b in result['blocking_components'])
+    assert not any(b['component'] == 'qa' for b in result['blocking_components'])
+
+
+def test_u07_f01_literal_query_and_future_output_have_distinct_input_roles():
+    e = _u07_envelope()
+    query = 'data/external/nto/unit/UNKNOWN query.fa'
+    entry = e['finite_input_inventory'][-1]
+    previous = entry['path']
+    entry['path'] = query
+    e['cross_references']['required_paths'][-1] = query
+    e['availability_regimes'][query] = e['availability_regimes'].pop(previous)
+    e['verified_transport']['files'][query] = e['verified_transport']['files'].pop(previous)
+    for candidate in e['parameters']['candidates']:
+        candidate['command_envelope']['paths']['-query'] = query
+        candidate['command_envelope']['paths']['-out'] = 'artifacts/unit/PENDING future output.asn'
+    _u07_bind(e)
+    result = _u07_evaluate(e)
+    assert {b['component'] for b in result['blocking_components']} == {'finite_input_inventory', 'tolerance_fields'}
+    assert any(b['component'] == 'finite_input_inventory' and b['reason'].startswith('complete database file coverage unresolved for -db') for b in result['blocking_components'])
+
+
+def test_u07_unresolved_dependencies_name_all_missing_carriers_without_adding_envelope_fields():
+    result = _u07_evaluate(_u07_envelope())
+    assert result['unresolved_dependencies']['preparation_record_carriers_not_established'] == [
+        'data/reference/nb04_cp1_resource_review.json', 'data/reference/nb04_calibration_fixture_catalog.json',
+        'data/reference/nb04_calibration_candidate_configurations.json', 'data/reference/nb04_calibration_tolerances.json',
+        'data/reference/nb04_calibration_prefreeze.json']
+    assert result['unresolved_dependencies']['tolerance_representation'] == 'REQUIRED_INTERNAL_KEYS_NOT_ESTABLISHED'
+    assert cal.E07_COMPONENTS == _U07_COMPONENT_NAMES
+    assert result['freeze_produced'] is False and result['informative_command_allowed'] is False and result['authority_verified'] is False
+
+
+def test_u07_f03_original_table_and_preserved_r3_agree_independently():
+    root = Path(__file__).resolve().parents[1]
+    preserved = root / cal.E05_U03_R3_PATH
+    if not preserved.is_file():
+        pytest.skip('operator-local r3 unavailable outside canonical checkout')
+    raw = preserved.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == '5fc259de14b51829f60cdf3ee8f21f0c9212e28c0373fb45efea8c658f8dd843'
+    original = _u07_authentic_qa()
+    derived = json.loads(raw)['e_configuration_qa_matrix_status']['criteria']
+    assert set(original) == set(derived)
+    for qid in original:
+        for field in ('criterion', 'metric', 'expected_behavior', 'fixture_dependency', 'failure_interpretation', 'biological_decision_role', 'blocks_configuration_freeze'):
+            assert original[qid][field] == derived[qid][field]
