@@ -4278,7 +4278,7 @@ def test_u08_specified_instance_cardinality_and_record_reservation_refuse_reboun
     catalog['identifier_map'][0]['installation_ids'] = sorted(catalog['identifier_map'][0]['installation_ids'] + [duplicate['installation_id']])
     catalog['execution_declarations'][0]['installation_ids'].append(duplicate['installation_id'])
     catalog['traceability'].append({**catalog['traceability'][0], 'installation_id': duplicate['installation_id']})
-    reason = 'one installation per fixture' if same_instance else 'distinct planted instances must occupy distinct records'
+    reason = 'one installation per fixture' if same_instance else 'one logical instance and fixture cannot use multiple planted_instance_id aliases'
     _u08_assert_refusal(catalog, 'roles', reason)
 
 
@@ -4337,3 +4337,70 @@ def test_u08_build_accepts_normative_values_and_zero_max_file_size_without_selec
     result = cal.evaluate_e04_fixture_catalog(catalog)
     assert result['state'] == 'DECLARATIONS_CONSISTENT', result
     assert result['qa_status'] == 'NOT_TESTED'
+
+
+def test_u08_logical_instance_alias_rewrite_with_second_record_refuses():
+    import copy
+    catalog = _u08_pc02_catalog()
+    assert cal.evaluate_e04_fixture_catalog(catalog)['state'] == 'DECLARATIONS_CONSISTENT'
+    original = catalog['installations'][0]
+    duplicate = copy.deepcopy(original)
+    duplicate.update({'installation_id': 'REBOUND_INSTALLATION',
+                      'planted_instance_id': 'REBOUND_OPAQUE_ID',
+                      'analysis_id': 'TEST_T__00000002'})
+    assert duplicate['instance_identity'] == original['instance_identity']
+    assert duplicate['fixture_role'] == original['fixture_role']
+    assert duplicate['class'] == original['class']
+    assert duplicate['length'] == original['length']
+    assert duplicate['fixture_id'] == original['fixture_id']
+    assert duplicate['planted_instance_id'] != original['planted_instance_id']
+    assert duplicate['analysis_id'] != original['analysis_id']
+
+    fixture = catalog['fixtures'][0]
+    record = copy.deepcopy(fixture['records'][0])
+    record['analysis_id'] = duplicate['analysis_id']
+    fixture['records'].append(record)
+    fixture['record_lengths'].append(2000)
+    fixture['record_count'] = 2
+    fixture['total_bases'] = 4000
+    fixture['fasta_sha256'] = _u08_sha('DIRECT_TWO_RECORD_DECLARATION')
+    catalog['installations'].append(duplicate)
+    map_row = copy.deepcopy(catalog['identifier_map'][0])
+    map_row.update({'analysis_id': duplicate['analysis_id'],
+                    'installation_ids': [duplicate['installation_id']]})
+    catalog['identifier_map'].append(map_row)
+    catalog['headers'].append(duplicate['analysis_id'])
+    inspection = catalog['database_id_inspection']
+    inspection['analysis_ids'] = list(catalog['headers'])
+    inspection['engine_to_analysis_id']['lcl|' + duplicate['analysis_id']] = duplicate['analysis_id']
+    catalog['execution_declarations'][0]['installation_ids'].append(duplicate['installation_id'])
+    catalog['traceability'].append({**catalog['traceability'][0],
+                                    'installation_id': duplicate['installation_id']})
+    _u08_assert_refusal(catalog, 'roles', 'one logical instance and fixture cannot use multiple planted_instance_id aliases')
+
+
+def test_u08_record_reservation_is_limited_to_a8_and_pc01_table_multiplicity_is_disclosed():
+    import copy
+    catalog = _u08_catalog()
+    original = catalog['installations'][0]
+    second = copy.deepcopy(original)
+    second.update({'installation_id': 'PC01_SECOND_LENGTH',
+                   'planted_instance_id': 'TUNING_PC01_LENGTH_2_V1',
+                   'length': 2, 'query_sequence': 'CG', 'query_sha256': _u08_sha('CG'),
+                   'local_module': 'CG', 'local_module_sha256': _u08_sha('CG'),
+                   'planted_interval': [4, 5], 'constructed_identity': [2, 2],
+                   'instance_identity': {'fixture_role': 'TUNING', 'class': 'PC01', 'length': 2, 'version': 'V1'},
+                   'coordinates': {'coordinate_system': 'ONE_BASED_INCLUSIVE',
+                                   'emitted': {'qstart': 1, 'qend': 2, 'sstart': 4, 'send': 5},
+                                   'ascending_subject_interval': [4, 5]},
+                   'generation_keys': [{'stream': 'QUERY', 'counter': 0,
+                                        'key': 'NB04_SYNTHETIC_CASE_V1|TUNING|PC01|2|QUERY|0'}]})
+    catalog['installations'].append(second)
+    catalog['identifier_map'][0]['installation_ids'] = sorted(
+        catalog['identifier_map'][0]['installation_ids'] + [second['installation_id']])
+    catalog['execution_declarations'][0]['installation_ids'].append(second['installation_id'])
+    catalog['traceability'].append({**catalog['traceability'][0],
+                                    'installation_id': second['installation_id']})
+    result = cal.evaluate_e04_fixture_catalog(catalog)
+    assert result['state'] == 'DECLARATIONS_CONSISTENT', result
+    assert any('does not verify table 18 multiplicity' in item for item in result['limitations'])

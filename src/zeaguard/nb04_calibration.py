@@ -4841,6 +4841,7 @@ E04_CATALOG_LIMITATIONS = (
     'Coordinates describe supplied complete planted objects, not recovered HSPs. Recovery, extension tolerances, incidental matches and statistical independence are not established.',
     'The recipe literal and declared generation keys are checked without generating bases. The integer seed is required but its derivation is not regenerated.',
     'BLAST file-list completeness and applicability are not established by supplied index-file declarations. This verifier does not remove any U07 barrier or supply its missing carriers.',
+    'This local format does not verify table 18 multiplicity declarations, including PC01 unit multiplicity across F01 through F07. DECLARATIONS_CONSISTENT does not attest conformity to those rows.',
     'RAW comparisons for src/zeaguard/nb04_calibration.py and tests/test_nb04_calibration.py and module prefixes 179161, 221104, 239075 and 266347 bytes must use Git blobs or LF-normalized content, never Windows checkout bytes. The line-ending exposure remains escalated. No attribute, configuration or certificate is changed.',
     'QA-M and QA-I remain NOT_TESTED. No materialization, execution, freeze, B4 or G1 authorization is produced.',
 )
@@ -5029,9 +5030,9 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
                 require(not {f['fasta_sha256'] for f in fixtures if f['fixture_role'] == 'TUNING'} & {f['fasta_sha256'] for f in fixtures if f['fixture_role'] == 'VALIDATION'}, 'TUNING/VALIDATION FASTA hash overlap')
                 identities: dict[str, tuple[str, str, int, str]] = {}
                 repeated: dict[tuple[str, str, int, str], tuple[str, str, str]] = {}
-                record_owners: dict[tuple[str, str, str, str], str] = {}
-                specified_instance_records: dict[tuple[str, str, str, str], str] = {}
-                specified_instance_counts: dict[tuple[str, str, str, str], int] = {}
+                record_owners: dict[tuple[str, str, str, str], tuple[str, str, int, str]] = {}
+                specified_instance_ids: dict[tuple[str, str, int, str, str], str] = {}
+                specified_instance_counts: dict[tuple[str, str, int, str, str], int] = {}
                 for row in installations:
                     _u06_text(row['installation_id'], 'installation_id')
                     _u06_text(row['planted_instance_id'], 'planted_instance_id')
@@ -5042,15 +5043,16 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
                     key = (role, row['class'], row['length'], catalog['version'])
                     require(row['planted_instance_id'] not in identities or identities[row['planted_instance_id']] == key, 'planted_instance_id reused for a different identity or role')
                     identities[row['planted_instance_id']] = key
-                    fixture_scope = (row['fixture_set_id'], role, row['fixture_id'])
-                    record_key = fixture_scope + (row['analysis_id'],)
-                    record_instance = record_owners.get(record_key)
-                    require(record_instance is None or record_instance == row['planted_instance_id'], 'distinct planted instances must occupy distinct records within a fixture')
-                    record_owners[record_key] = row['planted_instance_id']
-                    instance_key = fixture_scope + (row['planted_instance_id'],)
                     if row['class'] in ('PC02', 'PC03', 'PC06'):
-                        require(instance_key not in specified_instance_records or specified_instance_records[instance_key] == row['analysis_id'], 'specified planted instance must use one designated record per fixture')
-                        specified_instance_records[instance_key] = row['analysis_id']
+                        fixture_scope = (row['fixture_set_id'], role, row['fixture_id'])
+                        instance_key = key + (row['fixture_id'],)
+                        declared_instance_id = specified_instance_ids.get(instance_key)
+                        require(declared_instance_id is None or declared_instance_id == row['planted_instance_id'], 'one logical instance and fixture cannot use multiple planted_instance_id aliases')
+                        specified_instance_ids[instance_key] = row['planted_instance_id']
+                        record_key = fixture_scope + (row['analysis_id'],)
+                        record_instance = record_owners.get(record_key)
+                        require(record_instance is None or record_instance == key, 'distinct A.8 logical instances must occupy distinct records within a fixture')
+                        record_owners[record_key] = key
                         specified_instance_counts[instance_key] = specified_instance_counts.get(instance_key, 0) + 1
                         require(specified_instance_counts[instance_key] == 1, 'specified planted instance permits one installation per fixture')
                     if row['class'] in ('PC03', 'PC06'):
