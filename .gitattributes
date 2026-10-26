@@ -9,5 +9,3 @@ tests/test_nb04_cp0.py text eol=lf
 src/workstreams/bioinformatics/decisions/0007-nb04-nto-sequence-specificity-policy.md text eol=lf
 src/workstreams/bioinformatics/runs/2026-10-14_nb04-cp0-limited-implementation.md text eol=lf
 src/workstreams/bioinformatics/runs/2026-10-14_nb04-cp0-complementary-contract-patch.md text eol=lf
-src/zeaguard/nb04_calibration.py text eol=lf
-tests/test_nb04_calibration.py text eol=lf
