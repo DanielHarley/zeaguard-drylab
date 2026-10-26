@@ -1,0 +1,545 @@
+{
+  "artifact_id": "NB04_CALIBRATION_EXECUTION_SCOPE_V1",
+  "authority_bindings": {
+    "cp1_resources_manifest_path": "data/reference/nb04_nto_resources_manifest.json",
+    "cp1_resources_manifest_sha256": "2988284ac3e8a5c790f820dab479dacd5c9834f434eda5c9f6b9076fa2a99c52",
+    "e01_gitignore_baseline_raw_sha256": "2ed210bb34cedb631968097b078434ff4322a6cc6bdafcfbf6d34cf797fbce6a",
+    "evaluator_opinion_path": "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4/parecer_avaliador_v003.md",
+    "evaluator_opinion_sha256": "8b066d884b2044064f1c0d93a8f64a0e28c455b152bd76334da3fb083a346907",
+    "g0_certificate_path": "data/reference/nb04_g0_certification.json",
+    "g0_certificate_sha256": "4f4ebd05ad1bf3005ac9796f0d7b3f075c03e7f67de2c02444d349dae8f6fad1",
+    "plan_path": "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4/plan_v003.md",
+    "plan_section_2_gitignore_raw_sha256": "a40c0c295b5f1a6f31b8cd7f576307c0bc62aaa561bf43631c20fdbec21eed44",
+    "plan_sha256": "dfaac13bd97ac0e9504dcd97443d0286a872b92046881f60fbf8e5fcdd43c72b"
+  },
+  "blocked_operations": [
+    "INFORMATIVE_CALIBRATION",
+    "REAL_NTO_SEARCHES",
+    "E08_CALIBRATION_EXECUTION",
+    "E09_G1_CERTIFICATION",
+    "G1_CERTIFICATION_DECLARATION",
+    "SYNTHETIC_FIXTURE_MATERIALIZATION",
+    "BLAST_INDEX_BUILD_FOR_FIXTURES_OR_RESOURCES"
+  ],
+  "closed_preparation_dirty_allowlist": [
+    ".gitignore",
+    "src/zeaguard/nb04_calibration.py",
+    "scripts/prepare_nb04_calibration.py",
+    "scripts/run_nb04_calibration.py",
+    "tests/test_nb04_calibration.py",
+    "data/reference/nb04_calibration_execution_scope.json",
+    "data/reference/nb04_cp1_resource_review.json",
+    "data/reference/nb04_calibration_fixture_catalog.json",
+    "data/reference/nb04_calibration_candidate_configurations.json",
+    "data/reference/nb04_calibration_tolerances.json",
+    "data/reference/nb04_calibration_prefreeze.json"
+  ],
+  "index_to_fasta_size_ratio": {
+    "domain_restrictions": [
+      "NOT_GUARANTEED_ESTIMATE_FOR_SYNTHETIC_ACGT_FIXTURES",
+      "NOT_A_RUNTIME_OR_RAM_ESTIMATE",
+      "EMPIRICAL_BIOLOGICAL_TRANSCRIPT_COMPOSITION_AND_REDUNDANCY_ONLY"
+    ],
+    "empirical_origin": "REAL_BIOLOGICAL_NTO_CP1_RESOURCES",
+    "observed_max_ratio": 0.4024,
+    "observed_min_ratio": 0.29806,
+    "per_resource": {
+      "AM_GCF003254395_2_RNA": {
+        "blastdb_total_bytes": 30048321,
+        "blastdb_volume_count": 10,
+        "fasta_bytes": 100812948,
+        "index_to_fasta_byte_ratio": 0.29806
+      },
+      "OI_GCYL01_TSA": {
+        "blastdb_total_bytes": 11236444,
+        "blastdb_volume_count": 10,
+        "fasta_bytes": 27923536,
+        "index_to_fasta_byte_ratio": 0.4024
+      },
+      "PM_GKDL01_TSA": {
+        "blastdb_total_bytes": 18337056,
+        "blastdb_volume_count": 10,
+        "fasta_bytes": 58342652,
+        "index_to_fasta_byte_ratio": 0.314299
+      },
+      "RM_GCF003676215_2_RNA": {
+        "blastdb_total_bytes": 16281229,
+        "blastdb_volume_count": 10,
+        "fasta_bytes": 50237934,
+        "index_to_fasta_byte_ratio": 0.324082
+      },
+      "TA_GCA036937485_2_CDS": {
+        "blastdb_total_bytes": 11895493,
+        "blastdb_volume_count": 10,
+        "fasta_bytes": 34949453,
+        "index_to_fasta_byte_ratio": 0.340363
+      },
+      "ZM_GCF902167145_1_RNA": {
+        "blastdb_total_bytes": 55390020,
+        "blastdb_volume_count": 10,
+        "fasta_bytes": 167309712,
+        "index_to_fasta_byte_ratio": 0.331063
+      }
+    },
+    "plan_section_5_approx_range": [
+      0.298,
+      0.402
+    ],
+    "statement": "Observed CP1 BLAST index byte sizes range from approximately 0.298 to 0.402 of the corresponding normalized FASTA byte size across the six real biological resources (plan_v003.md section 5). Synthetic ACGT fixtures may exhibit different compressibility and index structure; this ratio is not a guaranteed bound for synthetic fixtures and does not estimate runtime or RAM."
+  },
+  "normative_corpus_declaration": {
+    "availability_qualification": "The 42 EXTERNAL_LOCAL_CORPUS documents reside outside version control in operator-supplied directories; their accessibility is local and temporal to the verification run.",
+    "documents": {
+      "01_PLAN_v2.2.5.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "9b759f71de500f65947bb150db71a5d20029da06971a26f7e20d1c72193dc83a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "02_B3_L4_REVIEW_v2.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "e8b4c4269a60bcaab97aa58a5b9936ed4d80e03233a41cf217cdd0f91a715ea4",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "03_B3_L4_METHOD_DECISION_MEMO_v2.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "580da72ed08859523ba2d079c249c4a75b59cb282c79e4c768eaffc26fabe70e",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "04_parameter_classification_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "8203ca35bf290700c6d7ac541c1e953dfbe6ae33b91ed1c936e1ebbd9d10f45d",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "05_B4_LOCAL_ALIGNMENT_CALIBRATION_DESIGN_v2_1_2.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "aa156f77f02b618b878c8f4acac84bf45b36407c86ec9a674e2d5eb82ec3b91a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "06_B4_TRUNCATION_AND_COMPLETENESS_CONTRACT_v2_1.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "9e559f9f3dac621afafb2dff53f7c392a439a76d1ed13bd031a5eb17ce174851",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "07_B4_TECHNICAL_DECISION_MEMO_v2_1_2.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "8e2ab29a2f08f13bd31076879e965205a732e2929156759c7e29e1b7dfdb5273",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "08_b4_calibration_parameter_matrix_v2_1.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "7731fa6bc8f4523f65d37c130e23885bab4358968ea655b2987712db160b8690",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "09_b4_calibration_qa_matrix_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "db59d77f44ec6be32962f25cb4da1e3b4f7c58c3c9c1a55348ba4581d57608b0",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "10_l1_l2_l3_l8_ecological_evidence_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "a253e6e2a1cde375e19e2457271683412cea7133673e7a3f23b275fe6b48494f",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "11_nto_candidate_receptors_precontract_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "870e468d626fef05248e05da76ebb184f2604131fd2162ce0f06c2db8b53d72a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "12_mandatory_category_closure_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "04b3e7773186926942e9b4fecd087615c7a8a47518b20bb3b02746ce045a6505",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "13_l9a_pre_g0_resource_landscape_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "68af318ed95fb4bbc808a8b2f249c0ed7ab59d15c0838844e25e67fae9ad0eab",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "14_l9a_resource_landscape_metadata_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "c9aa0ceb988e440202c0b5e555ce341d3ffa10a2772170b993ec82d5a97bd7ed",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "15_SOURCE_AUDIT_v2.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "dd0d285366b4e73a4b3c7caad5da6024ecc4c7bae6c9bf7783dff06888d403c9",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "16_l4_b3_methodological_evidence_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "9e26cc3b6c386fb5c6bd050f1264f924f66a98e9556d6dd4b83809e4b78ef61c",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "17_B4_V2_1_2_CHANGELOG.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "e99592617674668c4c6b9a00f1f3fc8563057e6fd91ef82fa553773d5a98d9d7",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "18_b4_fixture_spec_v2.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_INPUTS",
+        "expected_sha256": "1beb9845b357a279fca11d1ba317d91f79a84d7fdb3501169daa4c9229d6ad2c",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B4_CALIBRATION_AMENDMENT_A1.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "expected_sha256": "0c1815be37ca6187639a27429fc0b38adb3f4be762f773f17a159f29b38f0ecc",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B5_CONCERN_CRITERIA_REVIEW.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "ed7fd88c6ed8655d0c7b320bf21c618ef15ef11c478a60ec375436fcd4e37eb1",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B5_METHOD_DECISION_MEMO.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "179d262a41608af4759e95a918e702bce7477c88416618381d23d6ca97bcf57a",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B5_SOURCE_AUDIT.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "ab02e65e2e8383940949bb328984fb49f332f342a7d328a5ed153cbe6d495be8",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B6_GOVERNANCE_AMENDMENT_A1.md": {
+        "availability_semantics": "VERSIONED_IN_REPOSITORY",
+        "corpus_id": "REPOSITORY_DECISIONS",
+        "expected_sha256": "9ea167a88359f78e916d753865d7d40a5c37d2ff04d3a09d73c647c3aebaa62b",
+        "hash_mode": "RAW",
+        "location_class": "IN_REPOSITORY",
+        "repository_relative_path": "src/workstreams/bioinformatics/decisions/B6_GOVERNANCE_AMENDMENT_A1.md"
+      },
+      "B6_GOVERNANCE_REVIEW.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "b239e42bcc8cede524418a4866aadc32ae6f3f081ee89592167156c23e4a0b20",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B6_METHOD_DECISION_MEMO.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "6488b8cfc9bdab5d870402358f1fe955d050552ef3f586a30b24f69dee49dc00",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "B6_SOURCE_AUDIT.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "591270f9abb8bd90049cbd11b9dcab519c17aba9537dbcd4a4ebb7cbaf0bae60",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "NB04_CP0_COMPLEMENTARY_CONTRACT_PROPOSAL.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "expected_sha256": "617438b9bf5a0a4dd2e80fc832af288432060899e5f615384df3e306bb919c68",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "NB04_CP0_COMPLEMENTARY_INDEPENDENT_AUDIT.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "expected_sha256": "277ac250c6f66a0ff0d451682f75b08d325a33bd58d7d476a374ff2c22581572",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "NB04_CP0_COMPLEMENTARY_RATIFICATION_RECORD.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "expected_sha256": "a0b3d81d2d94351663a758603470509c91d81d2fdf30e9519c3bf2bbc66d9232",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "NB04_PREAPPROVAL_CLOSURE.md": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_20261014_AMENDMENTS_AND_CLOSURE",
+        "expected_sha256": "52b54d4fa633b2847818e7382e57fdbf9c1ec73588f662c93fb30f56aa7f618b",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b5_adjudication_matrix.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "cf28f1c388fd8a94de6477bf5afc552a6b2200db4ab06418db24ed8782b145a6",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b5_concern_methodological_evidence.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "2b102d6ccddbe0f3e863e4022f91bdd89d5838395477d20f1b9ffca678558618",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b5_review_trigger_registry.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "1058163a9294f3a114053b3213e418521fa2ccb95a6fece05219bac2cfd28146",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b5_rule_classification.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "1a60e1ad00e201d26d4270a90af83a7f498bc58d4a80075971061352d3453636",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b5_state_machine.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B5_REVIEW",
+        "expected_sha256": "9737888ce5633e890dfb394d18362167da8f0d3e16a5ddb01339e7593f89b3bb",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_amendment_matrix.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "bfae1f4685c5af44f836ba567f823c52fd1d041cfead3002b03eaab732e24f57",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_competency_matrix.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "1a6b16410d87a25fed0a2d3d83cc81a0af36356dbf9250196f44d2aea15a1670",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_disagreement_resolution.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "c6362ede9b0af46149072a0b2a0821980aca1c3b461ffc22657b0e998554a983",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_governance_methodological_evidence.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "2d31e1b6b499d7784e03cd80012a4a36ca4cef786b09dbad744266c724e81ff8",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_review_governance_matrix.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "bca35004c5306d3a6eb6b1f639c6fcd608d9cacb3f100b359329a3fbd02993a3",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_review_workflow.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "0c955d310013d820997c73a8f3bd44329868fad7b9845344002cf9764be9bb51",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_role_registry.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "005309631796d173f2fd747e94b665d4447fafd4d011c55da792c0b1c032d272",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      },
+      "b6_signoff_contract.tsv": {
+        "availability_semantics": "LOCAL_TEMPORAL_OPERATOR_SUPPLIED_NOT_VERSIONED",
+        "corpus_id": "NB04_B6_REVIEW",
+        "expected_sha256": "22da08f61ec6daef53fafe4e0dd5da2c6379d41d1b3a0798ea7235b4cfb322df",
+        "hash_mode": "RAW",
+        "location_class": "EXTERNAL_LOCAL_CORPUS",
+        "repository_relative_path": null
+      }
+    },
+    "external_local_corpus_count": 42,
+    "in_repository_count": 1,
+    "inaccessibility_policy": "Any missing corpus directory mapping or missing/unreadable file produces explicit status NORMATIVE_DOCUMENT_INACCESSIBLE and fails closed (raises ResourceContractError when strict=True); inaccessibility is never silently treated as approval.",
+    "logical_corpora_document_counts": {
+      "NB04_20261014_AMENDMENTS_AND_CLOSURE": 5,
+      "NB04_B5_INPUTS": 18,
+      "NB04_B5_REVIEW": 8,
+      "NB04_B6_REVIEW": 11,
+      "REPOSITORY_DECISIONS": 1
+    },
+    "personal_paths_omitted": true,
+    "total_documents": 43
+  },
+  "phase_git_and_snapshot_policy": {
+    "file_classification": {
+      "ignored_unversioned_campaign_outputs": [
+        "data/external/nto",
+        "results/bioinformatics/nb04",
+        "artifacts/validation/nb04_cp1_prefreeze"
+      ],
+      "local_uncommitted_preserved_file": ".gitignore",
+      "protected_immutable_historical_cp1_code": [
+        "src/zeaguard/nb04_resources.py",
+        "scripts/run_nb04_cp1.py",
+        "scripts/inventory_nb04_cp1.py"
+      ],
+      "versioned_post_e08_normative_exports": [
+        "data/reference/nb04_nto_search_configuration.json",
+        "data/reference/nb04_nto_search_calibration.tsv"
+      ],
+      "versioned_preparation_code_and_tests": [
+        "src/zeaguard/nb04_calibration.py",
+        "scripts/prepare_nb04_calibration.py",
+        "scripts/run_nb04_calibration.py",
+        "tests/test_nb04_calibration.py"
+      ],
+      "versioned_preparation_reference_records": [
+        "data/reference/nb04_calibration_execution_scope.json",
+        "data/reference/nb04_cp1_resource_review.json",
+        "data/reference/nb04_calibration_fixture_catalog.json",
+        "data/reference/nb04_calibration_candidate_configurations.json",
+        "data/reference/nb04_calibration_tolerances.json",
+        "data/reference/nb04_calibration_prefreeze.json"
+      ],
+      "versioned_task_documentation_directory": "docs/implementation/NB04_CP1_PREPARACAO_FREEZE_B4"
+    },
+    "phases": {
+      "E01_TO_E07_PREFREEZE_PREPARATION": {
+        "allow_dirty": true,
+        "allowlist_required": true,
+        "closed_dirty_allowlist": [
+          ".gitignore",
+          "src/zeaguard/nb04_calibration.py",
+          "scripts/prepare_nb04_calibration.py",
+          "scripts/run_nb04_calibration.py",
+          "tests/test_nb04_calibration.py",
+          "data/reference/nb04_calibration_execution_scope.json",
+          "data/reference/nb04_cp1_resource_review.json",
+          "data/reference/nb04_calibration_fixture_catalog.json",
+          "data/reference/nb04_calibration_candidate_configurations.json",
+          "data/reference/nb04_calibration_tolerances.json",
+          "data/reference/nb04_calibration_prefreeze.json"
+        ],
+        "informative_execution_permitted": false,
+        "repro_checkpoint": "nb04_cp0",
+        "snapshot_policy": "Preserve existing historical snapshots without overwriting; dirty working tree is explicitly declared and permitted only within CLOSED_PREPARATION_DIRTY_ALLOWLIST."
+      },
+      "E08_INFORMATIVE_CALIBRATION_EXECUTION": {
+        "allow_dirty": false,
+        "allowlist_required": false,
+        "closed_dirty_allowlist": [],
+        "informative_execution_permitted": true,
+        "repro_checkpoint": "nb04_cp0",
+        "snapshot_policy": "Requires prior authorized freeze commit, isolated clean checkout (without local .gitignore edit or private directories), a new Linux environment snapshot matching the freeze commit, and VERIFIED_BYTE_COPY of all ignored frozen inputs (sections 8.1 and 8.2)."
+      },
+      "E09_G1_CERTIFICATION": {
+        "allow_dirty": false,
+        "allowlist_required": false,
+        "closed_dirty_allowlist": [],
+        "informative_execution_permitted": false,
+        "repro_checkpoint": "nb04_cp0",
+        "snapshot_policy": "Requires authorized commit of final artifacts, a new Linux environment snapshot of that published commit, allow_dirty=False preflight, and qualified external human review."
+      },
+      "POST_E08_FINAL_ARTIFACT_MATERIALIZATION": {
+        "allow_dirty": true,
+        "allowlist_required": true,
+        "closed_dirty_allowlist": [
+          "data/reference/nb04_nto_search_configuration.json",
+          "data/reference/nb04_nto_search_calibration.tsv"
+        ],
+        "informative_execution_permitted": false,
+        "repro_checkpoint": "nb04_cp0",
+        "snapshot_policy": "Execution receipts preserve the E08 freeze commit and snapshot; dirty state is restricted strictly to the versioned final exports."
+      }
+    },
+    "repro_profile_note": "config/repro.yaml and config/repro.schema.json remain unmodified (G0 certified); no nb04_cp1 profile is added to config/repro.yaml, and checkpoint=None is preserved."
+  },
+  "schema_version": 1,
+  "stage": "NB04_CP1_E01_PREFREEZE_PREPARATION_SCOPE",
+  "state_declarations": {
+    "G0": "G0_PASS",
+    "G1": "NOT_DECLARED",
+    "b4_complete_prior_freeze": "NOT_DECLARED",
+    "informative_calibration": "NOT_EXECUTED",
+    "real_nto_searches": "NOT_EXECUTED",
+    "synthetic_fixtures_materialized": false
+  }
+}
