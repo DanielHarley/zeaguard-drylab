@@ -5029,6 +5029,9 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
                 require(not {f['fasta_sha256'] for f in fixtures if f['fixture_role'] == 'TUNING'} & {f['fasta_sha256'] for f in fixtures if f['fixture_role'] == 'VALIDATION'}, 'TUNING/VALIDATION FASTA hash overlap')
                 identities: dict[str, tuple[str, str, int, str]] = {}
                 repeated: dict[tuple[str, str, int, str], tuple[str, str, str]] = {}
+                record_owners: dict[tuple[str, str, str, str], str] = {}
+                specified_instance_records: dict[tuple[str, str, str, str], str] = {}
+                specified_instance_counts: dict[tuple[str, str, str, str], int] = {}
                 for row in installations:
                     _u06_text(row['installation_id'], 'installation_id')
                     _u06_text(row['planted_instance_id'], 'planted_instance_id')
@@ -5039,6 +5042,17 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
                     key = (role, row['class'], row['length'], catalog['version'])
                     require(row['planted_instance_id'] not in identities or identities[row['planted_instance_id']] == key, 'planted_instance_id reused for a different identity or role')
                     identities[row['planted_instance_id']] = key
+                    fixture_scope = (row['fixture_set_id'], role, row['fixture_id'])
+                    record_key = fixture_scope + (row['analysis_id'],)
+                    record_instance = record_owners.get(record_key)
+                    require(record_instance is None or record_instance == row['planted_instance_id'], 'distinct planted instances must occupy distinct records within a fixture')
+                    record_owners[record_key] = row['planted_instance_id']
+                    instance_key = fixture_scope + (row['planted_instance_id'],)
+                    if row['class'] in ('PC02', 'PC03', 'PC06'):
+                        require(instance_key not in specified_instance_records or specified_instance_records[instance_key] == row['analysis_id'], 'specified planted instance must use one designated record per fixture')
+                        specified_instance_records[instance_key] = row['analysis_id']
+                        specified_instance_counts[instance_key] = specified_instance_counts.get(instance_key, 0) + 1
+                        require(specified_instance_counts[instance_key] == 1, 'specified planted instance permits one installation per fixture')
                     if row['class'] in ('PC03', 'PC06'):
                         signature = (row['query_sequence'], row['local_module'], row['planted_instance_id'])
                         require(key not in repeated or repeated[key] == signature, 'PC03/PC06 query or local module differs between fixture sizes')
@@ -5083,13 +5097,24 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
                 require(len(line_map) == len(lines) and len(install_map) == len(installations) and len(execution_map) == len(executions), 'line/installation/execution IDs repeated')
                 require(all(type(line.get('applicable')) is bool for line in lines), 'line applicability must be explicit')
                 require(isinstance(trace, list) and trace, 'line-installation-execution-QA traceability missing')
+                for execution in executions:
+                    execution_id = execution['execution_id']
+                    _u06_text(execution_id, 'execution_id')
+                    execution_installations = execution['installation_ids']
+                    require(isinstance(execution_installations, list), f'{execution_id}: installation_ids must be a declared list')
+                    for installation_id in execution_installations:
+                        require(isinstance(installation_id, str) and installation_id in install_map, f'{execution_id}: unknown installation_id:{installation_id}')
+                    execution_qas = execution['qa_ids']
+                    require(isinstance(execution_qas, list), f'{execution_id}: qa_ids must be a declared list')
+                    for qa_id in execution_qas:
+                        require(isinstance(qa_id, str) and qa_id in E05_QA_SPEC, f'{execution_id}: unknown qa_id:{qa_id}')
+                    require(execution['state'] == 'NOT_EXECUTED', f'{execution_id}: only unexecuted declarations accepted, never recovery results')
                 covered_lines, covered_installations = set(), set()
                 for link in trace:
                     line, installation, execution = line_map[link['line_id']], install_map[link['installation_id']], execution_map[link['execution_id']]
                     require(line['applicable'] is True, 'trace points to an inapplicable line')
                     require(all(line[field] == installation[field] for field in ('fixture_id', 'fixture_role', 'class')), 'normative line/installation binding differs')
                     require(link['qa_id'] in E05_QA_SPEC and link['qa_id'] in execution['qa_ids'] and installation['installation_id'] in execution['installation_ids'], 'execution/QA trace binding differs')
-                    require(execution['state'] == 'NOT_EXECUTED', 'only unexecuted declarations accepted, never recovery results')
                     covered_lines.add(line['line_id'])
                     covered_installations.add(installation['installation_id'])
                 require(covered_lines == {line['line_id'] for line in lines if line['applicable']} and covered_installations == set(install_map), 'applicable line or installation lacks traceability')
@@ -5100,7 +5125,14 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
                 require(rule.get('fabricate_continuous_hsp') is False and rule.get('cross_record_concatenation') is False, 'fabricated HSPs and cross-record concatenation are forbidden')
             elif component == 'build_declarations':
                 build = catalog['build_rules']
-                require(isinstance(build, Mapping) and build['fixture']['parse_seqids'] is True, 'fixture parse_seqids declaration required')
+                require(isinstance(build, Mapping) and isinstance(build['fixture'], Mapping) and isinstance(build['production'], Mapping), 'fixture and production build declarations required')
+                for side_name in ('fixture', 'production'):
+                    side = build[side_name]
+                    require(type(side['dbtype']) is str and side['dbtype'] == 'nucl', f'{side_name}: dbtype must match the declared nucleotide build')
+                    require(type(side['parse_seqids']) is bool and side['parse_seqids'] is True, f'{side_name}: parse_seqids must be true')
+                    require(type(side['blastdb_version']) is int and side['blastdb_version'] == 5, f'{side_name}: blastdb_version must be the fixed version 5')
+                    require(type(side['max_file_sz_effective']) is int, f'{side_name}: max_file_sz_effective must be an integer; no value or range is selected here')
+                    require(type(side['volume_strategy']) is str and type(side['taxid_policy']) is str, f'{side_name}: volume and taxid policies must be text')
                 for field in E05_SECTION7_KEYS['database_build']:
                     require(field in build['fixture'] and field in build['production'], f'build field missing:{field}')
                     if field != 'taxid_policy':

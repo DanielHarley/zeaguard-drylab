@@ -4020,6 +4020,37 @@ def test_u08_build_and_database_id_declarations_are_required(case):
     _u08_assert_refusal(catalog, 'build_declarations')
 
 
+def _u08_pc02_catalog():
+    catalog = _u08_catalog()
+    base_installation, base_record = _u08_construction_input('PC02', 400, 'F02', [200])
+    for index, role in enumerate(('TUNING', 'VALIDATION')):
+        fixture = catalog['fixtures'][index]
+        installation = catalog['installations'][index]
+        row = catalog['identifier_map'][index]
+        line = catalog['normative_lines'][index]
+        sequence = base_record['sequence'] if role == 'TUNING' else base_record['sequence'].translate(str.maketrans('ACGT', 'CGTA'))
+        query = base_installation['query_sequence'] if role == 'TUNING' else base_installation['query_sequence'].translate(str.maketrans('ACGT', 'CGTA'))
+        fixture.update(fixture_id='F02', record_lengths=[2000], record_count=1, total_bases=2000)
+        record = fixture['records'][0]
+        record.update({'class': 'PC02', 'sequence': sequence, 'sequence_sha256': _u08_sha(sequence)})
+        installation.update({'fixture_id': 'F02', 'class': 'PC02', 'expected_detection_class': 'MUST_BE_REPORTED',
+                             'length': 400, 'query_sequence': query, 'query_sha256': _u08_sha(query),
+                             'local_module': sequence, 'local_module_sha256': _u08_sha(sequence),
+                             'planted_interval': [801, 1200], 'difference_positions': [200],
+                             'constructed_identity': [399, 400],
+                             'instance_identity': {'fixture_role': role, 'class': 'PC02', 'length': 400, 'version': 'V1'},
+                             'planted_instance_id': role + '_PC02_400_V1',
+                             'coordinates': {'coordinate_system': 'ONE_BASED_INCLUSIVE',
+                                             'emitted': {'qstart': 1, 'qend': 400, 'sstart': 801, 'send': 1200},
+                                             'ascending_subject_interval': [801, 1200]},
+                             'generation_keys': [{'stream': 'QUERY', 'counter': 0,
+                                                  'key': f'NB04_SYNTHETIC_CASE_V1|{role}|PC02|400|QUERY|0'}]})
+        row.update({'fixture_id': 'F02', 'class': 'PC02', 'length': 2000,
+                    'sequence_sha256': _u08_sha(sequence)})
+        line.update({'fixture_id': 'F02', 'class': 'PC02'})
+    return catalog
+
+
 def _u08_construction_input(case, length, fixture, positions):
     # Direct software strings and explicit positions. No SHA recipe, file or engine is used.
     query = 'A' * length
@@ -4231,3 +4262,78 @@ def test_u08_declared_fragmentation_cannot_allow_hsp_fabrication_or_lose_links(f
     catalog = _u08_catalog()
     catalog['fragmentation_rule'][field] = value
     _u08_assert_refusal(catalog, 'fragmentation')
+
+@pytest.mark.parametrize('same_instance', [True, False])
+def test_u08_specified_instance_cardinality_and_record_reservation_refuse_rebound_duplicate(same_instance):
+    import copy
+    catalog = _u08_pc02_catalog()
+    result = cal.evaluate_e04_fixture_catalog(catalog)
+    assert result['state'] == 'DECLARATIONS_CONSISTENT', result
+    original = catalog['installations'][0]
+    duplicate = copy.deepcopy(original)
+    duplicate['installation_id'] = 'SECOND_PC02_INSTALLATION'
+    if not same_instance:
+        duplicate['planted_instance_id'] = 'SECOND_PC02_INSTANCE'
+    catalog['installations'].append(duplicate)
+    catalog['identifier_map'][0]['installation_ids'] = sorted(catalog['identifier_map'][0]['installation_ids'] + [duplicate['installation_id']])
+    catalog['execution_declarations'][0]['installation_ids'].append(duplicate['installation_id'])
+    catalog['traceability'].append({**catalog['traceability'][0], 'installation_id': duplicate['installation_id']})
+    reason = 'one installation per fixture' if same_instance else 'distinct planted instances must occupy distinct records'
+    _u08_assert_refusal(catalog, 'roles', reason)
+
+
+def test_u08_pc03_pc06_replicas_across_designated_fixtures_remain_role_compatible():
+    import copy
+    for case in ('PC03', 'PC06'):
+        catalog = _u08_catalog()
+        base = catalog['installations'][0]
+        base.update({'class': case, 'length': 400, 'instance_identity': {'fixture_role': 'TUNING', 'class': case, 'length': 400, 'version': 'V1'}})
+        replica = copy.deepcopy(base)
+        replica.update({'installation_id': case + '_F04_REPLICA', 'fixture_id': 'F04'})
+        catalog['installations'].append(replica)
+        result = cal.evaluate_e04_fixture_catalog(catalog)
+        role_issues = [issue for issue in result['blocking_declarations'] if issue['component'] == 'roles']
+        assert role_issues == []
+        assert 'roles:catalog' in result['checked_declarations']
+
+
+@pytest.mark.parametrize('case', ['referenced_installation', 'referenced_qa', 'untraced_dangling_references', 'untraced_execution'])
+def test_u08_every_execution_member_is_resolved_even_without_trace(case):
+    catalog = _u08_catalog()
+    if case == 'referenced_installation':
+        catalog['execution_declarations'][0]['installation_ids'].append('ABSENT_INSTALLATION')
+        expected = 'unknown installation_id:ABSENT_INSTALLATION'
+    elif case == 'referenced_qa':
+        catalog['execution_declarations'][0]['qa_ids'].append('QA-UNKNOWN')
+        expected = 'unknown qa_id:QA-UNKNOWN'
+    elif case == 'untraced_dangling_references':
+        catalog['execution_declarations'].append({'execution_id': 'UNTRACED_EXECUTION',
+            'installation_ids': ['ABSENT_INSTALLATION'], 'qa_ids': ['QA-UNKNOWN'], 'state': 'NOT_EXECUTED'})
+        expected = 'unknown installation_id:ABSENT_INSTALLATION'
+    else:
+        catalog['execution_declarations'].append({'execution_id': 'UNTRACED_EXECUTION',
+            'installation_ids': [catalog['installations'][0]['installation_id']], 'qa_ids': ['QA-B'], 'state': 'EXECUTED'})
+        expected = 'UNTRACED_EXECUTION: only unexecuted declarations accepted'
+    _u08_assert_refusal(catalog, 'coverage', expected)
+
+
+@pytest.mark.parametrize('field,value,expected', [
+    ('dbtype', 'prot', 'dbtype must match'),
+    ('blastdb_version', 6, 'blastdb_version must be the fixed version 5'),
+    ('blastdb_version', True, 'blastdb_version must be the fixed version 5'),
+])
+def test_u08_build_fixed_contract_values_refuse_even_when_both_sides_match(field, value, expected):
+    catalog = _u08_catalog()
+    for side in ('fixture', 'production'):
+        catalog['build_rules'][side][field] = value
+    _u08_assert_refusal(catalog, 'build_declarations', expected)
+
+
+def test_u08_build_accepts_normative_values_and_zero_max_file_size_without_selecting_a_cap():
+    catalog = _u08_catalog()
+    for side in ('fixture', 'production'):
+        catalog['build_rules'][side].update({'dbtype': 'nucl', 'parse_seqids': True,
+                                             'blastdb_version': 5, 'max_file_sz_effective': 0})
+    result = cal.evaluate_e04_fixture_catalog(catalog)
+    assert result['state'] == 'DECLARATIONS_CONSISTENT', result
+    assert result['qa_status'] == 'NOT_TESTED'
