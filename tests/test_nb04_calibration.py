@@ -2856,3 +2856,307 @@ def test_u05_revision_identity_has_an_independent_canonical_oracle_and_scope_lim
     assert "standard library" in identity["scope"]["runtime_limitation"]
     assert identity["scope"]["prefreeze_dependency"] == "RECOMPUTE_IDENTITIES_FROM_FINAL_SOURCE_BEFORE_FREEZING_AND_ORDERING_CANDIDATES"
     assert identity["scope"]["decision_authority"] == "IMPLEMENTATION_COORDINATOR"
+
+# U06 uses declarations and token arrays only, with no command execution.
+_U06_NATIVE_TABULAR = '6 qseqid sseqid pident length qlen slen qstart qend sstart send sstrand evalue bitscore mismatch gapopen gaps qcovs btop score'
+_U06_SEARCH_HELP = _FAKE_BLASTN_HELP + '\n -db <String>\n -query <File_In>\n -out <File_Out>\n'
+_U06_EXPORT_HELP = _FAKE_BLAST_FORMATTER_HELP + '\n -out <File_Out>\n'
+
+
+def _u06_search_inputs():
+    payload = _section7_test_payload()
+    rows, records = _section7_test_declarations(payload)
+    provenance = {}
+    for param_id, flags in cal.E05_PARAMETER_FLAGS.items():
+        if param_id in ('P28', 'P29'):
+            continue
+        for index, flag in enumerate(flags):
+            if param_id == 'P26':
+                value = '11'
+            else:
+                value = payload['search_parameters'][cal.E05_SECTION7_PARAMETER_PATHS[param_id][index].split('.')[1]]
+            omitted = value == 'OPTION_NOT_APPLIED' or flag == '-lcase_masking'
+            origin = 'OPTION_NOT_APPLIED' if omitted else 'EXPLICIT'
+            if param_id == 'P23':
+                origin = 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET'
+            provenance[flag] = {'option_applied': not omitted, 'origin': origin}
+    envelope = {'executable': 'blastn', 'paths': {'-db': 'synthetic/db', '-query': 'synthetic/query.fa', '-out': 'synthetic/output.asn'},
+                'flag_provenance': provenance}
+    return payload, rows, records, envelope
+
+
+def _u06_search(payload=None, rows=None, records=None, envelope=None, help_text=_U06_SEARCH_HELP):
+    if payload is None:
+        payload, rows, records, envelope = _u06_search_inputs()
+    return cal.reconstruct_section7_search_command(payload, rows, records, envelope, help_text=help_text)
+
+
+def _u06_export_record():
+    return {'executable': 'blast_formatter', 'paths': {'-archive': 'synthetic/output.asn', '-out': 'synthetic/output.tsv'},
+            'options': {'-outfmt': {'value': _U06_NATIVE_TABULAR, 'option_applied': True, 'origin': 'EXPLICIT'},
+                        '-max_target_seqs': {'value': 'OPTION_NOT_APPLIED', 'option_applied': False, 'origin': 'OPTION_NOT_APPLIED'},
+                        '-num_descriptions': {'value': 'OPTION_NOT_APPLIED', 'option_applied': False, 'origin': 'OPTION_NOT_APPLIED'},
+                        '-num_alignments': {'value': 'OPTION_NOT_APPLIED', 'option_applied': False, 'origin': 'OPTION_NOT_APPLIED'}}}
+
+
+def test_u06_search_literal_argv_and_no_mutation():
+    inputs = _u06_search_inputs()
+    before = r.json_bytes(inputs)
+    result = _u06_search(*inputs)
+    assert result['argv'] == ['blastn', '-task', 'blastn', '-word_size', '11', '-evalue', '10.0', '-reward', '2',
+                              '-penalty', '-3', '-gapopen', '5', '-gapextend', '2', '-dust', 'no', '-soft_masking', 'false',
+                              '-strand', 'both', '-max_target_seqs', '100', '-outfmt', '11', '-num_threads', '1',
+                              '-db', 'synthetic/db', '-query', 'synthetic/query.fa', '-out', 'synthetic/output.asn']
+    assert r.json_bytes(inputs) == before
+    assert result['qa_m']['state'] == 'NOT_TESTED' and result['limitations']
+    assert result['order_decision_authority'] == 'IMPLEMENTATION_COORDINATOR_REVISABLE_BEFORE_FREEZE'
+    assert '-max_file_sz' not in result['argv'] and '-parse_seqids' not in result['argv']
+    for flag in ('-dbsize', '-searchsp', '-lcase_masking', '-sum_stats'):
+        assert flag not in result['argv']
+
+
+@pytest.mark.parametrize('task', ['blastn', 'blastn-short', 'dc-megablast'])
+def test_u06_each_admitted_task_is_explicit(task):
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters']['task'] = task
+    rows, records = _section7_test_declarations(payload)
+    result = _u06_search(payload, rows, records, envelope)
+    assert result['argv'][1:3] == ['-task', task]
+
+
+def test_u06_provenance_controls_emission_even_when_explicit_value_equals_default():
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters']['max_target_seqs'] = 500
+    rows, records = _section7_test_declarations(payload)
+    explicit = _u06_search(payload, rows, records, envelope)['argv']
+    envelope['flag_provenance']['-max_target_seqs'] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    defaulted = _u06_search(payload, rows, records, envelope)
+    assert explicit[explicit.index('-max_target_seqs') + 1] == '500'
+    assert '-max_target_seqs' not in defaulted['argv']
+    assert payload['search_parameters']['max_target_seqs'] == 500
+    assert defaulted['flag_provenance']['-max_target_seqs']['origin'] == 'DOCUMENTED_ENGINE_DEFAULT'
+
+
+@pytest.mark.parametrize('change, message', [
+    ('missing_flag', 'closed schema'), ('missing_origin', 'closed schema'), ('non_boolean', 'explicitly boolean'),
+    ('wrong_default', 'differs from documented default'), ('undocumented_default', 'not documented'),
+    ('explicit_without_origin', 'EXPLICIT'), ('omitted_effective', 'without documented-default'),
+    ('task_default', 'task must be explicit'), ('outfmt_omitted', 'P26'), ('absent_build_flag', 'absent from supplied build help'),
+    ('missing_record', 'payload OPEN'), ('missing_value', 'payload OPEN'),
+])
+def test_u06_search_refuses_incomplete_or_contradictory_declarations(change, message):
+    payload, rows, records, envelope = _u06_search_inputs()
+    help_text = _U06_SEARCH_HELP
+    if change == 'missing_flag':
+        del envelope['flag_provenance']['-word_size']
+    elif change == 'missing_origin':
+        del envelope['flag_provenance']['-word_size']['origin']
+    elif change == 'non_boolean':
+        envelope['flag_provenance']['-word_size']['option_applied'] = 1
+    elif change == 'wrong_default':
+        envelope['flag_provenance']['-max_target_seqs'] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    elif change == 'undocumented_default':
+        envelope['flag_provenance']['-gapopen'] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    elif change == 'explicit_without_origin':
+        envelope['flag_provenance']['-word_size']['origin'] = 'DOCUMENTED_ENGINE_DEFAULT'
+    elif change == 'omitted_effective':
+        envelope['flag_provenance']['-word_size'] = {'option_applied': False, 'origin': 'OPTION_NOT_APPLIED'}
+    elif change == 'task_default':
+        envelope['flag_provenance']['-task'] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    elif change == 'outfmt_omitted':
+        envelope['flag_provenance']['-outfmt']['option_applied'] = False
+    elif change == 'absent_build_flag':
+        help_text = help_text.replace(' -word_size <Integer, >=4>', ' -unavailable_word_size <Integer, >=4>')
+    elif change == 'missing_record':
+        del records['P13']
+    else:
+        del payload['search_parameters']['word_size']
+    with pytest.raises(r.ResourceContractError, match=message):
+        _u06_search(payload, rows, records, envelope, help_text=help_text)
+
+
+@pytest.mark.parametrize('param_id', ['P15', 'P16', 'P17', 'P18', 'P19', 'P20', 'P24'])
+def test_u06_architecture_exclusions_never_emit_even_with_fresh_consistent_declarations(param_id):
+    payload, rows, records, envelope = _u06_search_inputs()
+    flag = cal.E05_PARAMETER_FLAGS[param_id][0]
+    field = cal.E05_SECTION7_PARAMETER_PATHS[param_id][0].split('.')[1]
+    payload['search_parameters'][field] = 'true' if param_id in ('P20', 'P24') else 1
+    rows, records = _section7_test_declarations(payload)
+    with pytest.raises(r.ResourceContractError, match=param_id + ' .*excluded by architecture'):
+        _u06_search(payload, rows, records, envelope)
+    payload['search_parameters'][field] = 'OPTION_NOT_APPLIED'
+    rows, records = _section7_test_declarations(payload)
+    envelope['flag_provenance'][flag] = {'option_applied': True, 'origin': 'EXPLICIT'}
+    with pytest.raises(r.ResourceContractError, match='OPTION_NOT_APPLIED cannot emit'):
+        _u06_search(payload, rows, records, envelope)
+
+
+@pytest.mark.parametrize('flag', ['-dbsize', '-searchsp'])
+def test_u06_natural_search_space_is_explicit_nonapplication(flag):
+    payload, rows, records, envelope = _u06_search_inputs()
+    assert flag not in _u06_search(payload, rows, records, envelope)['argv']
+    envelope['flag_provenance'][flag]['origin'] = 'OPTION_NOT_APPLIED'
+    with pytest.raises(r.ResourceContractError, match='P23 .*natural-resource search space'):
+        _u06_search(payload, rows, records, envelope)
+    envelope['flag_provenance'][flag] = {'option_applied': True, 'origin': 'EXPLICIT'}
+    payload['search_parameters'][flag[1:]] = 1
+    rows, records = _section7_test_declarations(payload)
+    with pytest.raises(r.ResourceContractError, match='P23'):
+        _u06_search(payload, rows, records, envelope)
+
+
+def test_u06_nine_pending_fields_cannot_emit():
+    payload, rows, records, envelope = _u06_search_inputs()
+    pending = ('P02', 'P03', 'P04', 'P07', 'P08', 'P13', 'P14', 'P27', 'P29')
+    for param_id in pending:
+        section, field = cal.E05_SECTION7_PARAMETER_PATHS[param_id][0].split('.')
+        payload[section][field] = None
+        records[param_id] = {'effective_value': None, 'effective_value_state': cal.STATE_PENDING}
+    with pytest.raises(r.ResourceContractError, match='search payload OPEN') as exc:
+        _u06_search(payload, rows, records, envelope)
+    assert all(param_id in str(exc.value) for param_id in pending)
+
+
+@pytest.mark.parametrize('stage, flag', [('search', '-db'), ('search', '-query'), ('search', '-out'), ('export', '-archive'), ('export', '-out')])
+@pytest.mark.parametrize('bad_value', [None, '', 'x\x00y', '-query'])
+def test_u06_required_paths_are_declared_and_unambiguous(stage, flag, bad_value):
+    if stage == 'search':
+        inputs = _u06_search_inputs()
+        envelope = inputs[-1]
+        call = lambda: _u06_search(*inputs)
+    else:
+        envelope = _u06_export_record()
+        call = lambda: cal.reconstruct_blast_formatter_command(envelope, help_text=_U06_EXPORT_HELP)
+    if bad_value is None:
+        del envelope['paths'][flag]
+    else:
+        envelope['paths'][flag] = bad_value
+    with pytest.raises(r.ResourceContractError, match='paths'):
+        call()
+
+
+@pytest.mark.parametrize('key', ['overrides', 'execution_payload', 'parent_candidate_hash', 'qa_case_id'])
+@pytest.mark.parametrize('stage', ['search', 'export'])
+def test_u06_execution_overrides_are_explicitly_refused(stage, key):
+    if stage == 'search':
+        inputs = _u06_search_inputs()
+        inputs[-1][key] = {'max_target_seqs': 1}
+        call = lambda: _u06_search(*inputs)
+    else:
+        record = _u06_export_record()
+        record[key] = {'max_target_seqs': 1}
+        call = lambda: cal.reconstruct_blast_formatter_command(record, help_text=_U06_EXPORT_HELP)
+    with pytest.raises(r.ResourceContractError, match='execution overrides are unsupported.*max_target_seqs'):
+        call()
+
+
+def test_u06_export_literal_argv_and_default_cap_not_emitted():
+    record = _u06_export_record()
+    record['options']['-max_target_seqs'] = {'value': 500, 'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    result = cal.reconstruct_blast_formatter_command(record, help_text=_U06_EXPORT_HELP)
+    assert result['argv'] == ['blast_formatter', '-outfmt', _U06_NATIVE_TABULAR, '-archive', 'synthetic/output.asn', '-out', 'synthetic/output.tsv']
+    assert result['qa_m']['state'] == 'NOT_TESTED' and result['limitations']
+
+
+@pytest.mark.parametrize('other', ['-num_descriptions', '-num_alignments'])
+def test_u06_export_refuses_measured_incompatibilities(other):
+    record = _u06_export_record()
+    for flag in ('-max_target_seqs', other):
+        record['options'][flag] = {'value': 1, 'option_applied': True, 'origin': 'EXPLICIT'}
+    with pytest.raises(r.ResourceContractError, match='incompatible passed flags'):
+        cal.reconstruct_blast_formatter_command(record, help_text=_U06_EXPORT_HELP)
+
+
+def test_u06_export_does_not_invent_incompatibility_between_description_and_alignment_flags():
+    record = _u06_export_record()
+    for flag in ('-num_descriptions', '-num_alignments'):
+        record['options'][flag] = {'value': 1, 'option_applied': True, 'origin': 'EXPLICIT'}
+    assert cal.reconstruct_blast_formatter_command(record, help_text=_U06_EXPORT_HELP)['argv'] == [
+        'blast_formatter', '-outfmt', _U06_NATIVE_TABULAR, '-num_descriptions', '1', '-num_alignments', '1',
+        '-archive', 'synthetic/output.asn', '-out', 'synthetic/output.tsv']
+
+
+@pytest.mark.parametrize('change', ['missing_cap', 'missing_value', 'pending', 'negative', 'cap_zero', 'extra_option', 'wrong_outfmt', 'not_applied_emitted'])
+def test_u06_export_refuses_incomplete_or_invalid_records(change):
+    record = _u06_export_record()
+    option = record['options']['-max_target_seqs']
+    if change == 'missing_cap':
+        del record['options']['-max_target_seqs']
+    elif change == 'missing_value':
+        del option['value']
+    elif change == 'pending':
+        option['value'] = None
+    elif change in ('negative', 'cap_zero'):
+        option.update(value=-1 if change == 'negative' else 0, option_applied=True, origin='EXPLICIT')
+    elif change == 'extra_option':
+        record['options']['-max_hsps'] = option.copy()
+    elif change == 'wrong_outfmt':
+        record['options']['-outfmt']['value'] = '6 qseqid score'
+    else:
+        option.update(option_applied=True, origin='EXPLICIT')
+    with pytest.raises(r.ResourceContractError):
+        cal.reconstruct_blast_formatter_command(record, help_text=_U06_EXPORT_HELP)
+
+
+def test_u06_comparator_declares_order_normalization_and_never_approves_qa():
+    a = ['blastn', '-task', 'blastn', '-penalty', '-3', '-lcase_masking', 'pos_b', 'pos_a']
+    b = ['blastn', 'pos_a', '-lcase_masking', '-penalty', '-3', 'pos_b', '-task', 'blastn', 'pos_a']
+    result = cal.compare_qa_m_argv(a, b, help_text=_U06_SEARCH_HELP)
+    assert result['correspondence'] is True and result['state'] == 'NOT_TESTED'
+    assert result['normalization'] == {
+        'executable': 'EXACT_TOKEN_NO_PATH_RESOLUTION', 'flags': 'SET_OF_FLAG_VALUE_PAIRS_USING_SUPPLIED_HELP_ARITY',
+        'positional': 'SET_OF_EXACT_TOKENS', 'token_order': 'IGNORED', 'values': 'EXACT_TEXT_NO_NUMERIC_OR_PATH_NORMALIZATION',
+        'duplicate_flags': 'REJECTED_AS_AMBIGUOUS', 'decision_authority': 'IMPLEMENTATION_COORDINATOR_REVISABLE_BEFORE_FREEZE'}
+    assert result['flag_differences'] == [] and result['limitations']
+
+
+def test_u06_comparator_reports_each_flag_and_other_difference():
+    result = cal.compare_qa_m_argv(['blastn', '-task', 'blastn', '-evalue', '1', 'a'],
+                                 ['other_blastn', '-task', 'blastn-short', '-out', 'x', 'b'], help_text=_U06_SEARCH_HELP)
+    assert result['correspondence'] is False and result['executable_differs'] is True
+    assert result['flag_differences'] == [
+        {'flag': '-evalue', 'reconstructed_present': True, 'logged_present': False, 'reconstructed_value': '1', 'logged_value': None},
+        {'flag': '-out', 'reconstructed_present': False, 'logged_present': True, 'reconstructed_value': None, 'logged_value': 'x'},
+        {'flag': '-task', 'reconstructed_present': True, 'logged_present': True, 'reconstructed_value': 'blastn', 'logged_value': 'blastn-short'}]
+    assert result['positional_differences'] == {'only_reconstructed': ['a'], 'only_logged': ['b']}
+    assert cal.compare_qa_m_argv(['blastn', '-evalue', '1'], ['blastn', '-evalue', '1.0'], help_text=_U06_SEARCH_HELP)['correspondence'] is False
+
+
+@pytest.mark.parametrize('argv', [[], ['blastn', '-task'], ['blastn', '-task', '-out', 'x'],
+                                  ['blastn', '-task', 'blastn', '-task', 'blastn'], ['blastn', '-undeclared'], ['blastn', 'x\x00y']])
+def test_u06_comparator_refuses_ambiguous_argv(argv):
+    with pytest.raises(r.ResourceContractError):
+        cal.compare_qa_m_argv(['blastn'], argv, help_text=_U06_SEARCH_HELP)
+
+def test_u06_legacy_p23_record_uses_natural_resource_policy_without_flags():
+    payload, rows, records, envelope = _u06_search_inputs()
+    records['P23'] = {'effective_value_state': cal.STATE_DECIDED, 'effective_value': cal.E05_P23_EFFECTIVE_VALUE.copy()}
+    result = _u06_search(payload, rows, records, envelope)
+    assert '-dbsize' not in result['argv'] and '-searchsp' not in result['argv']
+    assert result['execution_performed'] is False and result['campaign_qa_approved'] is False
+
+
+def test_u06_presence_only_flag_and_parameter_order_ignore_envelope_insertion_order():
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters']['lcase_masking'] = 'true'
+    payload['search_parameters'].update(xdrop_ungap=20.0, xdrop_gap=30.0, xdrop_gap_final=100.0, window_size=40)
+    rows, records = _section7_test_declarations(payload)
+    for flag in ('-lcase_masking', '-xdrop_ungap', '-xdrop_gap', '-xdrop_gap_final', '-window_size'):
+        envelope['flag_provenance'][flag] = {'option_applied': True, 'origin': 'EXPLICIT'}
+    envelope['flag_provenance'] = dict(reversed(list(envelope['flag_provenance'].items())))
+    argv = _u06_search(payload, rows, records, envelope)['argv']
+    assert argv[argv.index('-lcase_masking'):argv.index('-lcase_masking') + 2] == ['-lcase_masking', '-strand']
+    assert argv[argv.index('-xdrop_ungap'):argv.index('-outfmt')] == ['-xdrop_ungap', '20.0', '-xdrop_gap', '30.0', '-xdrop_gap_final', '100.0', '-window_size', '40']
+
+
+def test_u06_comparator_refuses_unknown_option_disguised_as_a_value():
+    with pytest.raises(r.ResourceContractError, match='option-like value'):
+        cal.compare_qa_m_argv(['blastn'], ['blastn', '-task', '-unknown'], help_text=_U06_SEARCH_HELP)
+
+
+def test_u06_output_cannot_be_used_as_execution_or_integrity_approval():
+    result = cal.compare_qa_m_argv(['blastn'], ['blastn'], help_text=_U06_SEARCH_HELP)
+    assert result['correspondence'] is True and result['state'] == 'NOT_TESTED'
+    assert result['execution_performed'] is False and result['campaign_qa_approved'] is False
+    assert any('QA-I remains NOT_TESTED' in text for text in result['limitations'])
+    assert any('truncation' in text for text in result['limitations'])

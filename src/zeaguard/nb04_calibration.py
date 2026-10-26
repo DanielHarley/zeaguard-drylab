@@ -4279,3 +4279,207 @@ def build_u05_parser_precondition(qa_i_row: Mapping[str, str]) -> dict[str, Any]
             "behavior_verification_scope": "SYNTHETIC_TABLE_SOFTWARE_TESTS_ONLY",
             "execution_completeness_dependency": "EXTERNAL_EXECUTION_EXPECTED_ROW_COUNT_AND_WITNESS_AUTHORITY",
             "campaign_qa_approved": False, "biological_decision_role": False, "blocks_configuration_freeze": True}
+
+# U06: declarative reconstruction only. No command in this region is executed.
+U06_EXCLUDED_PARAMETERS = frozenset(('P15', 'P16', 'P17', 'P18', 'P19', 'P20', 'P24'))
+U06_COMMAND_LIMITATIONS = (
+    'Declarative reconstruction only. No executable, database, query, archive or output is opened or executed.',
+    'Closure checks computational consistency of supplied declarations. Documentary authority and E02/E03 decisions require external review.',
+    'Only base candidates are supported. QA execution payloads and all overrides are refused.',
+    'Help metadata and executable provenance are supplied assertions. Runtime/build equivalence and producer interoperability are not certified.',
+    'QA-M requires an actually executed and logged command after the authorized freeze. QA-I remains NOT_TESTED.',
+    'The specific parser and output-integrity contract bindings remain prospective dependencies. Export reconstruction does not establish completeness or absence of truncation.',
+)
+
+
+def _u06_text(value: Any, label: str) -> str:
+    require(isinstance(value, str) and bool(value.strip()) and not any(ord(c) < 32 or ord(c) == 127 for c in value),
+            f'{label}: expected declared text without control characters')
+    return value
+
+
+def _u06_envelope(envelope: Mapping[str, Any], tool: str, paths: Sequence[str], keys: Sequence[str]) -> list[str]:
+    require(isinstance(envelope, Mapping), 'command envelope must be an object')
+    for key in ('overrides', 'execution_payload', 'parent_candidate_hash', 'qa_case_id'):
+        require(key not in envelope, f'{key}: execution overrides are unsupported for base reconstruction, including max_target_seqs')
+    _section7_keys(envelope, ('executable', 'paths', *keys), 'command envelope')
+    executable = _u06_text(envelope['executable'], 'executable')
+    require(executable.replace('\\', '/').split('/')[-1] in (tool, tool + '.exe'), f'executable must select {tool}')
+    _section7_keys(envelope['paths'], paths, 'envelope.paths')
+    for flag in paths:
+        path = _u06_text(envelope['paths'][flag], f'envelope.paths.{flag}')
+        require(not path.startswith('-'), f'envelope.paths.{flag}: option-like path must be qualified explicitly')
+    return [executable]
+
+
+def _u06_option(flag: str, value: Any, provenance: Mapping[str, Any], help_flags: Mapping[str, Any]) -> list[str]:
+    """One emission mechanism for both tools. Values never determine whether a flag was passed."""
+    require(isinstance(provenance, Mapping), f'{flag}: missing provenance declaration')
+    _section7_keys(provenance, ('option_applied', 'origin'), f'{flag}.provenance')
+    applied, origin = provenance['option_applied'], provenance['origin']
+    require(type(applied) is bool, f'{flag}: option_applied must be explicitly boolean')
+    metadata = help_flags.get(flag, {})
+    header = metadata.get('header_line')
+    switch = header == flag
+    if value == 'OPTION_NOT_APPLIED':
+        require(not applied and origin in ('OPTION_NOT_APPLIED', 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET'),
+                f'{flag}: OPTION_NOT_APPLIED cannot emit a token or use default provenance')
+        require(origin != 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET' or flag in ('-dbsize', '-searchsp'),
+                f'{flag}: natural-resource policy applies only to dbsize/searchsp')
+        return []
+    if origin == 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET':
+        raise ResourceContractError(f'{flag}: natural-resource policy requires OPTION_NOT_APPLIED in the payload')
+    require(not _section7_unresolved(value), f'{flag}: unresolved value')
+    require(header is not None, f'{flag}: absent from supplied build help')
+    if applied:
+        require(origin == 'EXPLICIT', f'{flag}: passed flag requires EXPLICIT provenance')
+        if switch:
+            require(value in ('true', True), f'{flag}: presence-only flag requires true')
+            return [flag]
+        return [flag, _u06_text(str(value), f'{flag}.value')]
+    if origin == 'OPTION_NOT_APPLIED':
+        require(switch and value in ('false', False), f'{flag}: effective value cannot be omitted without documented-default provenance')
+        return []
+    require(origin == 'DOCUMENTED_ENGINE_DEFAULT', f'{flag}: missing explicit origin for omitted effective value')
+    default = metadata.get('documented_default_in_build_help', '')
+    match = re.fullmatch(r"Default = `([^']*)'", default)
+    require(match is not None, f'{flag}: default is not documented in supplied build help')
+    same = str(value) == match[1]
+    if type(value) in (int, float):
+        from decimal import Decimal, InvalidOperation
+        try:
+            same = Decimal(str(value)) == Decimal(match[1])
+        except InvalidOperation:
+            same = False
+    require(same, f'{flag}: declared effective value differs from documented default')
+    return []
+
+
+def _u06_incompatibilities(passed_flags: Sequence[str], help_flags: Mapping[str, Any]) -> None:
+    # Only the measured "Incompatible with" clauses contribute pairs, never descriptive prose.
+    passed = set(passed_flags)
+    for flag in sorted(passed):
+        constraints = help_flags[flag].get('constraints') or ''
+        for clause in re.findall(r'\* Incompatible with:\s*([^*]+)', constraints):
+            conflicts = {'-' + name.strip() for name in clause.split(',')}
+            require(not (conflicts & passed), f'{flag}: incompatible passed flags {sorted(conflicts & passed)}')
+
+
+def _u06_command_result(argv: list[str], stage: str, provenance: Mapping[str, Any]) -> dict[str, Any]:
+    return {'stage': stage, 'argv': argv, 'flag_provenance': dict(provenance),
+            'argument_order': 'PARAMETER_ID_P01_TO_P31_THEN_DECLARED_PATH_ORDER' if stage == 'SEARCH' else 'OUTFMT_THEN_EXPORT_CAP_ORDER_THEN_DECLARED_PATH_ORDER',
+            'order_decision_authority': 'IMPLEMENTATION_COORDINATOR_REVISABLE_BEFORE_FREEZE',
+            'execution_performed': False, 'campaign_qa_approved': False,
+            'qa_m': {'qa_id': 'QA-M', 'state': 'NOT_TESTED', 'reason': 'ACTUAL_EXECUTION_AND_LOG_COMPARISON_PROHIBITED_BEFORE_AUTHORIZED_FREEZE'},
+            'limitations': list(U06_COMMAND_LIMITATIONS)}
+
+
+def reconstruct_section7_search_command(
+    payload: Mapping[str, Any], parameter_rows: Mapping[str, Mapping[str, str]],
+    parameter_records: Mapping[str, Mapping[str, Any]], envelope: Mapping[str, Any], *, help_text: str,
+) -> dict[str, Any]:
+    """Reconstruct base blastn argv from closed values plus declared origins/paths, without execution."""
+    closure = evaluate_section7_closure(payload, parameter_rows, parameter_records)
+    require(closure['state'] == 'CLOSED', f"search payload OPEN: blocking_parameters={closure['blocking_parameters']}; schema_errors={closure['schema_errors']}; unresolved={closure['unresolved_payload_fields']}")
+    argv = _u06_envelope(envelope, 'blastn', ('-db', '-query', '-out'), ('flag_provenance',))
+    help_flags = parse_blast_help_flags(help_text)
+    flags = [flag for pid in E05_PARAMETER_IDS if pid not in ('P28', 'P29') for flag in E05_PARAMETER_FLAGS.get(pid, ())]
+    provenance = envelope['flag_provenance']
+    _section7_keys(provenance, flags, 'flag_provenance')
+    for flag in flags:
+        _section7_keys(provenance[flag], ('option_applied', 'origin'), f'{flag}.provenance')
+    for pid in E05_PARAMETER_IDS:
+        if pid in ('P01', 'P28', 'P29', 'P30', 'P31'):
+            continue
+        for index, flag in enumerate(E05_PARAMETER_FLAGS[pid]):
+            path = E05_SECTION7_PARAMETER_PATHS[pid][index] if pid != 'P26' else 'execution_architecture.authoritative_output_format'
+            section, field = path.split('.')
+            value = payload[section][field]
+            if pid in U06_EXCLUDED_PARAMETERS:
+                require(value == 'OPTION_NOT_APPLIED', f'{pid} {flag}: excluded by architecture, effective value forbidden')
+            if pid == 'P02':
+                require(provenance[flag].get('option_applied') is True and provenance[flag].get('origin') == 'EXPLICIT', 'P02 -task must be explicit')
+            if pid == 'P23':
+                require(value == 'OPTION_NOT_APPLIED' and provenance[flag].get('origin') == 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET',
+                        f'P23 {flag}: base candidate requires natural-resource search space, flag not passed')
+            if pid == 'P26':
+                require(value == '11' and provenance[flag].get('option_applied') is True, 'P26: authoritative archive format 11 must be passed explicitly')
+            argv.extend(_u06_option(flag, value, provenance[flag], help_flags))
+    for flag in ('-db', '-query', '-out'):
+        argv.extend((flag, envelope['paths'][flag]))
+    _u06_incompatibilities([flag for flag, declaration in provenance.items() if declaration['option_applied']], help_flags)
+    return _u06_command_result(argv, 'SEARCH', provenance)
+
+
+def reconstruct_blast_formatter_command(record: Mapping[str, Any], *, help_text: str) -> dict[str, Any]:
+    """Side-envelope export declarations. Search-stage caps are never reused implicitly."""
+    argv = _u06_envelope(record, 'blast_formatter', ('-archive', '-out'), ('options',))
+    flags = ('-outfmt', *E05_EXPORT_PATH_CAP_FLAGS)
+    _section7_keys(record['options'], flags, 'export.options')
+    help_flags = parse_blast_help_flags(help_text)
+    provenance = {}
+    for flag in flags:
+        option = record['options'][flag]
+        _section7_keys(option, ('value', 'option_applied', 'origin'), f'export.options.{flag}')
+        value = option['value']
+        provenance[flag] = {key: option[key] for key in ('option_applied', 'origin')}
+        if flag == '-outfmt':
+            require(isinstance(value, str) and value.startswith('6 ') and option['option_applied'] is True,
+                    'export -outfmt: explicit tabular format and native field list required')
+            fields = value.split(' ')[1:]
+            require(fields == list(E05_OUTFMT_6_PRECEDENT + E05_OUTFMT_6_ADDITIONS), 'export -outfmt: adopted native field order differs')
+        elif value != 'OPTION_NOT_APPLIED':
+            require(type(value) is int and value >= (1 if flag == '-max_target_seqs' else 0), f'export {flag}: invalid integer cap')
+        argv.extend(_u06_option(flag, value, provenance[flag], help_flags))
+    for flag in ('-archive', '-out'):
+        argv.extend((flag, record['paths'][flag]))
+    _u06_incompatibilities([flag for flag, declaration in provenance.items() if declaration['option_applied']], help_flags)
+    return _u06_command_result(argv, 'EXPORT', provenance)
+
+
+def compare_qa_m_argv(reconstructed_argv: Sequence[str], logged_argv: Sequence[str], *, help_text: str) -> dict[str, Any]:
+    """Compare supplied argv only. Supplied logs do not establish execution or campaign QA approval."""
+    help_flags = parse_blast_help_flags(help_text)
+
+    def normalize(argv: Sequence[str]) -> dict[str, Any]:
+        require(isinstance(argv, (list, tuple)) and bool(argv), 'argv must be a nonempty token sequence')
+        for token in argv:
+            _u06_text(token, 'argv token')
+        flags, positional = {}, set()
+        index = 1
+        while index < len(argv):
+            token = argv[index]
+            if token in help_flags:
+                require(token not in flags, f'{token}: duplicate flag is ambiguous')
+                header = help_flags[token]['header_line']
+                if header == token:
+                    flags[token] = None
+                    index += 1
+                else:
+                    require(index + 1 < len(argv) and argv[index + 1] not in help_flags, f'{token}: missing value')
+                    require(re.fullmatch(r'-[A-Za-z_].*|--.*', argv[index + 1]) is None, f'{token}: option-like value is ambiguous')
+                    flags[token] = argv[index + 1]
+                    index += 2
+            else:
+                require(re.fullmatch(r'-[A-Za-z_].*|--.*', token) is None, f'{token}: unknown option in supplied help')
+                positional.add(token)
+                index += 1
+        return {'executable': argv[0], 'flags': dict(sorted(flags.items())), 'positional': sorted(positional)}
+
+    left, right = normalize(reconstructed_argv), normalize(logged_argv)
+    differences = []
+    for flag in sorted(set(left['flags']) | set(right['flags'])):
+        if flag not in left['flags'] or flag not in right['flags'] or left['flags'][flag] != right['flags'][flag]:
+            differences.append({'flag': flag, 'reconstructed_present': flag in left['flags'], 'logged_present': flag in right['flags'],
+                                'reconstructed_value': left['flags'].get(flag), 'logged_value': right['flags'].get(flag)})
+    return {'qa_id': 'QA-M', 'state': 'NOT_TESTED', 'correspondence': left == right,
+            'reason': 'ACTUAL_EXECUTION_AND_LOG_COMPARISON_PROHIBITED_BEFORE_AUTHORIZED_FREEZE',
+            'execution_performed': False, 'campaign_qa_approved': False,
+            'normalization': {'executable': 'EXACT_TOKEN_NO_PATH_RESOLUTION', 'flags': 'SET_OF_FLAG_VALUE_PAIRS_USING_SUPPLIED_HELP_ARITY',
+                              'positional': 'SET_OF_EXACT_TOKENS', 'token_order': 'IGNORED', 'values': 'EXACT_TEXT_NO_NUMERIC_OR_PATH_NORMALIZATION',
+                              'duplicate_flags': 'REJECTED_AS_AMBIGUOUS', 'decision_authority': 'IMPLEMENTATION_COORDINATOR_REVISABLE_BEFORE_FREEZE'},
+            'normalized_reconstructed': left, 'normalized_logged': right, 'flag_differences': differences,
+            'executable_differs': left['executable'] != right['executable'],
+            'positional_differences': {'only_reconstructed': sorted(set(left['positional']) - set(right['positional'])),
+                                       'only_logged': sorted(set(right['positional']) - set(left['positional']))},
+            'limitations': list(U06_COMMAND_LIMITATIONS)}
