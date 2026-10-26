@@ -4369,7 +4369,8 @@ def _u06_option(
     _section7_keys(provenance, ('option_applied', 'origin'), f'{flag}.provenance')
     applied, origin = provenance['option_applied'], provenance['origin']
     require(type(applied) is bool, f'{flag}: option_applied must be explicitly boolean')
-    if value == 'OPTION_NOT_APPLIED':
+    # Path operands are literal envelope text, never parameter-state declarations.
+    if not path_operand and value == 'OPTION_NOT_APPLIED':
         require(not applied and origin in ('OPTION_NOT_APPLIED', 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET'),
                 f'{flag}: OPTION_NOT_APPLIED cannot emit a token or use default provenance')
         require(origin != 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET' or flag in ('-dbsize', '-searchsp'),
@@ -4377,7 +4378,7 @@ def _u06_option(
         return []
     if origin == 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET':
         raise ResourceContractError(f'{flag}: natural-resource policy requires OPTION_NOT_APPLIED in the payload')
-    require(not _section7_unresolved(value), f'{flag}: unresolved value')
+    require(path_operand or not _section7_unresolved(value), f'{flag}: unresolved value')
     switch = _u06_flag_domain(flag, value, help_flags, path_operand=path_operand)
     if applied:
         require(origin == 'EXPLICIT', f'{flag}: passed flag requires EXPLICIT provenance')

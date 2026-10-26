@@ -3334,3 +3334,64 @@ def test_u06_revision_scope_limits_are_in_the_returned_envelope():
     assert any('no tool_build carrier' in text for text in result['limitations'])
     assert any('no stdout or positional operands' in text for text in result['limitations'])
     assert result['qa_m']['state'] == 'NOT_TESTED' and result['campaign_qa_approved'] is False
+
+_U06_F04_PATH_CASES = [('blastn', '-db'), ('blastn', '-query'), ('blastn', '-out'),
+                       ('blast_formatter', '-archive'), ('blast_formatter', '-out')]
+
+
+@pytest.mark.parametrize('stage,flag', _U06_F04_PATH_CASES)
+@pytest.mark.parametrize('literal_path', [
+    'synthetic/UNKNOWN.fa', 'synthetic/PENDING/db', 'synthetic/TBD_run.tsv',
+    'synthetic/NOT_APPLICABLE.fa', 'synthetic/nao_medido/db',
+    'synthetic/NORMATIVE_BINDING_NOT_ESTABLISHED.asn', 'OPTION_NOT_APPLIED',
+    'synthetic/UNKNOWN result with spaces.asn', ' synthetic/UNKNOWN.asn ',
+])
+def test_u06_f04_path_names_are_literal_and_preserved_byte_for_byte(u06_revision_pinned_help, stage, flag, literal_path):
+    if stage == 'blastn':
+        inputs = _u06_search_inputs()
+        inputs[-1]['paths'][flag] = literal_path
+        call = lambda: _u06_search(*inputs, help_text=u06_revision_pinned_help[stage])
+    else:
+        inputs = _u06_export_record()
+        inputs['paths'][flag] = literal_path
+        call = lambda: cal.reconstruct_blast_formatter_command(inputs, help_text=u06_revision_pinned_help[stage])
+    before = r.json_bytes(inputs)
+    result = call()
+    emitted = result['argv'][result['argv'].index(flag) + 1]
+    assert emitted.encode('utf-8') == literal_path.encode('utf-8')
+    assert r.json_bytes(inputs) == before
+    assert result['execution_performed'] is False and result['campaign_qa_approved'] is False
+
+
+@pytest.mark.parametrize('stage,flag', _U06_F04_PATH_CASES)
+@pytest.mark.parametrize('invalid_path', [None, '   ', 'synthetic/UNKNOWN\x00.fa', '-looks_like_option', '-UNKNOWN'])
+def test_u06_f04_literal_context_preserves_envelope_rejections(u06_revision_pinned_help, stage, flag, invalid_path):
+    if stage == 'blastn':
+        inputs = _u06_search_inputs()
+        inputs[-1]['paths'][flag] = invalid_path
+        call = lambda: _u06_search(*inputs, help_text=u06_revision_pinned_help[stage])
+    else:
+        inputs = _u06_export_record()
+        inputs['paths'][flag] = invalid_path
+        call = lambda: cal.reconstruct_blast_formatter_command(inputs, help_text=u06_revision_pinned_help[stage])
+    with pytest.raises(r.ResourceContractError, match='envelope.paths'):
+        call()
+
+
+@pytest.mark.parametrize('marker', [None, 'UNKNOWN', 'PENDING_CALIBRATION', 'TBD', 'NOT_APPLICABLE', 'nao_medido', 'NORMATIVE_BINDING_NOT_ESTABLISHED'])
+def test_u06_f04_parameter_values_still_block_closure(marker):
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters']['word_size'] = marker
+    rows, records = _section7_test_declarations(payload)
+    closure = cal.evaluate_section7_closure(payload, rows, records)
+    assert closure['state'] == 'OPEN'
+    assert 'P03' in {entry['parameter_id'] for entry in closure['blocking_parameters']}
+    with pytest.raises(r.ResourceContractError, match='search payload OPEN'):
+        _u06_search(payload, rows, records, envelope)
+
+
+def test_u06_f04_named_spaces_and_negative_value_still_compare_by_unique_pairs():
+    a = ['blastn', '-dust', '20 64 1', '-out', 'synthetic/UNKNOWN result with spaces.asn', '-penalty', '-3']
+    b = ['blastn', '-penalty', '-3', '-out', 'synthetic/UNKNOWN result with spaces.asn', '-dust', '20 64 1']
+    result = cal.compare_qa_m_argv(a, b, help_text=_U06_SEARCH_HELP)
+    assert result['correspondence'] is True and result['state'] == 'NOT_TESTED'
