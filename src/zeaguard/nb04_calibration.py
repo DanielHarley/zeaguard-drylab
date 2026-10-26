@@ -4541,3 +4541,225 @@ def compare_qa_m_argv(reconstructed_argv: Sequence[str], logged_argv: Sequence[s
             'positional_differences': {'only_reconstructed': sorted(set(left['positional']) - set(right['positional'])),
                                        'only_logged': sorted(set(right['positional']) - set(left['positional']))},
             'limitations': list(U06_COMMAND_LIMITATIONS)}
+
+# U07 evaluates declarations only. This region has no freeze writer or executor.
+E07_COMPONENTS = (
+    'cross_references', 'hashes', 'roles', 'parameters', 'tolerance_fields', 'qa',
+    'scale_decisions', 'authorization', 'precedence', 'finite_input_inventory',
+    'availability_regimes', 'freeze_commit', 'snapshot', 'verified_transport', 'allow_dirty',
+)
+E07_DECLARED_ORDER = (
+    'G0', 'APPROVED_METHOD_AND_DESIGN', 'MATERIALIZED_FIXTURES_AND_CANDIDATES',
+    'NUMERIC_TOLERANCES', 'PREFREEZE', 'FREEZE_COMMIT', 'MATCHING_SNAPSHOT',
+    'VERIFIED_TRANSPORT', 'FIRST_INFORMATIVE_COMMAND',
+)
+E07_PRECEDENCE_EDGES = (
+    ('G0', 'MATERIALIZED_FIXTURES_AND_CANDIDATES'),
+    ('APPROVED_METHOD_AND_DESIGN', 'MATERIALIZED_FIXTURES_AND_CANDIDATES'),
+    ('MATERIALIZED_FIXTURES_AND_CANDIDATES', 'NUMERIC_TOLERANCES'),
+    ('NUMERIC_TOLERANCES', 'PREFREEZE'), ('PREFREEZE', 'FREEZE_COMMIT'),
+    ('FREEZE_COMMIT', 'MATCHING_SNAPSHOT'), ('FREEZE_COMMIT', 'VERIFIED_TRANSPORT'),
+    ('MATCHING_SNAPSHOT', 'FIRST_INFORMATIVE_COMMAND'),
+    ('VERIFIED_TRANSPORT', 'FIRST_INFORMATIVE_COMMAND'),
+)
+E07_PENDING_DECISION_IDS = ('I01', 'I02', 'I03', 'I04', 'PC13', 'F07', 'B4-8', 'B4-9')
+E07_LIMITATIONS = (
+    'Local declaration schema only. Component digests bind json_bytes of declarations, not a normative artifact or freeze identity.',
+    'Matching supplied hashes, references and receipts does not verify actual files, transport, snapshot, authorization or chronology.',
+    'Declared order is checked without a clock. Documentary authority and scientific justification require external review.',
+    'QA checks cover declarations of criteria only. QA-M and QA-I remain NOT_TESTED and no QA result is approved.',
+    'No freeze, UTC, freeze identifier, version, closed receipt, snapshot, transport or informative command is produced.',
+    'Complete declarations do not satisfy E07, B4, G1 or any gate. Informative execution remains blocked.',
+    'Scientific adequacy of supplied tolerance justifications, applicability and documentary dispositions is not established by matching declarations.',
+)
+
+
+def _e07_declaration_sha256(value: Any) -> str:
+    return hashlib.sha256(json_bytes(value)).hexdigest()
+
+
+def _e07_relative_input_path(value: Any) -> str:
+    path = _u06_text(value, 'inventory path')
+    require(not path.startswith('/') and '\\' not in path and ':' not in path and all(p not in ('', '.', '..') for p in path.split('/')), 'inventory path must be contained and relative')
+    require(path.startswith(('src/', 'scripts/', 'tests/', 'docs/implementation/', 'config/', 'data/reference/', 'data/external/nto/', 'results/bioinformatics/nb04/', 'artifacts/')), 'inventory path outside preparation directories')
+    return path
+
+
+def evaluate_e07_preconditions(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    """Check finite declared components. Even the complete branch cannot authorize or freeze."""
+    envelope_errors = []
+    if not isinstance(envelope, Mapping):
+        envelope_errors.append('envelope must be an object')
+        envelope = {}
+    try:
+        _section7_keys(envelope, E07_COMPONENTS, 'e07_envelope')
+    except ResourceContractError as exc:
+        envelope_errors.append(str(exc))
+    blockers = []
+    parameter_blockers = []
+    unresolved_decisions = []
+    hashes = envelope.get('hashes')
+    bindings = hashes.get('components', {}) if isinstance(hashes, Mapping) else {}
+    refs = envelope.get('cross_references')
+    refs = refs if isinstance(refs, Mapping) else {}
+    inventory = envelope.get('finite_input_inventory')
+    inventory = inventory if isinstance(inventory, list) else []
+    entries = {e['path']: e for e in inventory if isinstance(e, Mapping) and isinstance(e.get('path'), str)}
+    candidate_hashes = []
+    roles = envelope.get('roles')
+    roles = roles if isinstance(roles, Mapping) else {}
+    all_fixture_ids = [f for values in roles.values() if isinstance(values, list) for f in values]
+
+    for component in E07_COMPONENTS:
+        try:
+            require(component in envelope and envelope[component] is not None, 'required declaration missing')
+            value = envelope[component]
+            if component != 'hashes':
+                require(isinstance(bindings, Mapping) and component in bindings, 'component hash binding missing')
+                require(bindings[component] == _e07_declaration_sha256(value), 'component altered against declared hash binding')
+            if component == 'cross_references':
+                _section7_keys(value, ('required_paths', 'fixture_ids', 'candidate_payload_sha256s', 'applicable_tolerances'), component)
+                require(isinstance(value['required_paths'], list) and value['required_paths'] and len(value['required_paths']) == len(set(value['required_paths'])), 'required paths must be finite and distinct')
+                require(set(value['required_paths']) == set(entries), 'required paths and finite inventory differ')
+                require(set(value['fixture_ids']) == set(all_fixture_ids), 'fixture references and roles differ')
+                require(value['candidate_payload_sha256s'], 'candidate references missing')
+                require(isinstance(value['applicable_tolerances'], list) and value['applicable_tolerances'], 'tolerance applicability declarations missing')
+                require(all(len(row) == 3 and row[0] in all_fixture_ids and row[2] in value['candidate_payload_sha256s'] for row in value['applicable_tolerances']), 'tolerance applicability references differ')
+            elif component == 'hashes':
+                _section7_keys(value, ('components', 'files'), component)
+                require(isinstance(bindings, Mapping) and set(bindings) == set(E07_COMPONENTS) - {'hashes'}, 'complete component hash bindings required, without self-hash')
+                require(all(isinstance(h, str) and re.fullmatch(r'[0-9a-f]{64}', h) for h in bindings.values()), 'invalid component SHA256')
+                require(value['files'] == {p: e.get('sha256') for p, e in entries.items()} and bool(entries), 'declared file hashes and inventory differ')
+                require(all(bindings[c] == _e07_declaration_sha256(envelope.get(c)) for c in bindings), 'component hash binding mismatch')
+            elif component == 'roles':
+                _section7_keys(value, ('TUNING', 'VALIDATION'), component)
+                require(all(isinstance(v, list) and v and all(isinstance(f, str) and f.strip() for f in v) for v in value.values()), 'explicit nonempty roles required')
+                require(len(all_fixture_ids) == len(set(all_fixture_ids)), 'fixture roles overlap or repeat')
+            elif component == 'parameters':
+                require(isinstance(value, Mapping) and isinstance(value.get('candidates'), list) and value['candidates'], 'candidate declarations missing')
+                require(isinstance(value.get('parameter_rows'), Mapping) and all(isinstance(row, Mapping) for row in value['parameter_rows'].values()), 'parameter matrix declarations missing')
+                require(all(isinstance(c, Mapping) and isinstance(c.get('payload'), Mapping) and isinstance(c.get('parameter_records'), Mapping) and all(isinstance(r, Mapping) for r in c['parameter_records'].values()) for c in value['candidates']), 'candidate records malformed')
+                closures = [evaluate_section7_closure(c['payload'], value['parameter_rows'], c.get('parameter_records', {})) for c in value['candidates']]
+                parameter_blockers.extend(b for closure in closures for b in closure['blocking_parameters'])
+                require(all(c['state'] == 'CLOSED' for c in closures), 'section 7 closure refused: ' + repr(sorted({b['parameter_id'] for b in parameter_blockers})))
+                require(isinstance(value.get('design_space_declaration'), str) and value['design_space_declaration'].strip(), 'finite design-space declaration missing')
+                for candidate in value['candidates']:
+                    reconstruct_section7_search_command(candidate['payload'], value['parameter_rows'], candidate['parameter_records'], candidate['command_envelope'], help_text=candidate['help_text'])
+                    candidate_hashes.append(section7_payload_sha256(candidate['payload']))
+                require(candidate_hashes == refs.get('candidate_payload_sha256s'), 'candidate payload references differ')
+            elif component == 'tolerance_fields':
+                require(isinstance(value, list) and value, 'tolerance declarations missing')
+                required = ('fixture_id', 'candidate_payload_sha256', 'instance_id', 'pattern', 'expected_coordinates', 'orientation', 'comparison_object', 'fragmentation_rule', 'unit', 'applicable_endpoints', 'numeric_by_endpoint', 'independent_justification')
+                for record in value:
+                    require(isinstance(record, Mapping) and all(k in record and record[k] is not None for k in required), 'mandatory tolerance fields missing')
+                    require(all(isinstance(record[k], str) and record[k].strip() for k in ('instance_id', 'comparison_object', 'fragmentation_rule')), 'required tolerance descriptors empty or invalid')
+                    require(all(isinstance(record[k], Mapping) and record[k] for k in ('pattern', 'expected_coordinates')), 'required pattern or coordinate declaration empty')
+                    require(record['orientation'] in ('PLUS', 'MINUS'), 'tolerance orientation missing or invalid')
+                    require(record['fixture_id'] in all_fixture_ids and record['candidate_payload_sha256'] in refs.get('candidate_payload_sha256s', []), 'tolerance references differ')
+                    require(record['unit'] == 'nt' and isinstance(record['independent_justification'], str) and record['independent_justification'].strip(), 'unit or independent justification missing')
+                    numbers = record['numeric_by_endpoint']
+                    require(isinstance(numbers, Mapping) and numbers and set(numbers) == set(record['applicable_endpoints']) and set(numbers) <= {'qstart', 'qend', 'sstart', 'send'}, 'declared endpoint fields missing or unsupported')
+                    require(all(type(n) in (int, float) and 0 <= n < float('inf') for n in numbers.values()), 'unresolved or invalid numerical tolerance')
+                declared = [(r['fixture_id'], r['instance_id'], r['candidate_payload_sha256']) for r in value]
+                require(len(declared) == len(set(declared)) and set(declared) == {tuple(row) for row in refs.get('applicable_tolerances', [])}, 'tolerance coverage of declared applicable instances incomplete')
+            elif component == 'qa':
+                require(isinstance(value, Mapping) and set(value) == set(E05_QA_SPEC), 'complete QA criteria declarations required')
+                for qid, record in value.items():
+                    require(isinstance(record, Mapping) and record.get('qa_id') == qid and all(isinstance(record.get(k), str) and record[k].strip() for k in ('criterion', 'metric', 'expected_behavior', 'fixture_dependency')), f'{qid}: criterion declaration incomplete')
+                    require(record.get('biological_decision_role') == 'false' and record.get('blocks_configuration_freeze') == ('NO' if qid in ('QA-H', 'QA-O', 'QA-R') else 'YES'), f'{qid}: criterion role missing')
+                    status_fields = [key for key in ('status', 'state_after_e05_part1', 'matrix_initial_status') if key in record]
+                    require(status_fields and all(record[key] == 'NOT_TESTED' for key in status_fields), f'{qid}: this preparation evaluates declarations only, never QA outcomes')
+            elif component == 'scale_decisions':
+                require(isinstance(value, Mapping), 'scale/decision declarations missing')
+                unresolved_decisions.extend(d for d in E07_PENDING_DECISION_IDS if not isinstance(value.get(d), Mapping) or value[d].get('state') != 'DECLARED' or value[d].get('reference') not in refs.get('required_paths', []) or not isinstance(value[d].get('disposition'), str) or not value[d]['disposition'].strip())
+                require(not unresolved_decisions, 'documentary dispositions unresolved: ' + repr(unresolved_decisions))
+            elif component == 'authorization':
+                require(isinstance(value, Mapping) and value.get('reference') in refs.get('required_paths', []) and isinstance(value.get('authorized_stages'), list) and 'E08' in value['authorized_stages'], 'explicit transition authorization declaration missing')
+            elif component == 'precedence':
+                require(isinstance(value, list) and len(value) == len(E07_DECLARED_ORDER) and set(value) == set(E07_DECLARED_ORDER), 'declared phase events missing or repeated')
+                positions = {event: index for index, event in enumerate(value)}
+                require(all(positions[before] < positions[after] for before, after in E07_PRECEDENCE_EDGES), 'declared phase order inconsistent with required precedence')
+            elif component == 'finite_input_inventory':
+                require(inventory and len(entries) == len(inventory), 'finite file inventory missing or paths repeated')
+                for entry in inventory:
+                    _e07_relative_input_path(entry['path'])
+                    require(isinstance(entry.get('role'), str) and entry['role'].strip(), 'file role missing')
+                    require(type(entry.get('size_bytes')) is int and entry['size_bytes'] >= 0, 'file size missing or invalid')
+                    require(isinstance(entry.get('sha256'), str) and re.fullmatch(r'[0-9a-f]{64}', entry['sha256']), 'file RAW SHA256 missing or invalid')
+                    require(entry.get('regime') in ('TRACKED_COMMIT_BLOB', 'VERIFIED_BYTE_COPY'), 'availability regime missing or unsupported')
+                    ignored_roots = phase_git_and_snapshot_policy()['file_classification']['ignored_unversioned_campaign_outputs']
+                    ignored = entry['path'].startswith(tuple(path + '/' for path in [*ignored_roots, 'artifacts']))
+                    require(entry['regime'] == ('VERIFIED_BYTE_COPY' if ignored else 'TRACKED_COMMIT_BLOB'), 'availability regime conflicts with declared phase file classification')
+                    if entry['regime'] == 'TRACKED_COMMIT_BLOB':
+                        require(entry.get('commit') == envelope.get('freeze_commit'), 'tracked commit reference differs')
+            elif component == 'availability_regimes':
+                require(bool(entries) and value == {p: e.get('regime') for p, e in entries.items()}, 'per-file availability regimes differ from inventory')
+            elif component == 'freeze_commit':
+                require(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value), 'freeze commit declaration missing or malformed')
+            elif component == 'snapshot':
+                require(isinstance(value, Mapping) and value.get('commit') == envelope.get('freeze_commit'), 'snapshot does not correspond to declared commit')
+                _e07_relative_input_path(value.get('path'))
+                require(isinstance(value.get('sha256'), str) and re.fullmatch(r'[0-9a-f]{64}', value['sha256']), 'snapshot SHA256 missing')
+            elif component == 'verified_transport':
+                snapshot = envelope.get('snapshot')
+                require(isinstance(value, Mapping) and isinstance(snapshot, Mapping) and value.get('commit') == envelope.get('freeze_commit') and value.get('snapshot_sha256') == snapshot.get('sha256'), 'transport commit/snapshot references differ')
+                require(value.get('independent_copies') is True and value.get('hardlinks') is False and value.get('alternates') is False, 'independent verified copies must be declared without hardlinks or alternates')
+                require(json_bytes(value.get('files')) == json_bytes({p: {'sha256': e.get('sha256'), 'size_bytes': e.get('size_bytes')} for p, e in entries.items()}) and bool(entries), 'transport file declarations differ from finite inventory')
+            elif component == 'allow_dirty':
+                require(value is False, 'transition requires explicitly declared allow_dirty=false')
+        except (ResourceContractError, KeyError, TypeError, ValueError) as exc:
+            blockers.append({'component': component, 'reason': str(exc)})
+    if not isinstance(envelope.get('scale_decisions'), Mapping):
+        unresolved_decisions = list(E07_PENDING_DECISION_IDS)
+    return {'state': 'PRECONDICOES_DECLARADAS_COMPLETAS' if not blockers and not envelope_errors else 'RECUSADO',
+            'blocking_components': blockers, 'envelope_errors': envelope_errors,
+            'blocking_parameters': parameter_blockers, 'unresolved_decision_ids': unresolved_decisions,
+            'freeze_produced': False, 'informative_command_allowed': False, 'authority_verified': False,
+            **E05_SECTION7_CLOSURE_QUALIFICATION, 'limitations': list(E07_LIMITATIONS)}
+
+
+def inspect_e07_declared_state(root: Path, preservation_inventory_path: str, accepted_preservation_sha256: str) -> dict[str, Any]:
+    """Read preserved declarations only. Never materialize missing preconditions or probe a database."""
+    root = root.resolve()
+    require(digest(relative_path(root, preservation_inventory_path)) == accepted_preservation_sha256, 'preservation inventory identity differs')
+    preservation = json.loads(relative_path(root, preservation_inventory_path).read_text('utf-8'))
+    require(digest(relative_path(root, E05_U03_R3_PATH)) == E05_U03_R3_SHA256, 'U03 r3 identity differs')
+    inspection = json.loads(relative_path(root, E05_U03_R3_PATH).read_text('utf-8'))
+    certificate = verify_g0(root)
+    documentary = json.loads(relative_path(root, 'data/reference/nb04_cp0_documentary_inputs.json').read_text('utf-8'))
+    rows = {r['parameter_id']: r for r in documentary['original_table_records']['08_b4_calibration_parameter_matrix_v2_1.tsv']}
+    records = inspection['c_parameter_matrix_inspection']['parameters']
+    geometry = inspection['b_build_comparison_with_cp1_receipts_and_derivations']['current_e03_geometry_derivations']
+    for record in geometry.values():
+        require(digest(relative_path(root, record['geometry_record_path'])) == record['geometry_record_sha256'], 'accepted geometry identity differs')
+    parser_identity = nb04_parser_implementation_identity(root)
+    tools = {tool: {field: inspection['a_observed_tool_builds']['tools'][tool][field] for field in E05_SECTION7_TOOL_FIELDS} for tool in E05_SECTION7_KEYS['tool_build']}
+    # This diagnostic view is partial. It never fills undetermined parameters or creates candidate identity.
+    partial = {'schema_version': 1, 'tool_build': tools, 'search_parameters': dict.fromkeys(E05_SECTION7_SEARCH_FIELDS)}
+    for pid, paths in E05_SECTION7_PARAMETER_PATHS.items():
+        values = _section7_declared_values(pid, records[pid], paths)
+        if values is not None:
+            for path, value in values.items():
+                section, field = path.split('.')
+                partial.setdefault(section, {})[field] = value
+    partial.setdefault('execution_architecture', {})['parser_implementation_sha256'] = parser_identity['parser_implementation_sha256']
+    candidates = []
+    for task in E05_SECTION7_TASKS:
+        payload = json.loads(json_bytes(partial))
+        payload['search_parameters']['task'] = task
+        candidates.append({'payload': payload, 'parameter_records': records, 'command_envelope': None, 'help_text': None})
+    envelope = dict.fromkeys(E07_COMPONENTS)
+    envelope['parameters'] = {'parameter_rows': rows, 'candidates': candidates, 'design_space_declaration': None}
+    envelope['qa'] = inspection['e_configuration_qa_matrix_status']['criteria']
+    envelope['hashes'] = {'components': {key: _e07_declaration_sha256(envelope[key]) for key in E07_COMPONENTS if key != 'hashes'}, 'files': {}}
+    result = evaluate_e07_preconditions(envelope)
+    result['preserved_source_evidence'] = {
+        'preservation_inventory': {'path': preservation_inventory_path, 'sha256': accepted_preservation_sha256, 'stage': preservation['stage']},
+        'geometry_records': {rid: {'path': r['geometry_record_path'], 'sha256': r['geometry_record_sha256']} for rid, r in geometry.items()},
+        'u03_inspection': {'path': E05_U03_R3_PATH, 'sha256': E05_U03_R3_SHA256},
+        'g0_read_only_verification': certificate['status'], 'parser_implementation_sha256': parser_identity['parser_implementation_sha256'],
+        'pending_calibration_parameter_ids': [pid for pid in E05_PARAMETER_IDS if records[pid]['effective_value_state'] == STATE_PENDING],
+        'missing_preparation_artifacts': [path for path in PREPARATION_REFERENCE_ARTIFACT_PATHS if not relative_path(root, path).is_file()],
+    }
+    result['limitations'].append('Real-state evaluation uses a partial U03 declaration view, not a newly materialized candidate or complete section 7 payload. Missing preparation artifacts remain absent. No CP1 normalized FASTA, index or archive is read. verify_g0 hashes its certified inputs read-only.')
+    return result
