@@ -3099,26 +3099,26 @@ def test_u06_export_refuses_incomplete_or_invalid_records(change):
 
 
 def test_u06_comparator_declares_order_normalization_and_never_approves_qa():
-    a = ['blastn', '-task', 'blastn', '-penalty', '-3', '-lcase_masking', 'pos_b', 'pos_a']
-    b = ['blastn', 'pos_a', '-lcase_masking', '-penalty', '-3', 'pos_b', '-task', 'blastn', 'pos_a']
+    a = ['blastn', '-task', 'blastn', '-penalty', '-3', '-lcase_masking']
+    b = ['blastn', '-lcase_masking', '-penalty', '-3', '-task', 'blastn']
     result = cal.compare_qa_m_argv(a, b, help_text=_U06_SEARCH_HELP)
     assert result['correspondence'] is True and result['state'] == 'NOT_TESTED'
     assert result['normalization'] == {
         'executable': 'EXACT_TOKEN_NO_PATH_RESOLUTION', 'flags': 'SET_OF_FLAG_VALUE_PAIRS_USING_SUPPLIED_HELP_ARITY',
-        'positional': 'SET_OF_EXACT_TOKENS', 'token_order': 'IGNORED', 'values': 'EXACT_TEXT_NO_NUMERIC_OR_PATH_NORMALIZATION',
+        'positional': 'REJECTED_NO_POSITIONAL_ARGUMENTS_SUPPORTED', 'token_order': 'IGNORED', 'values': 'EXACT_TEXT_NO_NUMERIC_OR_PATH_NORMALIZATION',
         'duplicate_flags': 'REJECTED_AS_AMBIGUOUS', 'decision_authority': 'IMPLEMENTATION_COORDINATOR_REVISABLE_BEFORE_FREEZE'}
     assert result['flag_differences'] == [] and result['limitations']
 
 
 def test_u06_comparator_reports_each_flag_and_other_difference():
-    result = cal.compare_qa_m_argv(['blastn', '-task', 'blastn', '-evalue', '1', 'a'],
-                                 ['other_blastn', '-task', 'blastn-short', '-out', 'x', 'b'], help_text=_U06_SEARCH_HELP)
+    result = cal.compare_qa_m_argv(['blastn', '-task', 'blastn', '-evalue', '1'],
+                                 ['other_blastn', '-task', 'blastn-short', '-out', 'x'], help_text=_U06_SEARCH_HELP)
     assert result['correspondence'] is False and result['executable_differs'] is True
     assert result['flag_differences'] == [
         {'flag': '-evalue', 'reconstructed_present': True, 'logged_present': False, 'reconstructed_value': '1', 'logged_value': None},
         {'flag': '-out', 'reconstructed_present': False, 'logged_present': True, 'reconstructed_value': None, 'logged_value': 'x'},
         {'flag': '-task', 'reconstructed_present': True, 'logged_present': True, 'reconstructed_value': 'blastn', 'logged_value': 'blastn-short'}]
-    assert result['positional_differences'] == {'only_reconstructed': ['a'], 'only_logged': ['b']}
+    assert result['positional_differences'] == {'only_reconstructed': [], 'only_logged': []}
     assert cal.compare_qa_m_argv(['blastn', '-evalue', '1'], ['blastn', '-evalue', '1.0'], help_text=_U06_SEARCH_HELP)['correspondence'] is False
 
 
@@ -3160,3 +3160,177 @@ def test_u06_output_cannot_be_used_as_execution_or_integrity_approval():
     assert result['execution_performed'] is False and result['campaign_qa_approved'] is False
     assert any('QA-I remains NOT_TESTED' in text for text in result['limitations'])
     assert any('truncation' in text for text in result['limitations'])
+
+@pytest.fixture(scope='module')
+def u06_revision_pinned_help():
+    """Read only help/version. These probes never execute a reconstructed argv."""
+    helps = {}
+    for tool in ('blastn', 'blast_formatter'):
+        executable = cal._default_tool_which(tool)
+        if executable is None:
+            pytest.skip(f'pinned {tool} help unavailable outside canonical environment')
+        version = subprocess.run([executable, '-version'], capture_output=True, text=True, check=True).stdout
+        if '2.17.0+' not in version:
+            pytest.skip(f'{tool} build differs from pinned help contract')
+        helps[tool] = subprocess.run([executable, '-help'], capture_output=True, text=True, check=True).stdout
+    return helps
+
+
+@pytest.mark.parametrize('task,evalue,dust', [
+    ('blastn', 10, '20 64 1'), ('blastn-short', 1000, 'no'), ('dc-megablast', 10, '20 64 1'),
+])
+@pytest.mark.parametrize('flag,field', [('-evalue', 'evalue_reporting_limit'), ('-dust', 'dust')])
+def test_u06_revision_real_task_defaults_are_omitted_and_explicit_values_still_emit(u06_revision_pinned_help, task, evalue, dust, flag, field):
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters'].update(task=task, evalue_reporting_limit=evalue, dust=dust)
+    rows, records = _section7_test_declarations(payload)
+    envelope['flag_provenance'][flag] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    inputs = (payload, rows, records, envelope)
+    before = r.json_bytes(inputs)
+    result = _u06_search(*inputs, help_text=u06_revision_pinned_help['blastn'])
+    assert result['argv'][1:3] == ['-task', task] and flag not in result['argv']
+    assert result['qa_m']['state'] == 'NOT_TESTED' and result['execution_performed'] is False
+    assert r.json_bytes(inputs) == before
+    envelope['flag_provenance'][flag] = {'option_applied': True, 'origin': 'EXPLICIT'}
+    argv = _u06_search(*inputs, help_text=u06_revision_pinned_help['blastn'])['argv']
+    assert argv[argv.index(flag) + 1] == str(evalue if field == 'evalue_reporting_limit' else dust)
+
+
+@pytest.mark.parametrize('task,evalue,dust', [
+    ('blastn', 1000, 'no'), ('blastn-short', 10, '20 64 1'), ('dc-megablast', 1000, 'no'),
+])
+@pytest.mark.parametrize('flag,field', [('-evalue', 'evalue_reporting_limit'), ('-dust', 'dust')])
+def test_u06_revision_default_must_match_the_declared_task(u06_revision_pinned_help, task, evalue, dust, flag, field):
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters'].update(task=task)
+    payload['search_parameters'][field] = evalue if field == 'evalue_reporting_limit' else dust
+    rows, records = _section7_test_declarations(payload)
+    envelope['flag_provenance'][flag] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    with pytest.raises(r.ResourceContractError, match='differs from documented default for task ' + task):
+        _u06_search(payload, rows, records, envelope, help_text=u06_revision_pinned_help['blastn'])
+
+
+@pytest.mark.parametrize('flag', ['-evalue', '-dust'])
+def test_u06_revision_unknown_default_forms_fail_closed(u06_revision_pinned_help, flag):
+    payload, rows, records, envelope = _u06_search_inputs()
+    text = u06_revision_pinned_help['blastn']
+    default = cal.parse_blast_help_flags(text)[flag]['documented_default_in_build_help']
+    pattern = r'\s+'.join(re.escape(word) for word in default.split())
+    altered, count = re.subn(pattern, 'Default = unrecognized conditional prose', text)
+    assert count == 1
+    assert cal.parse_blast_help_flags(altered)[flag]['documented_default_in_build_help'] == 'Default = unrecognized conditional prose'
+    envelope['flag_provenance'][flag] = {'option_applied': False, 'origin': 'DOCUMENTED_ENGINE_DEFAULT'}
+    with pytest.raises(r.ResourceContractError, match='default is not documented in a supported form'):
+        _u06_search(payload, rows, records, envelope, help_text=altered)
+
+
+@pytest.mark.parametrize('field,value', [('word_size', 1), ('num_threads', 0), ('max_hsps', 0), ('penalty', 1)])
+def test_u06_revision_rejects_explicit_values_outside_real_header_domains(u06_revision_pinned_help, field, value):
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters'][field] = value
+    rows, records = _section7_test_declarations(payload)
+    envelope['flag_provenance']['-' + field] = {'option_applied': True, 'origin': 'EXPLICIT'}
+    assert cal.evaluate_section7_closure(payload, rows, records)['state'] == 'CLOSED'
+    with pytest.raises(r.ResourceContractError, match='outside documented header domain'):
+        _u06_search(payload, rows, records, envelope, help_text=u06_revision_pinned_help['blastn'])
+
+
+@pytest.mark.parametrize('field,value', [('word_size', 4), ('num_threads', 1), ('max_hsps', 1), ('penalty', -3), ('penalty', 0), ('reward', 0), ('window_size', 0)])
+def test_u06_revision_accepts_exact_boundaries_and_legitimate_negatives(u06_revision_pinned_help, field, value):
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['search_parameters'][field] = value
+    rows, records = _section7_test_declarations(payload)
+    envelope['flag_provenance']['-' + field] = {'option_applied': True, 'origin': 'EXPLICIT'}
+    argv = _u06_search(payload, rows, records, envelope, help_text=u06_revision_pinned_help['blastn'])['argv']
+    assert argv[argv.index('-' + field) + 1] == str(value)
+
+
+@pytest.mark.parametrize('flag,value', [('-max_target_seqs', 0), ('-num_descriptions', -1), ('-num_alignments', -1), ('-max_target_seqs', '1')])
+def test_u06_revision_export_uses_the_same_real_header_domain_checks(u06_revision_pinned_help, flag, value):
+    record = _u06_export_record()
+    record['options'][flag] = {'value': value, 'option_applied': True, 'origin': 'EXPLICIT'}
+    with pytest.raises(r.ResourceContractError, match='documented header domain|invalid Integer value'):
+        cal.reconstruct_blast_formatter_command(record, help_text=u06_revision_pinned_help['blast_formatter'])
+
+
+@pytest.mark.parametrize('flag,value', [('-max_target_seqs', 1), ('-num_descriptions', 0), ('-num_alignments', 0)])
+def test_u06_revision_export_accepts_header_boundaries(u06_revision_pinned_help, flag, value):
+    record = _u06_export_record()
+    record['options'][flag] = {'value': value, 'option_applied': True, 'origin': 'EXPLICIT'}
+    argv = cal.reconstruct_blast_formatter_command(record, help_text=u06_revision_pinned_help['blast_formatter'])['argv']
+    assert argv[argv.index(flag) + 1] == str(value)
+
+
+@pytest.mark.parametrize('stage,flag', [('blastn', '-db'), ('blastn', '-query'), ('blastn', '-out'), ('blast_formatter', '-archive'), ('blast_formatter', '-out')])
+@pytest.mark.parametrize('alteration', ['absent', 'presence_only', 'wrong_type'])
+def test_u06_revision_every_path_requires_supported_help_and_one_file_operand(u06_revision_pinned_help, stage, flag, alteration):
+    text = u06_revision_pinned_help[stage]
+    header = cal.parse_blast_help_flags(text)[flag]['header_line']
+    replacement = header.replace(flag, '-unavailable_path', 1) if alteration == 'absent' else flag if alteration == 'presence_only' else flag + ' <Integer>'
+    assert header in text
+    altered = text.replace(header, replacement)
+    if alteration == 'absent':
+        assert flag not in cal.parse_blast_help_flags(altered)
+    if stage == 'blastn':
+        inputs = _u06_search_inputs()
+        # Even a path spelled "true" must never turn into a valueless switch.
+        if alteration == 'presence_only':
+            inputs[-1]['paths'][flag] = 'true'
+        call = lambda: _u06_search(*inputs, help_text=altered)
+    else:
+        record = _u06_export_record()
+        if alteration == 'presence_only':
+            record['paths'][flag] = 'true'
+        call = lambda: cal.reconstruct_blast_formatter_command(record, help_text=altered)
+    with pytest.raises(r.ResourceContractError, match='absent from supplied build help|path flag requires one string/file operand'):
+        call()
+
+
+@pytest.mark.parametrize('length', [255, 256])
+def test_u06_revision_real_output_header_length_boundary(u06_revision_pinned_help, length):
+    inputs = _u06_search_inputs()
+    inputs[-1]['paths']['-out'] = 'a' * length
+    if length == 256:
+        with pytest.raises(r.ResourceContractError, match='outside documented header domain'):
+            _u06_search(*inputs, help_text=u06_revision_pinned_help['blastn'])
+    else:
+        argv = _u06_search(*inputs, help_text=u06_revision_pinned_help['blastn'])['argv']
+        assert argv[-2:] == ['-out', 'a' * length]
+
+
+@pytest.mark.parametrize('alteration', ['not_applicable', 'missing_sha', 'wrong_name'])
+def test_u06_revision_selected_blastn_requires_complete_applicable_identity(alteration):
+    payload, rows, records, envelope = _u06_search_inputs()
+    if alteration == 'not_applicable':
+        payload['tool_build']['blastn'] = 'NOT_APPLICABLE'
+    elif alteration == 'missing_sha':
+        del payload['tool_build']['blastn']['executable_sha256']
+    else:
+        payload['tool_build']['blastn']['tool_name'] = 'blast_formatter'
+    rows, records = _section7_test_declarations(payload)
+    if alteration == 'not_applicable':
+        assert cal.evaluate_section7_closure(payload, rows, records)['state'] == 'CLOSED'
+    with pytest.raises(r.ResourceContractError, match='tool_build.blastn'):
+        _u06_search(payload, rows, records, envelope)
+
+
+def test_u06_revision_unused_tool_can_still_be_inapplicable():
+    payload, rows, records, envelope = _u06_search_inputs()
+    payload['tool_build']['dustmasker'] = 'NOT_APPLICABLE'
+    assert _u06_search(payload, rows, records, envelope)['argv'][0] == 'blastn'
+
+
+@pytest.mark.parametrize('argv', [
+    ['blastn', '-lcase_masking', 'false', 'a'], ['blastn', 'a', '-lcase_masking', 'false', 'a'],
+    ['blastn', 'a'], ['blastn', '-3'], ['blast_formatter', '-archive', 'synthetic/output.asn', 'extra'],
+])
+def test_u06_revision_comparator_refuses_all_unexpected_positionals(argv):
+    with pytest.raises(r.ResourceContractError, match='unexpected positional argument'):
+        cal.compare_qa_m_argv(argv, argv, help_text=_U06_SEARCH_HELP + _U06_EXPORT_HELP)
+
+
+def test_u06_revision_scope_limits_are_in_the_returned_envelope():
+    result = cal.reconstruct_blast_formatter_command(_u06_export_record(), help_text=_U06_EXPORT_HELP)
+    assert any('no tool_build carrier' in text for text in result['limitations'])
+    assert any('no stdout or positional operands' in text for text in result['limitations'])
+    assert result['qa_m']['state'] == 'NOT_TESTED' and result['campaign_qa_approved'] is False

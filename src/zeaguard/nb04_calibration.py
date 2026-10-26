@@ -4286,6 +4286,9 @@ U06_COMMAND_LIMITATIONS = (
     'Declarative reconstruction only. No executable, database, query, archive or output is opened or executed.',
     'Closure checks computational consistency of supplied declarations. Documentary authority and E02/E03 decisions require external review.',
     'Only base candidates are supported. QA execution payloads and all overrides are refused.',
+    'Supported route: explicit archive format 11 and tabular export 6, named output paths, no stdout or positional operands.',
+    'Only the measured header and default forms are supported. Unknown forms are refused.',
+    'Export tool-build binding is not established: the lateral record has no tool_build carrier. No carrier or contract identifier is invented.',
     'Help metadata and executable provenance are supplied assertions. Runtime/build equivalence and producer interoperability are not certified.',
     'QA-M requires an actually executed and logged command after the authorized freeze. QA-I remains NOT_TESTED.',
     'The specific parser and output-integrity contract bindings remain prospective dependencies. Export reconstruction does not establish completeness or absence of truncation.',
@@ -4312,15 +4315,60 @@ def _u06_envelope(envelope: Mapping[str, Any], tool: str, paths: Sequence[str], 
     return [executable]
 
 
-def _u06_option(flag: str, value: Any, provenance: Mapping[str, Any], help_flags: Mapping[str, Any]) -> list[str]:
+def _u06_flag_domain(flag: str, value: Any, help_flags: Mapping[str, Any], *, path_operand: bool = False) -> bool:
+    """Check the finite header forms measured for this route, including named paths."""
+    from decimal import Decimal
+    header = help_flags.get(flag, {}).get('header_line')
+    require(isinstance(header, str), f'{flag}: absent from supplied build help')
+    if path_operand:
+        require(re.match(re.escape(flag) + r' <(?:String|File_In|File_Out)(?:>|, )', header) is not None, f'{flag}: path flag requires one string/file operand')
+    if header == flag:
+        require(type(value) is bool or value in ('true', 'false'), f'{flag}: invalid presence-only flag value')
+        return True
+    numeric = re.fullmatch(re.escape(flag) + r' <(Integer|Int8|Real)(?:, (.*))?>', header)
+    if numeric:
+        kind, restriction = numeric.groups()
+        require(type(value) in ((int, float) if kind == 'Real' else (int,)), f'{flag}: invalid {kind} value')
+        number = Decimal(str(value))
+        require(number.is_finite(), f'{flag}: nonfinite numeric value')
+        if restriction:
+            bound = re.fullmatch(r'(>=|<=)(-?[0-9]+)', restriction)
+            interval = re.fullmatch(r'(-?[0-9]+)\.\.(-?[0-9]+)', restriction)
+            open_interval = re.fullmatch(r'\(>([0-9]+(?:\.[0-9]+)?) and <([0-9]+(?:\.[0-9]+)?)\)', restriction)
+            if bound:
+                valid = number >= Decimal(bound[2]) if bound[1] == '>=' else number <= Decimal(bound[2])
+            elif interval:
+                valid = Decimal(interval[1]) <= number <= Decimal(interval[2])
+            elif open_interval:
+                valid = Decimal(open_interval[1]) < number < Decimal(open_interval[2])
+            else:
+                raise ResourceContractError(f'{flag}: unsupported header domain {header}')
+            require(valid, f'{flag}: value outside documented header domain {header}')
+        return False
+    if header == f'{flag} <Boolean>':
+        require(value in ('true', 'false'), f'{flag}: invalid Boolean value')
+        return False
+    _u06_text(value, f'{flag}.value')
+    if header in (f'{flag} <String>', f'{flag} <File_In>', f'{flag} <File_Out>'):
+        return False
+    if header.startswith(f'{flag} <String, '):
+        choices = re.findall(r"[`']([^`']+)'", header)
+        require(bool(choices) and value in choices, f'{flag}: value outside documented string domain {header}')
+        return False
+    file_limit = re.fullmatch(re.escape(flag) + r' <File_Out, file name length < ([0-9]+)>', header)
+    require(file_limit is not None, f'{flag}: unsupported header domain {header}')
+    require(len(value) < int(file_limit[1]), f'{flag}: value outside documented header domain {header}')
+    return False
+
+
+def _u06_option(
+    flag: str, value: Any, provenance: Mapping[str, Any], help_flags: Mapping[str, Any], *, task: str | None = None, path_operand: bool = False,
+) -> list[str]:
     """One emission mechanism for both tools. Values never determine whether a flag was passed."""
     require(isinstance(provenance, Mapping), f'{flag}: missing provenance declaration')
     _section7_keys(provenance, ('option_applied', 'origin'), f'{flag}.provenance')
     applied, origin = provenance['option_applied'], provenance['origin']
     require(type(applied) is bool, f'{flag}: option_applied must be explicitly boolean')
-    metadata = help_flags.get(flag, {})
-    header = metadata.get('header_line')
-    switch = header == flag
     if value == 'OPTION_NOT_APPLIED':
         require(not applied and origin in ('OPTION_NOT_APPLIED', 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET'),
                 f'{flag}: OPTION_NOT_APPLIED cannot emit a token or use default provenance')
@@ -4330,28 +4378,38 @@ def _u06_option(flag: str, value: Any, provenance: Mapping[str, Any], help_flags
     if origin == 'NATURAL_RESOURCE_SEARCH_SPACE_NOT_SET':
         raise ResourceContractError(f'{flag}: natural-resource policy requires OPTION_NOT_APPLIED in the payload')
     require(not _section7_unresolved(value), f'{flag}: unresolved value')
-    require(header is not None, f'{flag}: absent from supplied build help')
+    switch = _u06_flag_domain(flag, value, help_flags, path_operand=path_operand)
     if applied:
         require(origin == 'EXPLICIT', f'{flag}: passed flag requires EXPLICIT provenance')
         if switch:
             require(value in ('true', True), f'{flag}: presence-only flag requires true')
             return [flag]
-        return [flag, _u06_text(str(value), f'{flag}.value')]
+        return [flag, str(value)]
     if origin == 'OPTION_NOT_APPLIED':
         require(switch and value in ('false', False), f'{flag}: effective value cannot be omitted without documented-default provenance')
         return []
     require(origin == 'DOCUMENTED_ENGINE_DEFAULT', f'{flag}: missing explicit origin for omitted effective value')
-    default = metadata.get('documented_default_in_build_help', '')
+    default = help_flags[flag].get('documented_default_in_build_help', '')
     match = re.fullmatch(r"Default = `([^']*)'", default)
-    require(match is not None, f'{flag}: default is not documented in supplied build help')
-    same = str(value) == match[1]
+    expected = match[1] if match else None
+    # Only these observed conditional forms are supported. Unknown default prose fails closed.
+    conditional = None
+    if flag == '-evalue':
+        conditional = re.fullmatch(r'Default = ([0-9]+) \(([0-9]+) for blastn-short\)', default)
+    elif flag == '-dust':
+        conditional = re.fullmatch(r"Default = '([^']+)' \('([^']+)' for blastn-short\)", default)
+    if conditional:
+        require(task in E05_SECTION7_TASKS, f'{flag}: admitted explicit task required for documented default')
+        expected = conditional[2] if task == 'blastn-short' else conditional[1]
+    require(expected is not None, f'{flag}: default is not documented in a supported form in supplied build help')
+    same = str(value) == expected
     if type(value) in (int, float):
         from decimal import Decimal, InvalidOperation
         try:
-            same = Decimal(str(value)) == Decimal(match[1])
+            same = Decimal(str(value)) == Decimal(expected)
         except InvalidOperation:
             same = False
-    require(same, f'{flag}: declared effective value differs from documented default')
+    require(same, f'{flag}: declared effective value differs from documented default for task {task}')
     return []
 
 
@@ -4381,6 +4439,8 @@ def reconstruct_section7_search_command(
     """Reconstruct base blastn argv from closed values plus declared origins/paths, without execution."""
     closure = evaluate_section7_closure(payload, parameter_rows, parameter_records)
     require(closure['state'] == 'CLOSED', f"search payload OPEN: blocking_parameters={closure['blocking_parameters']}; schema_errors={closure['schema_errors']}; unresolved={closure['unresolved_payload_fields']}")
+    tool = payload['tool_build']['blastn']
+    require(isinstance(tool, Mapping) and tool.get('tool_name') == 'blastn', 'tool_build.blastn: selected tool must be applicable with complete identity')
     argv = _u06_envelope(envelope, 'blastn', ('-db', '-query', '-out'), ('flag_provenance',))
     help_flags = parse_blast_help_flags(help_text)
     flags = [flag for pid in E05_PARAMETER_IDS if pid not in ('P28', 'P29') for flag in E05_PARAMETER_FLAGS.get(pid, ())]
@@ -4404,9 +4464,9 @@ def reconstruct_section7_search_command(
                         f'P23 {flag}: base candidate requires natural-resource search space, flag not passed')
             if pid == 'P26':
                 require(value == '11' and provenance[flag].get('option_applied') is True, 'P26: authoritative archive format 11 must be passed explicitly')
-            argv.extend(_u06_option(flag, value, provenance[flag], help_flags))
+            argv.extend(_u06_option(flag, value, provenance[flag], help_flags, task=payload['search_parameters']['task']))
     for flag in ('-db', '-query', '-out'):
-        argv.extend((flag, envelope['paths'][flag]))
+        argv.extend(_u06_option(flag, envelope['paths'][flag], {'option_applied': True, 'origin': 'EXPLICIT'}, help_flags, path_operand=True))
     _u06_incompatibilities([flag for flag, declaration in provenance.items() if declaration['option_applied']], help_flags)
     return _u06_command_result(argv, 'SEARCH', provenance)
 
@@ -4428,11 +4488,9 @@ def reconstruct_blast_formatter_command(record: Mapping[str, Any], *, help_text:
                     'export -outfmt: explicit tabular format and native field list required')
             fields = value.split(' ')[1:]
             require(fields == list(E05_OUTFMT_6_PRECEDENT + E05_OUTFMT_6_ADDITIONS), 'export -outfmt: adopted native field order differs')
-        elif value != 'OPTION_NOT_APPLIED':
-            require(type(value) is int and value >= (1 if flag == '-max_target_seqs' else 0), f'export {flag}: invalid integer cap')
         argv.extend(_u06_option(flag, value, provenance[flag], help_flags))
     for flag in ('-archive', '-out'):
-        argv.extend((flag, record['paths'][flag]))
+        argv.extend(_u06_option(flag, record['paths'][flag], {'option_applied': True, 'origin': 'EXPLICIT'}, help_flags, path_operand=True))
     _u06_incompatibilities([flag for flag, declaration in provenance.items() if declaration['option_applied']], help_flags)
     return _u06_command_result(argv, 'EXPORT', provenance)
 
@@ -4445,7 +4503,7 @@ def compare_qa_m_argv(reconstructed_argv: Sequence[str], logged_argv: Sequence[s
         require(isinstance(argv, (list, tuple)) and bool(argv), 'argv must be a nonempty token sequence')
         for token in argv:
             _u06_text(token, 'argv token')
-        flags, positional = {}, set()
+        flags = {}
         index = 1
         while index < len(argv):
             token = argv[index]
@@ -4462,9 +4520,8 @@ def compare_qa_m_argv(reconstructed_argv: Sequence[str], logged_argv: Sequence[s
                     index += 2
             else:
                 require(re.fullmatch(r'-[A-Za-z_].*|--.*', token) is None, f'{token}: unknown option in supplied help')
-                positional.add(token)
-                index += 1
-        return {'executable': argv[0], 'flags': dict(sorted(flags.items())), 'positional': sorted(positional)}
+                raise ResourceContractError(f'{token}: unexpected positional argument, only named options are supported')
+        return {'executable': argv[0], 'flags': dict(sorted(flags.items())), 'positional': []}
 
     left, right = normalize(reconstructed_argv), normalize(logged_argv)
     differences = []
@@ -4476,7 +4533,7 @@ def compare_qa_m_argv(reconstructed_argv: Sequence[str], logged_argv: Sequence[s
             'reason': 'ACTUAL_EXECUTION_AND_LOG_COMPARISON_PROHIBITED_BEFORE_AUTHORIZED_FREEZE',
             'execution_performed': False, 'campaign_qa_approved': False,
             'normalization': {'executable': 'EXACT_TOKEN_NO_PATH_RESOLUTION', 'flags': 'SET_OF_FLAG_VALUE_PAIRS_USING_SUPPLIED_HELP_ARITY',
-                              'positional': 'SET_OF_EXACT_TOKENS', 'token_order': 'IGNORED', 'values': 'EXACT_TEXT_NO_NUMERIC_OR_PATH_NORMALIZATION',
+                              'positional': 'REJECTED_NO_POSITIONAL_ARGUMENTS_SUPPORTED', 'token_order': 'IGNORED', 'values': 'EXACT_TEXT_NO_NUMERIC_OR_PATH_NORMALIZATION',
                               'duplicate_flags': 'REJECTED_AS_AMBIGUOUS', 'decision_authority': 'IMPLEMENTATION_COORDINATOR_REVISABLE_BEFORE_FREEZE'},
             'normalized_reconstructed': left, 'normalized_logged': right, 'flag_differences': differences,
             'executable_differs': left['executable'] != right['executable'],
