@@ -4781,3 +4781,182 @@ def test_u09_plan208_specific_numbers_with_per_candidate_basis_and_rigor_are_dec
     result = cal.evaluate_e06_tolerance_register(register)
     assert result['state'] == 'DECLARATIONS_CONSISTENT'
     assert result['scientific_defensibility_assessed'] is False
+
+
+# Review round 019 counterexamples use only direct in-memory software declarations.
+# Their oracle is plan_v003 lines 204/206/212, independent of verifier output.
+_U09_R019_TARGETS = (
+    ('complete_patterns',), ('build',), ('fixture',), ('expected_object',),
+    ('expected_object', 'content'), ('candidate_configurations', 'CANDIDATE_A'),
+    ('domains', 'SOFTWARE_DOMAIN'), ('candidate_configurations',), ('domains',),
+)
+_U09_R019_ORIGINAL_MODEL = {
+    'epistemic_status': 'ASSUMPTION', 'model_kind': 'SYMBOLIC_BEFORE_ANY_ENGINE_RUN',
+    'scoring_inputs': ['reward', 'penalty', 'gapopen', 'gapextend', 'xdrop'],
+    'measured_extent_available': False,
+}
+_U09_R019_PAYLOADS = (
+    {'tolerances': {'orientation': {'value': 0, 'unit': 'nt'}, 'origin': {'value': 0, 'unit': 'nt'},
+                    'coordinate_system': {'value': 0, 'unit': 'nt'}}},
+    {'orientation_tolerance': 0},
+    {'originTolerance': 0},
+    {'coordinate_system_tolerance': 0},
+    {'recovered_span': {'qstart': 1, 'qend': 4}},
+    {'RECOVEREDSpan': {'qstart': 1, 'qend': 4}},
+    {'register_sha256': 'a' * 64},
+    {'pairs': [['recovered_span', 12], ['register_sha256', 'a' * 64]]},
+    {'metadata': [['recovered_span', {'qstart': 1, 'qend': 4}]]},
+    {'score_recovery_model': _U09_R019_ORIGINAL_MODEL},
+    {'scoring_path_model': _U09_R019_ORIGINAL_MODEL},
+    {'empirical_extent': {'qstart': 1, 'qend': 4}},
+)
+
+
+@pytest.mark.parametrize('target_path', _U09_R019_TARGETS)
+@pytest.mark.parametrize('payload', _U09_R019_PAYLOADS)
+def test_u09_r019_plan204_206_212_all_reported_encodings_refuse_in_every_binding(target_path, payload):
+    import copy
+    register = _u09_register()
+    before = r.json_bytes(register)
+    target = register['applicable_instances'][0]
+    for member in target_path:
+        target = target[member]
+    target.update(copy.deepcopy(payload))
+    mutated = r.json_bytes(register)
+    result = cal.evaluate_e06_tolerance_register(register)
+    assert result['state'] == 'RECUSADO', (target_path, payload, result)
+    assert result['canonical_content'] is None
+    assert result['blocking_declarations']
+    assert result['dependent_instances_blocked'] is True
+    assert result['dependent_executions_blocked'] is True
+    assert result['informative_command_allowed'] is False
+    assert mutated != before and r.json_bytes(register) == mutated
+
+
+def _u09_r019_symbolic_model():
+    return {'scoring_inputs': ['reward', 'penalty', 'gapopen', 'gapextend', 'xdrop'],
+            'reference': 'DIRECT_SOFTWARE_SYMBOLIC_ANALYSIS_REFERENCE',
+            'assumptions': 'DIRECT_SOFTWARE_ASSUMPTION_NO_NUMERICAL_GROUNDING'}
+
+
+@pytest.mark.parametrize('location', ['expected_object', 'independent_basis'])
+def test_u09_r019_f03_plan206_closed_symbolic_score_recovery_is_admitted_without_scientific_approval(location, monkeypatch):
+    register = _u09_register()
+    if location == 'expected_object':
+        target = register['applicable_instances'][0]['expected_object']['content']
+    else:
+        target = register['records'][0]['independent_basis']
+    target['score_recovery_model'] = _u09_r019_symbolic_model()
+    before = r.json_bytes(register)
+    def forbidden(*args, **kwargs):
+        pytest.fail('symbolic declaration validation attempted IO, engine or clock access')
+    monkeypatch.setattr(Path, 'open', forbidden)
+    monkeypatch.setattr(cal.subprocess, 'run', forbidden)
+    monkeypatch.setattr(cal.subprocess, 'Popen', forbidden)
+    monkeypatch.setattr(cal, 'datetime', forbidden)
+    result = cal.evaluate_e06_tolerance_register(register)
+    assert result['state'] == 'DECLARATIONS_CONSISTENT', result
+    assert result['canonical_content'].encode() == before
+    assert r.json_bytes(register) == before
+    assert result['scientific_defensibility_assessed'] is False
+    assert result['informative_command_allowed'] is False and result['dependent_executions_blocked'] is True
+    assert 'structured_declarations' in result['schema_choices']
+
+
+@pytest.mark.parametrize('field,value', [
+    ('epistemic_status', 'ASSUMPTION'), ('model_kind', 'SYMBOLIC_BEFORE_ANY_ENGINE_RUN'),
+    ('measured_extent_available', False), ('measured_extent_available', True),
+    ('RECOVEREDSpan', {'qstart': 1, 'qend': 4}), ('register_sha256', 'a' * 64),
+    ('pairs', [['recovered_span', 12]]),
+])
+def test_u09_r019_f02_f03_labels_and_results_do_not_extend_the_symbolic_shape(field, value):
+    register = _u09_register()
+    model = _u09_r019_symbolic_model()
+    model[field] = value
+    register['records'][0]['independent_basis']['score_recovery_model'] = model
+    _u09_refusal(register, 'undeclared field')
+
+
+@pytest.mark.parametrize('inputs', [
+    [], ['reward', 'reward'], ['RECOVEREDSpan'], [['recovered_span', 12]],
+    [{'register_sha256': 'a' * 64}], ['reward', {'recovered_span': 12}], [0],
+])
+def test_u09_r019_plan206_symbolic_inputs_are_parameter_symbols_without_values(inputs):
+    register = _u09_register()
+    model = _u09_r019_symbolic_model()
+    model['scoring_inputs'] = inputs
+    register['applicable_instances'][0]['expected_object']['content']['score_recovery_model'] = model
+    _u09_refusal(register, 'scoring_inputs')
+
+
+@pytest.mark.parametrize('target_path,field', [
+    (('complete_patterns',), 'query_pattern'), (('complete_patterns',), 'subject_pattern'),
+    (('complete_patterns',), 'origin'), (('build',), 'build_id'),
+    (('fixture',), 'fixture_id'), (('fixture',), 'version'),
+    (('expected_object', 'content'), 'object'),
+    (('candidate_configurations', 'CANDIDATE_A'), 'configuration'),
+    (('domains', 'SOFTWARE_DOMAIN'), 'common_domain'),
+])
+@pytest.mark.parametrize('value', [
+    {'RECOVEREDSpan': {'qstart': 1, 'qend': 4}}, [['register_sha256', 'a' * 64]],
+])
+def test_u09_r019_plan212_closed_member_names_also_require_their_scalar_shape(target_path, field, value):
+    register = _u09_register()
+    target = register['applicable_instances'][0]
+    for member in target_path:
+        target = target[member]
+    target[field] = value
+    _u09_refusal(register, field)
+
+
+def test_u09_r019_plan204_descriptive_geometry_and_legitimate_reference_hashes_remain_admissible():
+    register = _u09_register()
+    instance = register['applicable_instances'][0]
+    geometry = {'orientation': 'MINUS', 'origin': 'DECLARED_SOFTWARE_REFERENCE_ORIGIN',
+                'coordinate_system': 'ONE_BASED_INCLUSIVE',
+                'coordinates': {'qstart': 1, 'qend': 4, 'sstart': 4, 'send': 1}}
+    instance['complete_patterns'].update(geometry)
+    instance['expected_object']['content'].update(geometry)
+    instance['complete_patterns']['pattern_sha256'] = 'a' * 64
+    instance['fixture']['fixture_sha256'] = 'b' * 64
+    instance['build']['build_sha256'] = 'c' * 64
+    instance['candidate_configurations']['CANDIDATE_A']['configuration_sha256'] = 'd' * 64
+    instance['expected_object']['content']['reference_sha256'] = 'e' * 64
+    result = cal.evaluate_e06_tolerance_register(register)
+    assert result['state'] == 'DECLARATIONS_CONSISTENT', result
+    assert result['canonical_content'].encode() == r.json_bytes(register)
+    # These geometry coordinates are direct software data, never tolerances.
+    assert register['records'][0]['endpoints']['qstart']['value'] == 0
+
+
+@pytest.mark.parametrize('member', ['orientation', 'origin', 'coordinate_system', 'coordinates'])
+@pytest.mark.parametrize('where', ['complete_patterns', 'expected_object'])
+def test_u09_r019_f01_descriptive_members_cannot_be_repurposed_as_tolerance_containers(member, where):
+    register = _u09_register()
+    target = register['applicable_instances'][0][where]
+    if where == 'expected_object':
+        target = target['content']
+    target[member] = {'tolerances': {'orientation': 0, 'origin': 0, 'coordinate_system': 0}}
+    _u09_refusal(register, member)
+
+
+@pytest.mark.parametrize('mode', ['CONSTANT', 'CANDIDATE_SPECIFIC'])
+def test_u09_r019_plan212_optional_domain_members_are_checked_even_when_policy_does_not_use_them(mode):
+    register = _u09_two_candidates(mode)
+    policy = register['applicable_instances'][0]['domains']['SOFTWARE_DOMAIN']
+    if mode == 'CONSTANT':
+        policy['same_rigor_by_candidate'] = {'CANDIDATE_A': 'DECLARED', 'CANDIDATE_B': {'register_sha256': 'a' * 64}}
+        reason = 'same_rigor_by_candidate'
+    else:
+        policy['common_domain'] = [['RECOVEREDSpan', {'qstart': 1, 'qend': 4}]]
+        reason = 'common_domain'
+    _u09_refusal(register, reason)
+
+
+def test_u09_r019_plan210_stop_identity_and_u07_unresolved_domains_are_preserved():
+    register = _u09_register('PC03')
+    register['records'][0]['independent_basis']['numeric_criterion_provided'] = False
+    result = _u09_refusal(register, 'STOP_INDEPENDENT_NUMERIC_CRITERION_UNAVAILABLE')
+    assert result['blocked_records'] == [{'instance_id': 'SOFTWARE_ONLY_INSTANCE', 'domain_id': 'SOFTWARE_DOMAIN', 'candidate_id': 'CANDIDATE_A'}]
+    assert cal.E07_UNRESOLVED_DEPENDENCIES['tolerance_representation'] == 'REQUIRED_INTERNAL_KEYS_NOT_ESTABLISHED'
+    assert cal.E07_UNRESOLVED_DEPENDENCIES['tolerance_applicability'] == 'APPLICABLE_INSTANCES_WITHOUT_TOLERANCE_REGISTER_NOT_ESTABLISHED'

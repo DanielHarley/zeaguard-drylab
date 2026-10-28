@@ -5170,6 +5170,7 @@ E06_TOLERANCE_SCHEMA_CHOICES = {
     'independent_basis': 'reference/content/units/assumptions/pattern_and_extension_parameters are nonempty declarations. numeric_criterion_provided is an explicit boolean. Defensibility is not assessed.',
     'covers_entire_interval': 'Explicit declared interval coverage. A true value requires discriminating_criterion. Its scientific adequacy is not assessed.',
     'conditional_tolerance_basis': 'PC03 declaration of its previously grounded conditional tolerance. qa_b_applicable remains false.',
+    'structured_declarations': 'Closed local shapes: complete_patterns requires query_pattern/subject_pattern. fixture requires fixture_id/version. build requires build_id. candidate configuration requires configuration. expected_object.content requires object. Optional reference hashes are pattern_sha256/fixture_sha256/build_sha256/configuration_sha256/reference_sha256 only in their corresponding shape. Patterns and expected object may describe orientation/origin/coordinate_system as text and coordinates as qstart/qend/sstart/send integers. score_recovery_model is admitted only in expected_object.content and independent_basis, with scoring_inputs/reference/assumptions. Its scoring_inputs are symbolic parameter names only. Labels, measured extents, arbitrary nested members and lists of pairs are outside these shapes.',
 }
 
 
@@ -5180,19 +5181,41 @@ def _e06_fields(value: Any, required: tuple[str, ...], location: str, optional: 
     require(set(value) <= set(required + optional), f'{location}: undeclared field or forbidden tolerance category:{sorted(set(value) - set(required + optional), key=str)}')
 
 
-def _e06_no_future_results(value: Any, location: str) -> None:
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            require(isinstance(key, str), f'{location}: member names must be text')
-            tokens = re.sub(r'([a-z])([A-Z])', r'\1_\2', key).lower()
-            require(not ('toleran' in tokens and any(category in tokens for category in ('orientation', 'origin', 'coordinate'))),
-                    f'{location}.{key}: forbidden tolerance category')
-            require(re.search(r'(^|[^a-z])(results?|recovery|recovered|observed|post_hoc|receipt|execution_results?)([^a-z]|$)', tokens) is None,
-                    f'{location}.{key}: future result or recovery field forbidden')
-            _e06_no_future_results(item, f'{location}.{key}')
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            _e06_no_future_results(item, f'{location}[{index}]')
+def _e06_symbolic_score_model(value: Any, location: str) -> None:
+    """Admit symbolic input references only, without empirical fields or model approval."""
+    _e06_fields(value, ('scoring_inputs', 'reference', 'assumptions'), location)
+    inputs = value['scoring_inputs']
+    symbols = ('reward', 'penalty', 'gapopen', 'gapextend', 'xdrop', 'xdrop_ungap', 'xdrop_gap', 'xdrop_gap_final')
+    require(isinstance(inputs, list) and inputs and all(type(item) is str and item in symbols for item in inputs),
+            f'{location}.scoring_inputs: declared symbolic scoring parameter names required')
+    require(len(set(inputs)) == len(inputs), f'{location}.scoring_inputs: duplicate symbolic input')
+    _u06_text(value['reference'], location + '.reference')
+    _u06_text(value['assumptions'], location + '.assumptions')
+
+
+def _e06_structured_declaration(value: Any, kind: str, location: str) -> None:
+    """Close each binding shape rather than infer content categories from field spelling."""
+    description_fields = ('orientation', 'origin', 'coordinate_system', 'coordinates')
+    shapes = {
+        'complete_patterns': (('query_pattern', 'subject_pattern'), description_fields + ('pattern_sha256',)),
+        'fixture': (('fixture_id', 'version'), ('fixture_sha256',)),
+        'build': (('build_id',), ('build_sha256',)),
+        'configuration': (('configuration',), ('configuration_sha256',)),
+        'expected_object': (('object',), description_fields + ('reference_sha256', 'score_recovery_model')),
+    }
+    required, optional = shapes[kind]
+    _e06_fields(value, required, location, optional)
+    for field, item in value.items():
+        field_location = location + '.' + field
+        if field == 'score_recovery_model':
+            _e06_symbolic_score_model(item, field_location)
+        elif field == 'coordinates':
+            _e06_fields(item, ('qstart', 'qend', 'sstart', 'send'), field_location)
+            require(all(type(number) is int and number > 0 for number in item.values()), f'{field_location}: declared one based coordinates required')
+        elif field.endswith('_sha256'):
+            require(isinstance(item, str) and re.fullmatch(r'[0-9a-f]{64}', item) is not None, f'{field_location}: reference SHA256 declaration required')
+        else:
+            _u06_text(item, field_location)
 
 
 def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, Any]:
@@ -5210,7 +5233,6 @@ def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, An
     try:
         _e06_fields(register, ('applicable_instances', 'records'), 'register')
         _e07_declared_content(register, 'register')
-        _e06_no_future_results(register, 'register')
         require(isinstance(register['applicable_instances'], list) and register['applicable_instances'], 'applicable_instances: nonempty declared inventory required')
         require(isinstance(register['records'], list), 'records: declared list required')
         checked.append('canonical_fields')
@@ -5233,11 +5255,10 @@ def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, An
             require(type(identity['length']) is int and identity['length'] > 0, f'{location}: invalid length')
             _u06_text(identity['version'], location + '.version')
             for field in ('complete_patterns', 'fixture', 'build'):
-                require(isinstance(instance[field], Mapping) and instance[field], f'{location}.{field}: nonempty structured declaration required')
-                _e07_declared_content(instance[field], location + '.' + field)
+                _e06_structured_declaration(instance[field], field, location + '.' + field)
             obj = instance['expected_object']
             _e06_fields(obj, ('content', 'exact_endpoints', 'exactness_contractual_reason'), location + '.expected_object')
-            _e07_declared_content(obj['content'], location + '.expected_object.content')
+            _e06_structured_declaration(obj['content'], 'expected_object', location + '.expected_object.content')
             require(isinstance(obj['exact_endpoints'], list) and len(set(obj['exact_endpoints'])) == len(obj['exact_endpoints'])
                     and set(obj['exact_endpoints']) <= set(endpoint_names), f'{location}: invalid exact_endpoints')
             _u06_text(obj['exactness_contractual_reason'], location + '.exactness_contractual_reason')
@@ -5259,14 +5280,20 @@ def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, An
             require(isinstance(candidates, Mapping) and candidates, f'{location}.candidate_configurations: nonempty candidate declarations required')
             for candidate_id, configuration in candidates.items():
                 _u06_text(candidate_id, location + '.candidate_id')
-                require(isinstance(configuration, Mapping) and configuration, f'{location}: candidate configuration content required')
-                _e07_declared_content(configuration, location + '.candidate_configurations.' + candidate_id)
+                _e06_structured_declaration(configuration, 'configuration', location + '.candidate_configurations.' + candidate_id)
             require(isinstance(domains, Mapping) and domains, f'{location}.domains: nonempty domains required')
             for domain_id, policy in domains.items():
                 _u06_text(domain_id, location + '.domain_id')
                 _e06_fields(policy, ('tolerance_mode',), location + '.domains.' + domain_id,
                             ('common_domain', 'same_rigor_by_candidate'))
                 require(policy['tolerance_mode'] in ('CONSTANT', 'CANDIDATE_SPECIFIC'), f'{location}: invalid tolerance_mode')
+                if 'common_domain' in policy:
+                    _u06_text(policy['common_domain'], location + '.common_domain')
+                if 'same_rigor_by_candidate' in policy:
+                    rigor = policy['same_rigor_by_candidate']
+                    require(isinstance(rigor, Mapping) and set(rigor) == set(candidates), f'{location}: same rigor declaration required for every candidate')
+                    for candidate_id, content in rigor.items():
+                        _u06_text(content, location + '.same_rigor_by_candidate.' + candidate_id)
                 if policy['tolerance_mode'] == 'CONSTANT':
                     _u06_text(policy.get('common_domain'), location + '.common_domain')
                 else:
@@ -5311,7 +5338,10 @@ def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, An
                 if endpoint in instance['expected_object']['exact_endpoints']:
                     require(type(item['value']) in (int, float) and item['value'] == 0, f'{location}.{endpoint}: contractual exactness requires zero nt')
             basis = record['independent_basis']
-            _e06_fields(basis, ('reference', 'content', 'units', 'assumptions', 'pattern_and_extension_parameters', 'numeric_criterion_provided'), location + '.independent_basis')
+            _e06_fields(basis, ('reference', 'content', 'units', 'assumptions', 'pattern_and_extension_parameters', 'numeric_criterion_provided'), location + '.independent_basis',
+                        ('score_recovery_model',))
+            if 'score_recovery_model' in basis:
+                _e06_symbolic_score_model(basis['score_recovery_model'], location + '.independent_basis.score_recovery_model')
             for field in ('reference', 'content', 'units', 'assumptions', 'pattern_and_extension_parameters'):
                 _u06_text(basis[field], location + '.independent_basis.' + field)
             require(type(basis['numeric_criterion_provided']) is bool, f'{location}: numeric_criterion_provided must be explicit boolean')
@@ -5352,5 +5382,5 @@ def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, An
             'freeze_produced': False, 'qa_status': 'NOT_TESTED',
             'limitations': ['Declared inventory coverage only. Actual applicability, complete patterns, provenance, exactness outside PC01, and interval coverage require independent adjudication.',
                            'Basis, common domain, discriminating criterion and equal rigor are checked for declared presence only. Their scientific adequacy is not assessed.',
-                           'Closed local field names are declared for review. Reserved future-result keys are refused recursively. Free text is not semantically adjudicated.',
+                           'Closed local shapes admit declared bindings and symbolic scoring input references. Unknown fields and alternate structural encodings are refused. Free text is not semantically adjudicated and symbolic models are not scientifically approved.',
                            'No numerical tolerance is selected or grounded here. E06 is not completed and U07 tolerance_representation remains blocked.']}
