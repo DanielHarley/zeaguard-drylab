@@ -4826,3 +4826,333 @@ def inspect_e07_declared_state(root: Path, preservation_inventory_path: str, acc
     }
     result['limitations'].append('Real-state evaluation uses a partial U03 declaration view, not a newly materialized candidate or complete section 7 payload. Missing preparation artifacts remain absent. No CP1 normalized FASTA, index or archive is read. verify_g0 hashes its certified inputs read-only.')
     return result
+
+
+# U08 checks supplied catalog declarations only. It contains no generator or executor.
+E04_CATALOG_DESIGN_DECLARATIONS = (
+    'length_vector_rule', 'balancing_regime', 'PC04', 'PC05', 'PC07', 'PC08A', 'PC08B',
+    'PC09', 'PC10', 'PC11', 'PC12', 'PC13', 'PC14', 'PC15', 'F07', 'B4-8', 'B4-9',
+    'I01', 'I02', 'I03', 'I04',
+)
+E04_CATALOG_LIMITATIONS = (
+    'Local declaration format for pure software verification, not a normative artifact or a materialized fixture catalog.',
+    'Declaration consistency does not verify documentary authority, scientific adequacy, actual FASTA/index files or an actual database inspection. No QA is evaluated or approved.',
+    'Numerically specified construction checks cover PC01, PC02, PC03 and PC06. Other classes remain pending even if a generic specification is supplied.',
+    'Coordinates describe supplied complete planted objects, not recovered HSPs. Recovery, extension tolerances, incidental matches and statistical independence are not established.',
+    'The recipe literal and declared generation keys are checked without generating bases. The integer seed is required but its derivation is not regenerated.',
+    'BLAST file-list completeness and applicability are not established by supplied index-file declarations. This verifier does not remove any U07 barrier or supply its missing carriers.',
+    'This local format does not verify table 18 multiplicity declarations, including PC01 unit multiplicity across F01 through F07. DECLARATIONS_CONSISTENT does not attest conformity to those rows.',
+    'RAW comparisons for src/zeaguard/nb04_calibration.py and tests/test_nb04_calibration.py and module prefixes 179161, 221104, 239075 and 266347 bytes must use Git blobs or LF-normalized content, never Windows checkout bytes. The line-ending exposure remains escalated. No attribute, configuration or certificate is changed.',
+    'QA-M and QA-I remain NOT_TESTED. No materialization, execution, freeze, B4 or G1 authorization is produced.',
+)
+
+
+def _e04_expected_coordinates(installation: Mapping[str, Any], record_length: int) -> None:
+    """Validate the declared projection of the complete planted object, without HSP recovery."""
+    length = installation['length']
+    require(type(length) is int and type(record_length) is int and 0 < length <= record_length, 'installation length does not fit its record')
+    start = (record_length - length) // 2 + 1
+    end = start + length - 1
+    require(installation['planted_interval'] == [start, end] and all(type(n) is int for n in installation['planted_interval']), 'planted_interval differs from the centered 1-based inclusive formula')
+    orientation = installation['orientation']
+    require(orientation in ('PLUS', 'MINUS'), 'computational orientation missing or invalid')
+    coordinates = installation['coordinates']
+    require(isinstance(coordinates, Mapping), 'distinct coordinate declaration required')
+    emitted = coordinates['emitted']
+    _section7_keys(emitted, ('qstart', 'qend', 'sstart', 'send'), 'declared coordinate projection')
+    require(all(type(v) is int for v in emitted.values()), 'coordinate values must be integers')
+    require(coordinates.get('coordinate_system') == 'ONE_BASED_INCLUSIVE', 'coordinate origin/system differs')
+    expected_subject = [start, end] if orientation == 'PLUS' else [end, start]
+    require([emitted['qstart'], emitted['qend']] == [1, length], 'query projection endpoints differ from complete planted object')
+    require([emitted['sstart'], emitted['send']] == expected_subject, 'subject projection/orientation does not remap exactly to planted interval')
+    require(coordinates['ascending_subject_interval'] == sorted(expected_subject) and all(type(n) is int for n in coordinates['ascending_subject_interval']), 'ascending subject interval is inconsistent or not distinct')
+
+
+def _e04_construction(installation: Mapping[str, Any], record: Mapping[str, Any]) -> None:
+    """Compare supplied bases and complete difference arrays with the specified construction."""
+    case, length = installation['class'], installation['length']
+    require(case in ('PC01', 'PC02', 'PC03', 'PC06'), f'PENDING_CLASS_SPECIFICATION:{case}')
+    require(installation['expected_detection_class'] == ('MUST_BE_REPORTED' if case in ('PC01', 'PC02') else 'CHARACTERIZED_NOT_ASSERTED'), f'{case}: declared detection class differs from contract')
+    query = _u06_text(installation['query_sequence'], 'query_sequence')
+    require(len(query) == length and set(query) <= set('ACGT'), 'query length/alphabet differs')
+    start = (len(record['sequence']) - length) // 2
+    target = record['sequence'][start:start + length]
+    if installation['orientation'] == 'MINUS':
+        target = target.translate(str.maketrans('ACGT', 'TGCA'))[::-1]
+    differences = [position for position, (left, right) in enumerate(zip(query, target), 1) if left != right]
+    require(installation['gaps'] == [], 'specified ungapped construction cannot contain gaps')
+    if case == 'PC01':
+        expected = []
+    else:
+        require(installation['orientation'] == 'PLUS', f'{case}: closure construction requires PLUS')
+        fixture = installation['fixture_id']
+        if case == 'PC02':
+            require(fixture in ('F01', 'F02'), 'PC02 fixture not specified')
+            require(length == (200 if fixture == 'F01' else 400), 'PC02 length differs from closure')
+            require(len(record['sequence']) == (2500 if fixture == 'F01' else 2000), 'PC02 subject record length differs from closure')
+            expected = [length // 2]
+        else:
+            require(fixture in ('F02', 'F04', 'F05'), f'{case}: fixture not specified')
+            require(len(record['sequence']) == {'F02': 2000, 'F04': 15000000, 'F05': 230000000}[fixture], 'subject record length differs from closure')
+            if case == 'PC03':
+                require(length == 400, 'PC03 length must be 400')
+                first, last, divisor = 151, 250, 4
+            else:
+                require(length in (800, 1600), 'PC06 length must be 800 or 1600')
+                first = (length - length // 4) // 2 + 1
+                last, divisor = first + length // 4 - 1, 3
+            expected = [position for position in range(1, length + 1) if position % divisor == 0 and not first <= position <= last]
+        replacement = dict(zip('ACGT', 'CGTA'))
+        require(all(target[p - 1] == replacement[query[p - 1]] for p in expected), 'substitution bases differ from closure cycle')
+        module = installation['local_module']
+        module_start = (len(record['sequence']) - 2000) // 2
+        require(len(module) == 2000 and set(module) <= set('ACGT') and module == record['sequence'][module_start:module_start + 2000], 'local module differs from centered declared ACGT record content')
+    require(differences == expected, f'{case}: constructed difference positions differ')
+    require(installation['difference_positions'] == expected and all(type(p) is int for p in installation['difference_positions']), 'declared complete difference array differs')
+    require(installation['constructed_identity'] == [length - len(expected), length] and all(type(n) is int for n in installation['constructed_identity']), 'constructed identity numerator/denominator differs')
+    if case == 'PC01':
+        _e04_expected_coordinates(installation, len(record['sequence']))
+
+
+def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
+    """Check a local JSON declaration in memory. No file, sequence generator or engine is invoked."""
+    issues: list[dict[str, str]] = []
+    checked: list[str] = []
+    if not isinstance(catalog, Mapping):
+        issues.append({'component': 'catalog', 'location': 'catalog', 'reason': 'catalog must be an object'})
+        catalog = {}
+    fixtures = catalog.get('fixtures')
+    fixtures = fixtures if isinstance(fixtures, list) else []
+    installations = catalog.get('installations')
+    installations = installations if isinstance(installations, list) else []
+    fixtures_by_key = {(f['fixture_set_id'], f['fixture_role'], f['fixture_id']): f for f in fixtures if isinstance(f, Mapping) and all(isinstance(f.get(k), str) for k in ('fixture_set_id', 'fixture_role', 'fixture_id'))}
+    records = {r.get('analysis_id'): (f, r) for f in fixtures if isinstance(f, Mapping) and isinstance(f.get('records'), list) for r in f['records'] if isinstance(r, Mapping) and isinstance(r.get('analysis_id'), str)}
+    declarations = catalog.get('design_declarations')
+    declarations = declarations if isinstance(declarations, Mapping) else {}
+    # Missing members are enumerated individually before any dependent check can fail.
+    required = ('version', 'recipe', 'generator_version', 'seed', 'alphabet', 'closure_reference',
+                'fixtures', 'installations', 'identifier_map', 'headers', 'normative_lines', 'declared_normative_entry_count',
+                'execution_declarations', 'traceability', 'fragmentation_rule', 'build_rules', 'index_files', 'database_id_inspection', 'design_declarations')
+    field_objects = [('catalog', catalog, required)]
+    for index, fixture in enumerate(fixtures):
+        field_objects.append((f'fixtures[{index}]', fixture, ('fixture_set_id', 'fixture_id', 'fixture_role', 'prefix', 'record_lengths', 'record_count', 'total_bases', 'ambiguities', 'repeats', 'fasta_sha256', 'records')))
+        if isinstance(fixture, Mapping) and isinstance(fixture.get('records'), list):
+            for row_index, record in enumerate(fixture['records']):
+                field_objects.append((f'fixtures[{index}].records[{row_index}]', record, ('analysis_id', 'class', 'sequence', 'sequence_sha256', 'logical_origin', 'ambiguous_positions')))
+    for index, installation in enumerate(installations):
+        field_objects.append((f'installations[{index}]', installation, ('installation_id', 'planted_instance_id', 'instance_identity', 'fixture_set_id', 'fixture_id', 'fixture_role', 'analysis_id', 'class', 'expected_detection_class', 'length', 'query_sequence', 'query_sha256', 'local_module', 'local_module_sha256', 'generation_keys', 'orientation', 'planted_interval', 'coordinates', 'gaps', 'difference_positions', 'constructed_identity')))
+    for location, obj, fields in field_objects:
+        for field in fields:
+            if not isinstance(obj, Mapping) or field not in obj or obj[field] is None or (isinstance(obj[field], str) and not obj[field].strip()):
+                issues.append({'component': 'required_fields', 'location': f'{location}.{field}', 'reason': 'required declaration absent'})
+    for name in E04_CATALOG_DESIGN_DECLARATIONS:
+        try:
+            value = declarations.get(name)
+            require(isinstance(value, Mapping) and value.get('state') == 'DECLARED', 'PENDING: explicit documentary design declaration missing')
+            _u06_text(value.get('reference'), name + '.reference')
+            _e07_declared_content(value.get('specification'), name + '.specification')
+        except (ResourceContractError, TypeError, ValueError) as exc:
+            issues.append({'component': 'design_declarations', 'location': name, 'reason': str(exc)})
+
+    work = [('catalog_fields', 'catalog', catalog), ('headers', 'catalog', catalog),
+            ('bijection', 'catalog', catalog), ('roles', 'catalog', catalog), ('coverage', 'catalog', catalog),
+            ('build_declarations', 'catalog', catalog), ('fragmentation', 'catalog', catalog)]
+    work.extend(('fixture', f'fixtures[{i}]', row) for i, row in enumerate(fixtures))
+    work.extend((kind, f'installations[{i}]', row) for i, row in enumerate(installations) for kind in ('literals', 'construction', 'coordinates'))
+    for component, location, value in work:
+        try:
+            require(isinstance(value, Mapping), 'declaration must be an object')
+            if component == 'catalog_fields':
+                require(fixtures and installations, 'fixture and installation declarations required')
+                require(catalog['recipe'] == 'NB04_SYNTHETIC_CASE_SHA256_ACGT_V1', 'recipe literal differs; closure provenance never belongs in recipe')
+                require(type(catalog['seed']) is int, 'declared integer seed required')
+                require(catalog['alphabet'] == 'UPPERCASE_IUPAC_DNA', 'alphabet policy differs')
+                for field in ('version', 'generator_version', 'closure_reference'):
+                    _u06_text(catalog[field], field)
+                require(len(fixtures_by_key) == len(fixtures), 'fixture identity repeated within role')
+            elif component == 'fixture':
+                _u06_text(value['fixture_set_id'], 'fixture_set_id')
+                _u06_text(value['fixture_id'], 'fixture_id')
+                require(value['fixture_role'] in ('TUNING', 'VALIDATION'), 'fixture role invalid')
+                lengths = value['record_lengths']
+                require(isinstance(lengths, list) and lengths and all(type(n) is int and n > 0 for n in lengths), 'record length vector missing or invalid')
+                require(type(value['record_count']) is int and value['record_count'] == len(lengths) == len(value['records']), 'record counts/vector differ')
+                require(type(value['total_bases']) is int and value['total_bases'] == sum(lengths), 'total bases differ from complete vector')
+                require(re.fullmatch(r'[0-9a-f]{64}', value['fasta_sha256']) is not None, 'declared FASTA hash invalid')
+                for field in ('ambiguities', 'repeats'):
+                    _e07_declared_content(value[field], field)
+                require(isinstance(value['repeats'], Mapping) and all(isinstance(value['repeats'].get(k), list) for k in ('motifs', 'positions')), 'repeat motifs and positions must be declared explicitly')
+                for row, length in zip(value['records'], lengths):
+                    sequence = _u06_text(row['sequence'], row['analysis_id'] + '.sequence')
+                    require(len(sequence) == length and set(sequence) <= DNA, 'declared record length/alphabet differs')
+                    require(hashlib.sha256(sequence.encode('ascii')).hexdigest() == row['sequence_sha256'], 'declared sequence SHA256 differs from supplied content')
+                    require(row['ambiguous_positions'] == [i for i, base in enumerate(sequence, 1) if base not in 'ACGT'] and all(type(p) is int for p in row['ambiguous_positions']), 'declared ambiguity positions differ from content')
+                    _u06_text(row['logical_origin'], 'logical_origin')
+                require(type(value['ambiguities']['count']) is int and value['ambiguities']['count'] == sum(len(row['ambiguous_positions']) for row in value['records']), 'declared ambiguity count differs')
+            elif component == 'headers':
+                prefixes: dict[str, tuple[str, str]] = {}
+                owners: dict[tuple[str, str], str] = {}
+                grouped: dict[tuple[str, str], list[int]] = {}
+                for fixture in fixtures:
+                    prefix = fixture['prefix']
+                    require(isinstance(prefix, str) and re.fullmatch(r'[A-Z][A-Z0-9_]{0,23}', prefix), 'unsafe FASTA prefix')
+                    owner = (fixture['fixture_set_id'], fixture['fixture_role'])
+                    require(prefix not in prefixes or prefixes[prefix] == owner, 'prefix repeated across set/role')
+                    require(owner not in owners or owners[owner] == prefix, 'set/role must have one declared prefix')
+                    prefixes[prefix] = owner
+                    owners[owner] = prefix
+                    for record in fixture['records']:
+                        match = re.fullmatch(re.escape(prefix) + r'__([0-9]{8})', record['analysis_id'])
+                        require(match is not None, 'unsafe FASTA analysis_id/header')
+                        grouped.setdefault(owner, []).append(int(match.group(1)))
+                for numbers in grouped.values():
+                    require(sorted(numbers) == list(range(1, len(numbers) + 1)), 'FASTA numbering must start at 00000001 without holes or duplicates')
+            elif component == 'bijection':
+                headers, rows = catalog['headers'], catalog['identifier_map']
+                require(isinstance(headers, list) and isinstance(rows, list), 'declared headers/map must be lists')
+                total = sum(len(f['records']) for f in fixtures)
+                map_ids = [row['analysis_id'] for row in rows]
+                require(len(records) == total == len(headers) == len(set(headers)) == len(rows) == len(set(map_ids)), 'catalog/map/header counts or duplicate IDs differ')
+                require(set(records) == set(headers) == set(map_ids), 'catalog/map/header bijection broken')
+                for row in rows:
+                    fixture, record = records[row['analysis_id']]
+                    installation_ids = sorted(i['installation_id'] for i in installations if i['analysis_id'] == row['analysis_id'])
+                    expected = {'fixture_set_id': fixture['fixture_set_id'], 'fixture_role': fixture['fixture_role'],
+                                'fixture_id': fixture['fixture_id'], 'class': record['class'], 'length': len(record['sequence']),
+                                'version': catalog['version'], 'installation_ids': installation_ids,
+                                'logical_origin': record['logical_origin'], 'sequence_sha256': record['sequence_sha256']}
+                    require(all(json_bytes(row.get(key)) == json_bytes(item) for key, item in expected.items()), 'identifier_map binding differs from catalog/installation')
+            elif component == 'roles':
+                require({f['fixture_role'] for f in fixtures} == {'TUNING', 'VALIDATION'}, 'both distinct fixture roles required')
+                for field in ('analysis_id', 'sequence_sha256', 'sequence'):
+                    role_sets = {role: {r[field] for f in fixtures if f['fixture_role'] == role for r in f['records']} for role in ('TUNING', 'VALIDATION')}
+                    require(not role_sets['TUNING'] & role_sets['VALIDATION'], f'TUNING/VALIDATION overlap in {field}')
+                require(not {f['fasta_sha256'] for f in fixtures if f['fixture_role'] == 'TUNING'} & {f['fasta_sha256'] for f in fixtures if f['fixture_role'] == 'VALIDATION'}, 'TUNING/VALIDATION FASTA hash overlap')
+                identities: dict[str, tuple[str, str, int, str]] = {}
+                repeated: dict[tuple[str, str, int, str], tuple[str, str, str]] = {}
+                record_owners: dict[tuple[str, str, str, str], tuple[str, str, int, str]] = {}
+                specified_instance_ids: dict[tuple[str, str, int, str, str], str] = {}
+                specified_instance_counts: dict[tuple[str, str, int, str, str], int] = {}
+                for row in installations:
+                    _u06_text(row['installation_id'], 'installation_id')
+                    _u06_text(row['planted_instance_id'], 'planted_instance_id')
+                    role = row['fixture_role']
+                    identity = row['instance_identity']
+                    expected = {'fixture_role': role, 'class': row['class'], 'length': row['length'], 'version': catalog['version']}
+                    require(json_bytes(identity) == json_bytes(expected), 'instance identity must explicitly include matching role/class/length/version')
+                    key = (role, row['class'], row['length'], catalog['version'])
+                    require(row['planted_instance_id'] not in identities or identities[row['planted_instance_id']] == key, 'planted_instance_id reused for a different identity or role')
+                    identities[row['planted_instance_id']] = key
+                    if row['class'] in ('PC02', 'PC03', 'PC06'):
+                        fixture_scope = (row['fixture_set_id'], role, row['fixture_id'])
+                        instance_key = key + (row['fixture_id'],)
+                        declared_instance_id = specified_instance_ids.get(instance_key)
+                        require(declared_instance_id is None or declared_instance_id == row['planted_instance_id'], 'one logical instance and fixture cannot use multiple planted_instance_id aliases')
+                        specified_instance_ids[instance_key] = row['planted_instance_id']
+                        record_key = fixture_scope + (row['analysis_id'],)
+                        record_instance = record_owners.get(record_key)
+                        require(record_instance is None or record_instance == key, 'distinct A.8 logical instances must occupy distinct records within a fixture')
+                        record_owners[record_key] = key
+                        specified_instance_counts[instance_key] = specified_instance_counts.get(instance_key, 0) + 1
+                        require(specified_instance_counts[instance_key] == 1, 'specified planted instance permits one installation per fixture')
+                    if row['class'] in ('PC03', 'PC06'):
+                        signature = (row['query_sequence'], row['local_module'], row['planted_instance_id'])
+                        require(key not in repeated or repeated[key] == signature, 'PC03/PC06 query or local module differs between fixture sizes')
+                        repeated[key] = signature
+                for field in ('query_sequence', 'query_sha256', 'local_module', 'local_module_sha256'):
+                    by_role = {role: {row[field] for row in installations if row['fixture_role'] == role} for role in ('TUNING', 'VALIDATION')}
+                    require(not by_role['TUNING'] & by_role['VALIDATION'], f'TUNING/VALIDATION overlap in {field}')
+            elif component == 'literals':
+                role, case, length = value['fixture_role'], value['class'], value['length']
+                require(role in ('TUNING', 'VALIDATION') and isinstance(case, str) and re.fullmatch(r'PC[0-9]{2}[AB]?', case), 'generation role/class invalid')
+                require(type(length) is int and length > 0, 'generation length must be positive integer')
+                counters: dict[str, list[int]] = {}
+                require(isinstance(value['generation_keys'], list) and value['generation_keys'], 'declared generation keys missing')
+                for entry in value['generation_keys']:
+                    stream, counter = entry['stream'], entry['counter']
+                    _u06_text(stream, 'generation stream')
+                    require('|' not in stream and all(marker not in stream.lower() for marker in ('closure a.8', 'nb04_preapproval_closure')), 'unsafe generation stream/provenance')
+                    require(type(counter) is int and counter >= 0, 'counter must be nonnegative integer')
+                    key = f'NB04_SYNTHETIC_CASE_V1|{role}|{case}|{length}|{stream}|{counter}'
+                    require(entry['key'] == key, 'generation key differs from exact UTF8 literal; closure reference must be separate')
+                    counters.setdefault(stream, []).append(counter)
+                require(all(sorted(values) == list(range(len(values))) for values in counters.values()), 'generation counters must start at zero without leading zeros, holes or duplicates')
+                for field, digest_field in (('query_sequence', 'query_sha256'), ('local_module', 'local_module_sha256')):
+                    content = _u06_text(value[field], field)
+                    require(set(content) <= DNA, f'{field}: declared sequence alphabet invalid')
+                    require(hashlib.sha256(content.encode('ascii')).hexdigest() == value[digest_field], f'{digest_field} differs from supplied content')
+            elif component in ('construction', 'coordinates'):
+                require(value['analysis_id'] in records, 'installation refers to absent catalog record')
+                fixture, record = records[value['analysis_id']]
+                require((value['fixture_set_id'], value['fixture_role'], value['fixture_id']) == (fixture['fixture_set_id'], fixture['fixture_role'], fixture['fixture_id']), 'installation fixture set/role differs from record')
+                if component == 'construction':
+                    _e04_construction(value, record)
+                else:
+                    require(value['class'] in ('PC01', 'PC02', 'PC03', 'PC06') and value['gaps'] == [], f'PENDING_COORDINATE_SPECIFICATION:{value["class"]}')
+                    _e04_expected_coordinates(value, len(record['sequence']))
+            elif component == 'coverage':
+                lines, executions, trace = catalog['normative_lines'], catalog['execution_declarations'], catalog['traceability']
+                require(isinstance(lines, list) and lines and type(catalog['declared_normative_entry_count']) is int and len(lines) == catalog['declared_normative_entry_count'], 'declared normative entry target/count differs')
+                line_map = {line['line_id']: line for line in lines}
+                install_map = {row['installation_id']: row for row in installations}
+                execution_map = {row['execution_id']: row for row in executions}
+                require(len(line_map) == len(lines) and len(install_map) == len(installations) and len(execution_map) == len(executions), 'line/installation/execution IDs repeated')
+                require(all(type(line.get('applicable')) is bool for line in lines), 'line applicability must be explicit')
+                require(isinstance(trace, list) and trace, 'line-installation-execution-QA traceability missing')
+                for execution in executions:
+                    execution_id = execution['execution_id']
+                    _u06_text(execution_id, 'execution_id')
+                    execution_installations = execution['installation_ids']
+                    require(isinstance(execution_installations, list), f'{execution_id}: installation_ids must be a declared list')
+                    for installation_id in execution_installations:
+                        require(isinstance(installation_id, str) and installation_id in install_map, f'{execution_id}: unknown installation_id:{installation_id}')
+                    execution_qas = execution['qa_ids']
+                    require(isinstance(execution_qas, list), f'{execution_id}: qa_ids must be a declared list')
+                    for qa_id in execution_qas:
+                        require(isinstance(qa_id, str) and qa_id in E05_QA_SPEC, f'{execution_id}: unknown qa_id:{qa_id}')
+                    require(execution['state'] == 'NOT_EXECUTED', f'{execution_id}: only unexecuted declarations accepted, never recovery results')
+                covered_lines, covered_installations = set(), set()
+                for link in trace:
+                    line, installation, execution = line_map[link['line_id']], install_map[link['installation_id']], execution_map[link['execution_id']]
+                    require(line['applicable'] is True, 'trace points to an inapplicable line')
+                    require(all(line[field] == installation[field] for field in ('fixture_id', 'fixture_role', 'class')), 'normative line/installation binding differs')
+                    require(link['qa_id'] in E05_QA_SPEC and link['qa_id'] in execution['qa_ids'] and installation['installation_id'] in execution['installation_ids'], 'execution/QA trace binding differs')
+                    covered_lines.add(line['line_id'])
+                    covered_installations.add(installation['installation_id'])
+                require(covered_lines == {line['line_id'] for line in lines if line['applicable']} and covered_installations == set(install_map), 'applicable line or installation lacks traceability')
+            elif component == 'fragmentation':
+                rule = catalog['fragmentation_rule']
+                require(isinstance(rule, Mapping), 'explicit fragmentation declaration required')
+                require(rule.get('preserve_each_hsp') is True and rule.get('preserve_planted_subinterval_links') is True, 'each HSP and its planted-subinterval links must be preserved')
+                require(rule.get('fabricate_continuous_hsp') is False and rule.get('cross_record_concatenation') is False, 'fabricated HSPs and cross-record concatenation are forbidden')
+            elif component == 'build_declarations':
+                build = catalog['build_rules']
+                require(isinstance(build, Mapping) and isinstance(build['fixture'], Mapping) and isinstance(build['production'], Mapping), 'fixture and production build declarations required')
+                for side_name in ('fixture', 'production'):
+                    side = build[side_name]
+                    require(type(side['dbtype']) is str and side['dbtype'] == 'nucl', f'{side_name}: dbtype must match the declared nucleotide build')
+                    require(type(side['parse_seqids']) is bool and side['parse_seqids'] is True, f'{side_name}: parse_seqids must be true')
+                    require(type(side['blastdb_version']) is int and side['blastdb_version'] == 5, f'{side_name}: blastdb_version must be the fixed version 5')
+                    require(type(side['max_file_sz_effective']) is int, f'{side_name}: max_file_sz_effective must be an integer; no value or range is selected here')
+                    require(type(side['volume_strategy']) is str and type(side['taxid_policy']) is str, f'{side_name}: volume and taxid policies must be text')
+                for field in E05_SECTION7_KEYS['database_build']:
+                    require(field in build['fixture'] and field in build['production'], f'build field missing:{field}')
+                    if field != 'taxid_policy':
+                        require(not _section7_unresolved(build['fixture'][field]) and json_bytes(build['fixture'][field]) == json_bytes(build['production'][field]), f'fixture/production build differs:{field}')
+                require(build['fixture']['taxid_policy'] == 'OMIT_FOR_SYNTHETIC_NO_TAXONOMIC_FILTER' and build['production']['taxid_policy'] == 'SOURCE_SPECIES_METADATA', 'synthetic/source taxid policy differs')
+                require(isinstance(catalog['index_files'], list) and catalog['index_files'], 'index file declarations missing')
+                for row in catalog['index_files']:
+                    _e07_relative_input_path(row['path'])
+                    require(re.fullmatch(r'[0-9a-f]{64}', row['sha256']) is not None, 'index hash declaration invalid')
+                inspection = catalog['database_id_inspection']
+                require(inspection['state'] == 'DECLARED' and inspection['analysis_ids'] == catalog['headers'], 'database inspection declaration missing or differs from headers')
+                aliases = inspection['engine_to_analysis_id']
+                require(isinstance(aliases, Mapping) and aliases and set(aliases.values()) == set(records), 'explicit engine ID/alias mapping incomplete')
+                require(all(isinstance(key, str) and key.strip() for key in aliases), 'engine identifier missing')
+            checked.append(f'{component}:{location}')
+        except (ResourceContractError, KeyError, TypeError, ValueError, AttributeError) as exc:
+            issues.append({'component': component, 'location': location, 'reason': str(exc)})
+    return {'state': 'DECLARATIONS_CONSISTENT' if not issues else 'RECUSADO', 'blocking_declarations': issues,
+            'checked_declarations': checked, 'authority_verified': False, 'materialization_performed': False,
+            'execution_performed': False, 'informative_command_allowed': False, 'freeze_produced': False,
+            'qa_status': 'NOT_TESTED', 'limitations': list(E04_CATALOG_LIMITATIONS)}
