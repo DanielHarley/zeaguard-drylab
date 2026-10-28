@@ -102,6 +102,18 @@ Tie-breaks: `fix` over `chore` when prior behavior was actually incorrect; `feat
 
 **Content limits.** Do not commit credentials or secrets. Do not commit certified artifacts, original sources, or historical results without explicit authorization. Respect `.gitattributes`. Keep internal material out of version control, under §8.
 
+### Incremental publication by implementation round
+
+At the end of each implementation work round that produces versionable changes authorized for publication, the responsible writer commits the pertinent changes and pushes the commit to the same work branch on `origin`. The Programmer performs this for implementation files, including corrections requested by the Reviewer. Do not accumulate completed rounds for a later combined commit. A round without versionable changes requires no empty commit.
+
+Before every push, apply §8 and verify the authentication, credential separation, and protections required by §9. If publication cannot proceed safely or a prerequisite is unverified, record the blocker, its affected changes, and the disposition required from the appropriate authority. Do not push unsafe or unauthorized material. This rule does not authorize rebase, force-push, destructive operations, or changes to scientific gates.
+
+After pushing, verify that the published branch commit equals the local commit and report the commit SHA, branch, tests actually executed and results, and implementation state to the Coordinator. The Coordinator independently verifies publication, records the SHA, tracks the versions submitted for review, and maintains the pull request. A Coordinator documentation commit remains subject to the explicit branch handoff and single-writer rule in §3.
+
+Publication establishes availability of a version. It does not constitute technical or scientific approval or authorize merge. The Reviewer performs no Git write operation and identifies the exact commit examined in each review. Public communication of review results is the Coordinator's responsibility and remains subject to §8.
+
+---
+
 ## 6. Pull requests
 
 The Coordinator opens and updates pull requests. Title follows the commit title format. Body is in English, with these sections, in this order:
@@ -128,7 +140,7 @@ These seven sections are the whole body. Do not add an eighth. The governance fa
 
 A pull request that carries no implementation unit, such as a documentation or governance change, says so in `## Risks / review focus` and needs no verdict; the draft rule below applies to pull requests that carry an implementation.
 
-Keep the pull request a **draft** until both verdicts are `SEM_IMPEDIMENTO` for the same final version and no blocking finding or required decision remains. When marking it ready, state in the body that the remaining decision is the owner's merge decision. Never state or imply that the owner approved, that science was validated experimentally, or that a pending gate was cleared.
+After the first authorized publication of an implementation branch, the Coordinator opens or maintains a draft pull request when applicable and updates it as commits are published. Each new commit changing the reviewed version requires reassessment under the shared protocol, including explicit confirmation that both final verdicts apply to the current version. Keep the pull request a **draft** until both verdicts are `SEM_IMPEDIMENTO` for the same final version and no blocking finding or required decision remains. When marking it ready, state in the body that the remaining decision is the owner's merge decision. Never state or imply that the owner approved, that science was validated experimentally, or that a pending gate was cleared.
 
 ## 7. Prohibited for every agent
 
