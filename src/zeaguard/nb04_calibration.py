@@ -5156,3 +5156,231 @@ def evaluate_e04_fixture_catalog(catalog: Mapping[str, Any]) -> dict[str, Any]:
             'checked_declarations': checked, 'authority_verified': False, 'materialization_performed': False,
             'execution_performed': False, 'informative_command_allowed': False, 'freeze_produced': False,
             'qa_status': 'NOT_TESTED', 'limitations': list(E04_CATALOG_LIMITATIONS)}
+
+
+# U09 is a local declared schema for plan_v003 section 6.5, pending adjudication.
+E06_TOLERANCE_SCHEMA_CHOICES = {
+    'applicable_instances': 'Declared applicability inventory. instance_identity retains role/class/length/version. fixture and build bind each installation scope.',
+    'complete_patterns': 'Declared complete patterns, supplied by the caller. Completeness and scientific correspondence are not established here.',
+    'expected_object': 'Declared comparison object. exact_endpoints lists contractual exactness, with exactness_contractual_reason. PC01 requires all four endpoints.',
+    'candidate_configurations': 'Candidate ID to declared configuration content. References from records resolve within each applicable instance.',
+    'domains': 'Domain ID to comparison policy. CONSTANT requires common_domain. CANDIDATE_SPECIFIC requires same_rigor_by_candidate covering every candidate.',
+    'records': 'Exactly one entry per applicable instance, domain and candidate. instance_id/domain_id/candidate_id resolve the role, patterns, expected object, configuration, fixture and build.',
+    'endpoints': 'qstart/qend/sstart/send each carry value and unit nt, or value NOT_APPLICABLE and contractual_reason. Other tolerance categories are forbidden.',
+    'independent_basis': 'reference/content/units/assumptions/pattern_and_extension_parameters are nonempty declarations. numeric_criterion_provided is an explicit boolean. Defensibility is not assessed.',
+    'covers_entire_interval': 'Explicit declared interval coverage. A true value requires discriminating_criterion. Its scientific adequacy is not assessed.',
+    'conditional_tolerance_basis': 'PC03 declaration of its previously grounded conditional tolerance. qa_b_applicable remains false.',
+    'structured_declarations': 'Closed local shapes: complete_patterns requires query_pattern/subject_pattern. fixture requires fixture_id/version. build requires build_id. candidate configuration requires configuration. expected_object.content requires object. Optional reference hashes are pattern_sha256/fixture_sha256/build_sha256/configuration_sha256/reference_sha256 only in their corresponding shape. Patterns and expected object may describe orientation/origin/coordinate_system as text and coordinates as qstart/qend/sstart/send integers. score_recovery_model is admitted only in expected_object.content and independent_basis, with scoring_inputs/reference/assumptions. Its scoring_inputs are symbolic parameter names only. Labels, measured extents, arbitrary nested members and lists of pairs are outside these shapes.',
+}
+
+
+def _e06_fields(value: Any, required: tuple[str, ...], location: str, optional: tuple[str, ...] = ()) -> None:
+    require(isinstance(value, Mapping), f'{location}: declared object required')
+    for field in required:
+        require(field in value, f'{location}.{field}: required declaration absent')
+    require(set(value) <= set(required + optional), f'{location}: undeclared field or forbidden tolerance category:{sorted(set(value) - set(required + optional), key=str)}')
+
+
+def _e06_symbolic_score_model(value: Any, location: str) -> None:
+    """Admit symbolic input references only, without empirical fields or model approval."""
+    _e06_fields(value, ('scoring_inputs', 'reference', 'assumptions'), location)
+    inputs = value['scoring_inputs']
+    symbols = ('reward', 'penalty', 'gapopen', 'gapextend', 'xdrop', 'xdrop_ungap', 'xdrop_gap', 'xdrop_gap_final')
+    require(isinstance(inputs, list) and inputs and all(type(item) is str and item in symbols for item in inputs),
+            f'{location}.scoring_inputs: declared symbolic scoring parameter names required')
+    require(len(set(inputs)) == len(inputs), f'{location}.scoring_inputs: duplicate symbolic input')
+    _u06_text(value['reference'], location + '.reference')
+    _u06_text(value['assumptions'], location + '.assumptions')
+
+
+def _e06_structured_declaration(value: Any, kind: str, location: str) -> None:
+    """Close each binding shape rather than infer content categories from field spelling."""
+    description_fields = ('orientation', 'origin', 'coordinate_system', 'coordinates')
+    shapes = {
+        'complete_patterns': (('query_pattern', 'subject_pattern'), description_fields + ('pattern_sha256',)),
+        'fixture': (('fixture_id', 'version'), ('fixture_sha256',)),
+        'build': (('build_id',), ('build_sha256',)),
+        'configuration': (('configuration',), ('configuration_sha256',)),
+        'expected_object': (('object',), description_fields + ('reference_sha256', 'score_recovery_model')),
+    }
+    required, optional = shapes[kind]
+    _e06_fields(value, required, location, optional)
+    for field, item in value.items():
+        field_location = location + '.' + field
+        if field == 'score_recovery_model':
+            _e06_symbolic_score_model(item, field_location)
+        elif field == 'coordinates':
+            _e06_fields(item, ('qstart', 'qend', 'sstart', 'send'), field_location)
+            require(all(type(number) is int and number > 0 for number in item.values()), f'{field_location}: declared one based coordinates required')
+        elif field.endswith('_sha256'):
+            require(isinstance(item, str) and re.fullmatch(r'[0-9a-f]{64}', item) is not None, f'{field_location}: reference SHA256 declaration required')
+        else:
+            _u06_text(item, field_location)
+
+
+def evaluate_e06_tolerance_register(register: Mapping[str, Any]) -> dict[str, Any]:
+    """Check only supplied declarations. Never choose tolerances or authorize E06/E07."""
+    issues: list[dict[str, str]] = []
+    checked: list[str] = []
+    blocked: list[dict[str, str]] = []
+    instances: dict[str, Mapping[str, Any]] = {}
+    instance_scopes: set[bytes] = set()
+    expected: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
+    group_values: dict[tuple[str, str], list[tuple[Any, ...]]] = {}
+    canonical_content = None
+    endpoint_names = ('qstart', 'qend', 'sstart', 'send')
+    try:
+        _e06_fields(register, ('applicable_instances', 'records'), 'register')
+        _e07_declared_content(register, 'register')
+        require(isinstance(register['applicable_instances'], list) and register['applicable_instances'], 'applicable_instances: nonempty declared inventory required')
+        require(isinstance(register['records'], list), 'records: declared list required')
+        checked.append('canonical_fields')
+    except (ResourceContractError, TypeError, ValueError) as exc:
+        issues.append({'component': 'register', 'location': 'register', 'reason': str(exc)})
+
+    declarations = register.get('applicable_instances', []) if isinstance(register, Mapping) else []
+    for index, instance in enumerate(declarations if isinstance(declarations, list) else []):
+        location = f'applicable_instances[{index}]'
+        try:
+            _e06_fields(instance, ('instance_id', 'instance_identity', 'complete_patterns', 'expected_object', 'fixture', 'build',
+                                   'candidate_configurations', 'domains', 'expected_detection_class', 'qa_b_applicable'), location,
+                        ('conditional_tolerance_basis',))
+            instance_id = _u06_text(instance['instance_id'], location + '.instance_id')
+            require(instance_id not in instances, f'{location}: duplicate instance_id')
+            identity = instance['instance_identity']
+            _e06_fields(identity, ('fixture_role', 'class', 'length', 'version'), location + '.instance_identity')
+            require(identity['fixture_role'] in ('TUNING', 'VALIDATION'), f'{location}: invalid fixture_role')
+            require(isinstance(identity['class'], str) and re.fullmatch(r'PC[0-9]{2}[AB]?', identity['class']), f'{location}: invalid class')
+            require(type(identity['length']) is int and identity['length'] > 0, f'{location}: invalid length')
+            _u06_text(identity['version'], location + '.version')
+            for field in ('complete_patterns', 'fixture', 'build'):
+                _e06_structured_declaration(instance[field], field, location + '.' + field)
+            obj = instance['expected_object']
+            _e06_fields(obj, ('content', 'exact_endpoints', 'exactness_contractual_reason'), location + '.expected_object')
+            _e06_structured_declaration(obj['content'], 'expected_object', location + '.expected_object.content')
+            require(isinstance(obj['exact_endpoints'], list) and len(set(obj['exact_endpoints'])) == len(obj['exact_endpoints'])
+                    and set(obj['exact_endpoints']) <= set(endpoint_names), f'{location}: invalid exact_endpoints')
+            _u06_text(obj['exactness_contractual_reason'], location + '.exactness_contractual_reason')
+            case = identity['class']
+            if case == 'PC01':
+                require(set(obj['exact_endpoints']) == set(endpoint_names), f'{location}: PC01 exactness requires all endpoints')
+            detection = {'PC01': 'MUST_BE_REPORTED', 'PC02': 'MUST_BE_REPORTED',
+                         'PC03': 'CHARACTERIZED_NOT_ASSERTED', 'PC06': 'CHARACTERIZED_NOT_ASSERTED'}
+            _u06_text(instance['expected_detection_class'], location + '.expected_detection_class')
+            if case in detection:
+                require(instance['expected_detection_class'] == detection[case], f'{location}: contractual detection class differs')
+            require(type(instance['qa_b_applicable']) is bool, f'{location}: qa_b_applicable must be explicit boolean')
+            if case == 'PC03':
+                require(instance['qa_b_applicable'] is False, f'{location}: PC03 remains outside QA-B')
+                _u06_text(instance.get('conditional_tolerance_basis'), location + '.conditional_tolerance_basis')
+            if case == 'PC06':
+                require(instance['qa_b_applicable'] is True, f'{location}: PC06 emitted objects participate in QA-B')
+            candidates, domains = instance['candidate_configurations'], instance['domains']
+            require(isinstance(candidates, Mapping) and candidates, f'{location}.candidate_configurations: nonempty candidate declarations required')
+            for candidate_id, configuration in candidates.items():
+                _u06_text(candidate_id, location + '.candidate_id')
+                _e06_structured_declaration(configuration, 'configuration', location + '.candidate_configurations.' + candidate_id)
+            require(isinstance(domains, Mapping) and domains, f'{location}.domains: nonempty domains required')
+            for domain_id, policy in domains.items():
+                _u06_text(domain_id, location + '.domain_id')
+                _e06_fields(policy, ('tolerance_mode',), location + '.domains.' + domain_id,
+                            ('common_domain', 'same_rigor_by_candidate'))
+                require(policy['tolerance_mode'] in ('CONSTANT', 'CANDIDATE_SPECIFIC'), f'{location}: invalid tolerance_mode')
+                if 'common_domain' in policy:
+                    _u06_text(policy['common_domain'], location + '.common_domain')
+                if 'same_rigor_by_candidate' in policy:
+                    rigor = policy['same_rigor_by_candidate']
+                    require(isinstance(rigor, Mapping) and set(rigor) == set(candidates), f'{location}: same rigor declaration required for every candidate')
+                    for candidate_id, content in rigor.items():
+                        _u06_text(content, location + '.same_rigor_by_candidate.' + candidate_id)
+                if policy['tolerance_mode'] == 'CONSTANT':
+                    _u06_text(policy.get('common_domain'), location + '.common_domain')
+                else:
+                    rigor = policy.get('same_rigor_by_candidate')
+                    require(isinstance(rigor, Mapping) and set(rigor) == set(candidates), f'{location}: same rigor declaration required for every candidate')
+                    for candidate_id, content in rigor.items():
+                        _u06_text(content, location + '.same_rigor_by_candidate.' + candidate_id)
+                expected.update((instance_id, domain_id, candidate_id) for candidate_id in candidates)
+            # Identity includes fixture/build, allowing the same logical instance in distinct installation scopes.
+            scope = json_bytes({key: instance[key] for key in ('instance_identity', 'fixture', 'build')})
+            require(scope not in instance_scopes, f'{location}: duplicate logical instance/fixture/build under another alias')
+            instance_scopes.add(scope)
+            instances[instance_id] = instance
+            checked.append(location)
+        except (ResourceContractError, KeyError, TypeError, ValueError, AttributeError) as exc:
+            issues.append({'component': 'applicability', 'location': location, 'reason': str(exc)})
+
+    records = register.get('records', []) if isinstance(register, Mapping) else []
+    for index, record in enumerate(records if isinstance(records, list) else []):
+        location = f'records[{index}]'
+        try:
+            _e06_fields(record, ('instance_id', 'domain_id', 'candidate_id', 'endpoints', 'independent_basis', 'covers_entire_interval'), location,
+                        ('discriminating_criterion',))
+            key = tuple(_u06_text(record[field], location + '.' + field) for field in ('instance_id', 'domain_id', 'candidate_id'))
+            require(key in expected and key[0] in instances, f'{location}: undeclared instance/domain/candidate binding')
+            require(key not in seen, f'{location}: duplicate instance/domain/candidate record')
+            seen.add(key)
+            instance = instances[key[0]]
+            endpoints = record['endpoints']
+            _e06_fields(endpoints, endpoint_names, location + '.endpoints')
+            for endpoint in endpoint_names:
+                item = endpoints[endpoint]
+                require(isinstance(item, Mapping) and 'value' in item, f'{location}.{endpoint}.value: numeric nt or NOT_APPLICABLE required')
+                if item['value'] == 'NOT_APPLICABLE':
+                    _e06_fields(item, ('value', 'contractual_reason'), location + '.' + endpoint)
+                    _u06_text(item['contractual_reason'], location + '.' + endpoint + '.contractual_reason')
+                else:
+                    _e06_fields(item, ('value', 'unit'), location + '.' + endpoint)
+                    value = item['value']
+                    require(type(value) in (int, float) and 0 <= value < float('inf') and item['unit'] == 'nt',
+                            f'{location}.{endpoint}: finite nonnegative numerical tolerance in nt required')
+                if endpoint in instance['expected_object']['exact_endpoints']:
+                    require(type(item['value']) in (int, float) and item['value'] == 0, f'{location}.{endpoint}: contractual exactness requires zero nt')
+            basis = record['independent_basis']
+            _e06_fields(basis, ('reference', 'content', 'units', 'assumptions', 'pattern_and_extension_parameters', 'numeric_criterion_provided'), location + '.independent_basis',
+                        ('score_recovery_model',))
+            if 'score_recovery_model' in basis:
+                _e06_symbolic_score_model(basis['score_recovery_model'], location + '.independent_basis.score_recovery_model')
+            for field in ('reference', 'content', 'units', 'assumptions', 'pattern_and_extension_parameters'):
+                _u06_text(basis[field], location + '.independent_basis.' + field)
+            require(type(basis['numeric_criterion_provided']) is bool, f'{location}: numeric_criterion_provided must be explicit boolean')
+            require(basis['numeric_criterion_provided'] is True, f'{location}: STOP_INDEPENDENT_NUMERIC_CRITERION_UNAVAILABLE')
+            require(type(record['covers_entire_interval']) is bool, f'{location}: interval coverage declaration required')
+            if record['covers_entire_interval']:
+                _u06_text(record.get('discriminating_criterion'), location + '.discriminating_criterion')
+            policy = instance['domains'][key[1]]
+            values = tuple(endpoints[endpoint]['value'] for endpoint in endpoint_names)
+            previous = group_values.setdefault(key[:2], [])
+            if policy['tolerance_mode'] == 'CONSTANT':
+                require(not previous or values == previous[0], f'{location}: CONSTANT tolerances differ between candidates')
+            previous.append(values)
+            checked.append(location)
+        except (ResourceContractError, KeyError, TypeError, ValueError, AttributeError) as exc:
+            issues.append({'component': 'record', 'location': location, 'reason': str(exc)})
+            if isinstance(record, Mapping):
+                blocked.append({field: record.get(field) for field in ('instance_id', 'domain_id', 'candidate_id')})
+    for instance_id, domain_id, candidate_id in sorted(expected - seen):
+        missing = dict(instance_id=instance_id, domain_id=domain_id, candidate_id=candidate_id)
+        blocked.append(missing)
+        issues.append({'component': 'coverage', 'location': ':'.join((instance_id, domain_id, candidate_id)),
+                       'reason': 'required instance/domain/candidate record absent'})
+    for (instance_id, domain_id), values in group_values.items():
+        if len(values) > 1 and all(value == values[0] for value in values):
+            try:
+                _u06_text(instances[instance_id]['domains'][domain_id].get('common_domain'), f'{instance_id}:{domain_id}.common_domain')
+            except ResourceContractError as exc:
+                issues.append({'component': 'candidate_comparison', 'location': f'{instance_id}:{domain_id}', 'reason': str(exc)})
+    if not issues:
+        canonical_content = json_bytes(register).decode('utf-8')
+    return {'state': 'DECLARATIONS_CONSISTENT' if not issues else 'RECUSADO', 'blocking_declarations': issues,
+            'checked_declarations': checked, 'blocked_records': blocked,
+            'dependent_instances_blocked': bool(issues), 'dependent_executions_blocked': True,
+            'canonical_content': canonical_content, 'schema_choices': dict(E06_TOLERANCE_SCHEMA_CHOICES),
+            'authority_verified': False, 'scientific_defensibility_assessed': False,
+            'materialization_performed': False, 'execution_performed': False, 'informative_command_allowed': False,
+            'freeze_produced': False, 'qa_status': 'NOT_TESTED',
+            'limitations': ['Declared inventory coverage only. Actual applicability, complete patterns, provenance, exactness outside PC01, and interval coverage require independent adjudication.',
+                           'Basis, common domain, discriminating criterion and equal rigor are checked for declared presence only. Their scientific adequacy is not assessed.',
+                           'Closed local shapes admit declared bindings and symbolic scoring input references. Unknown fields and alternate structural encodings are refused. Free text is not semantically adjudicated and symbolic models are not scientifically approved.',
+                           'No numerical tolerance is selected or grounded here. E06 is not completed and U07 tolerance_representation remains blocked.']}
