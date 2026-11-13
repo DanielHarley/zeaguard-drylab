@@ -4,7 +4,11 @@
 
 ## Status
 
-`Proposed`
+`Accepted`
+
+Ratified by the repository owner on 2026-11-13, after the record was published on `master` in
+`b93f899cd3cb284957cd4e082ae29898811416ee`. Ratification adopts the classification stated under
+Decision. It does not carry out the deferred implementation, which remains as recorded there.
 
 ## Decision scope
 
@@ -132,7 +136,11 @@ Recorded retrospectively on 2026-11-13 by an automated assistant at the request 
 
 ## Estado
 
-`Proposed`
+`Accepted`
+
+Ratificado pelo proprietário do repositório em 2026-11-13, após a publicação do registro no
+`master` em `b93f899cd3cb284957cd4e082ae29898811416ee`. A ratificação adota a classificação
+declarada em Decisão. Não executa a implementação adiada, que permanece como ali registrada.
 
 ## Escopo da decisão
 
