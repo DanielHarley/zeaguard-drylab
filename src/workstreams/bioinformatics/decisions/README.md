@@ -31,6 +31,7 @@ Current records:
 5. [0005 NB02 dsRNase-2 candidate region policy](0005-nb02-dsrnase2-candidate-region-policy.md)
 6. [0006 NB03 BicC candidate region policy](0006-nb03-bicc-candidate-region-policy.md)
 7. [0007 NB04 NTO sequence specificity policy](0007-nb04-nto-sequence-specificity-policy.md)
+8. [0008 NB03 BicC benchmark length discrepancy cause](0008-nb03-bicc-benchmark-length-discrepancy-cause.md) — `Proposed`. Implementation in `nb03_benchmark.py` and in the pinned BicC reference is deliberately deferred, so those artifacts still carry the superseded classification.
 
 ## Governance amendment A1
 
