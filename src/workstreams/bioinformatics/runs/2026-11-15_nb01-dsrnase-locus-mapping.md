@@ -10,7 +10,9 @@
 
 Base commit `08079cd65f76b3d542b6981840a53e194552b060` (`origin/master`, merge of PR #22, which carries ADR 0008). The local `master` of the checkout this branch was cut from was two commits behind that at the time, so `origin/master` was used as the base: it is the current main line, and cutting from the stale local `master` would have dropped ADR 0008 and made this record's ADR number wrong.
 
-The mapping records the commit it ran at in `manifest.json` under `git`. In the cross-OS worktree used for implementation that field came back **empty**; see Anomalies item 4.
+Implementation commit of this branch: **`f00b87d5f1a52d0a0402a96c136d5b4dd79dea2e`**, which is the commit the clean-clone reconstruction was verified against. This record's own clean-clone outcome is added by the commit that follows it.
+
+The mapping records the commit it ran at in `manifest.json` under `git`. In the cross-OS worktree used for implementation that field came back **empty**; in the clean clone it is populated with `f00b87d`. See Anomalies item 4.
 
 ## Branch
 
@@ -156,13 +158,13 @@ Written to `results/bioinformatics/nb01/mappings/dsrnase_locus_mapping` (git-ign
 
 - `pytest tests/test_nb01_locus.py -q`: **50 passed.** The synthetic HSPs and synthetic genomes exercise every `INDETERMINATE` branch that the real data does not reach (no locus, two passing loci, overlapping spans, unassigned pair, non-colinear tiling, a cluster below the reporting threshold, a diverged locus that is `RELATED` not assignable), and the hash verification is exercised with the same content as LF and as CRLF. One test runs the real derivation against the real anchor FASTA, so it fails if the published ORF coordinates ever stop falling out of the anchors.
 - `pytest -q` (full suite): **1725 passed, 10 failed, 67 skipped, 12 errors.** Every failure and error is in `tests/test_nb04_cp0.py` and is `FileNotFoundError: results/bioinformatics/nb02/cp5/run_manifest.json`, a prior-stage output that exists only in a checkout where NB02 CP5 has been run; this worktree's `results/` starts empty. **Verified pre-existing and unrelated:** a pristine clone of `master` (`9471494`, which does not contain `nb01_locus.py`) produces exactly the same 10 failures and 12 errors. Nothing in this branch is implicated.
-- Run end to end in an empty output directory, twice: once before and once after the splice-boundary correction of Anomalies item 2. Locus coordinates, coverage, identity, exon counts, intron sizes and every assignment were identical across the two runs; only the splice columns changed.
+- Run end to end in an empty output directory three times: before the splice-boundary correction of Anomalies item 2, after it, and once more at the delivered commit `f00b87d`. Locus coordinates, coverage, identity, exon counts, intron sizes and every assignment were identical across all three; only the splice columns changed, at the second run. The third run is the one recorded here, and the five output tables of the second and third are byte-identical.
 - Every declared hash agreed with the observed one: both assemblies by `sha256` and by `sha256_decompressed`, and the anchor FASTA by its LF-normalised hash (`declared_hash_agrees` true throughout `manifest.json`).
 - Every declared assembly statistic agreed with the file as read, for both assemblies.
 - `-max_target_seqs` provably did not truncate: `observed_subjects_below_limit` is true for both assemblies (1 and 0 subjects with HSPs, against a limit of 20,000).
 - **Controls for the alternate-haplotype result**, run because "no hits" is the one result that an empty or broken database also produces. All three are recorded in Results; in short: the database is sound, and the absence is real.
 - **Internal consistency of the tiling.** For each locus the tiled alignment length exceeds the CDS length by exactly the total junction overlap: 11 = 11, 25 = 25, 13 = 13 for dsRNase-1, -2 and -3. With coverage at 100 % and no positive offset anywhere, this means each tiling accounts for the whole CDS, counted once except at the tolerated overlaps, and nothing outside it — so the identity computed over the tiled length has the right denominator. Asserted as an invariant in the tests as well.
-- **Clean-clone reconstruction.** Procedure in the dedicated section below; observed outcome in the follow-up commit that reports it.
+- **Clean-clone reconstruction, executed against the delivered commit `f00b87d`.** The reconstruction commands reproduce both declared hashes, the mapping refuses with exit 2 while the inputs are absent, 50 tests pass in the clone, and all five output tables come back byte-identical to the run recorded here. Full outcome in the dedicated section below.
 
 ## Results
 
@@ -249,7 +251,28 @@ The reconstruction instructions are to be verified by executing them, not by ins
 4. run `pytest tests/test_nb01_locus.py -q` in the clone;
 5. run the mapping end to end and compare the sha256 of every output table with this run's.
 
-The observed outcome is recorded in the follow-up commit on this branch, because a record of a verification cannot sit inside the commit whose verification it reports. That commit names the commit actually verified.
+### Observed outcome
+
+Executed against commit **`f00b87d5f1a52d0a0402a96c136d5b4dd79dea2e`**, the implementation commit of this branch, cloned with `git clone --branch feat/nb01-dsrnase-locus-mapping --single-branch` into an empty directory. This section is recorded in the follow-up commit, because a record of a verification cannot sit inside the commit whose verification it reports.
+
+1. The clone carried `data/reference/target_anchor_sequences.fasta` and **no `data/external` directory at all**. The anchor FASTA checked out with **LF** line endings, so its raw sha256 and its LF-normalised sha256 are both `10cd666816d76fd4a87ae769849008551a40ddfde4081722d33f73e54cbea89b`. The implementation worktree, on Windows, holds the same file with CRLF and a different raw hash. Verification by the LF-normalised hash accepts both, which is the whole reason that mode is used.
+2. With the inputs absent the mapping **refused**, exited **2**, and printed the missing input with its declared download URL:
+   `declared input is missing: ihDalMaid1.1_primary -> data/external/nb01_locus_mapping/GCA_975739785.1_ihDalMaid1.1_genomic.fna.gz` / `download it from: https://ftp.ncbi.nlm.nih.gov/...`. It produced `queries.tsv` and an empty `raw/` before refusing, because the queries are derived and checked before any assembly is opened, and **no** locus, assignment, distinctness, copy-number or manifest output. No search ran.
+3. The two `curl` commands, copied verbatim from the panel, reproduced both assemblies at their exact declared byte counts, and `sha256sum` reproduced both declared hashes: `aef4d8ec...9184` and `90e6c6ab...1757`.
+4. `pytest tests/test_nb01_locus.py -q` in the clone: **50 passed**.
+5. The mapping ran end to end, exit 0, and reproduced this run **byte for byte**. All five output tables have the same sha256 as the run recorded above:
+
+   | output | sha256 |
+   | --- | --- |
+   | `queries.tsv` | `c851b92484c1cf93581771c885f8ec8a22d85f8ce424325b39edd72d0c277964` |
+   | `loci.tsv` | `57b0d68ce3d0460c832f15ab24bd8ab1214dd90e3dc63807140d62ed6ff172e4` |
+   | `assignments.tsv` | `dae544940fdd73454109b2e5f66824f5640eba08eda53a70bbbc59123401bc8d` |
+   | `distinctness.tsv` | `f66d6445a225e21f339a8fda977e23f46a9cff4567f22de82d0925a433b6e457` |
+   | `copy_number.tsv` | `7dadd5d912d5081e280001246c982930f9f3ad3ecf0b9a51f2dbc907e58fa77b` |
+
+   The BLAST counts matched as well: 57 HSPs on one subject for the primary, 0 for the alternate, and the same three loci, three assignments and three distinctness verdicts.
+
+The clean clone also settles Anomalies item 4: in an ordinary checkout the manifest's `git` block is **populated** — `{"commit": "f00b87d5f1a52d0a0402a96c136d5b4dd79dea2e", "status_porcelain": ""}` — confirming that the empty block in the implementation worktree is an artefact of the cross-OS worktree and not of the module. `manifest.json` is not compared by hash because it legitimately differs between runs: it records the timestamp, the commit and the temporary paths of that run.
 
 ## What this run does NOT establish
 
@@ -271,7 +294,7 @@ The observed outcome is recorded in the follow-up commit on this branch, because
 
 3. **The primary assembly's sequence count does not match NCBI's, for a traceable reason.** The file carries 141 records and 972,225,736 nt; the NCBI Datasets report says 140 scaffolds and 972,206,121 nt. The difference is exactly one record, `OZ319714.1` (`organelle: mitochondrion`, 19,615 nt): 972,225,736 - 972,206,121 = 19,615. NCBI's scaffold count and lengths describe the nuclear assembly only. The panel declares the statistics **of the file** and records NCBI's alongside with this reconciliation; the mitochondrion is left in the search space, because removing a sequence from a declared input would make its hash unverifiable, and is classified under a role of its own so a count including it always reconciles. No dsRNase CDS has an HSP on it. NCBI's `number_of_contigs` and `contig_n50` describe pre-scaffolding components that a FASTA of scaffolds does not contain, so neither is declared or checked.
 
-4. **`manifest.json` recorded an empty `git` block in the implementation worktree.** `_git` returned `""` for both the commit and the porcelain status. The cause is not the module: the worktree was created by Windows git, so its `.git` file holds the absolute path `C:/Programming/Python/zeaguard-drylab/.git/worktrees/...`, which the Linux git inside WSL resolves relative to the working directory and fails on. `_git` does not raise on a failed git call, so the field came back empty rather than aborting the run. In an ordinary checkout, including the clean clone, the field is populated. The base commit is recorded in this file instead. Worth noting for review: a provenance manifest whose commit field can silently come back empty is a weakness of the shared `_git` helper, which is used by other NB01 modules as well; it is left unchanged here because it is outside this branch's scope, and is listed as a follow-up rather than fixed in passing.
+4. **`manifest.json` recorded an empty `git` block in the implementation worktree.** `_git` returned `""` for both the commit and the porcelain status. The cause is not the module: the worktree was created by Windows git, so its `.git` file holds the absolute path `C:/Programming/Python/zeaguard-drylab/.git/worktrees/...`, which the Linux git inside WSL resolves relative to the working directory and fails on. `_git` does not raise on a failed git call, so the field came back empty rather than aborting the run. **Confirmed by the clean clone**, where the same code records `{"commit": "f00b87d5f1a52d0a0402a96c136d5b4dd79dea2e", "status_porcelain": ""}`: the module is not at fault, the cross-OS worktree is. The commits are recorded in this file instead. Worth noting for review: a provenance manifest whose commit field can silently come back empty is a weakness of the shared `_git` helper, which is used by other NB01 modules as well; it is left unchanged here because it is outside this branch's scope, and is listed as a follow-up rather than fixed in passing.
 
 5. **Building the BLAST database on the working tree did not finish in 13 minutes.** On a 9p-mounted Windows working tree under WSL, `makeblastdb` on the 972 Mb assembly had produced no output after 13 minutes and was abandoned; on native Linux disk it completes in about 7 seconds. The module now puts the expansion and the database in a temporary directory, which is both the correct place for a derived intermediate and the fast one. Anyone reproducing this with the repository on a Windows filesystem should keep `TMPDIR` on a native filesystem.
 
@@ -291,7 +314,9 @@ Preceding run records: [2026-10-03 dsRNase-2 identity](2026-10-03_nb01-dsrnase2-
 
 ## Related Issue / PR / commits
 
-Branch `feat/nb01-dsrnase-locus-mapping`, cut from `origin/master` at `08079cd`. Not pushed and no pull request opened: publication and merge are the repository owner's decisions (CONTRIBUTING.md §2 and §9).
+Branch `feat/nb01-dsrnase-locus-mapping`, cut from `origin/master` at `08079cd`. Two commits: `f00b87d` carries the implementation, the panel, ADR 0009 and this record; the commit that follows adds this record's clean-clone outcome, which could not be written before the verification it reports.
+
+Not pushed and no pull request opened: publication and merge are the repository owner's decisions (CONTRIBUTING.md §2 and §9).
 
 ## Evidence classification
 
