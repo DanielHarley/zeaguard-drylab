@@ -12,7 +12,7 @@ Proposed
 
 ## Context / problem
 
-[ADR 0004](0004-nb01-dsrnase2-identity-criteria.md) classified the identity of Dmai-dsRNase-2 as `AMBIGUOUS` at accession, CDS and protein level: two records of the TSA assembly `GITV00000000.1`, `GITV01008430.1` and `GITV01012450.1`, reproduce **the same** 1425 nt CDS and the same 474 aa protein. The NB01 family audit then confirmed coding-region integrity and PF01223 classification for all three published proteins and stated explicitly that it does **not** establish attribution to loci. Its run record, `2026-11-13_nb01-dsrnase-protein-audit.md`, is not in this tree: it lives on the unpublished branch `feat/nb01-dsrnase-protein-audit`, so it is named rather than linked, and nothing in this record or its implementation depends on that branch.
+[ADR 0004](0004-nb01-dsrnase2-identity-criteria.md) classified Dmai-dsRNase-2 as `AMBIGUOUS` at the accession, CDS and protein levels. The [operational reference](../../../../data/reference/nb01_dsrnase2_operational_reference.json) records CDS of 1425 nt for both TSA accessions, `GITV01008430.1` and `GITV01012450.1`, with distinct SHA256 hashes. `GITV01008430.1` exactly matches the published CDS. The NB01 family audit then confirmed coding-region integrity and PF01223 classification for all three published proteins and stated explicitly that it does **not** establish attribution to loci. Its run record, `2026-11-13_nb01-dsrnase-protein-audit.md`, is not in this tree: it lives on the unpublished branch `feat/nb01-dsrnase-protein-audit`, so it is named rather than linked, and nothing in this record or its implementation depends on that branch.
 
 Two questions were left open, and both are questions about the genome, not about the transcriptome:
 
@@ -27,12 +27,12 @@ This record does **not** modify ADR 0003, ADR 0004, or the family audit. It adds
 
 ## Question being decided
 
-Under what pre-registered computational criteria may a published Dmai-dsRNase CDS be assigned to a genomic locus of a declared *D. maidis* assembly; when are two such assignments to be called distinct loci, the same locus, or `INDETERMINATE`; and how is the genomic copy number of the dsRNase-2 CDS to be reported so that it does not read as an answer to a question the method cannot answer?
+Under what preregistered criteria can a published Dmai-dsRNase CDS be assigned to a locus in a declared *D. maidis* assembly? When can two assignments be classified as distinct loci, the same locus or `INDETERMINATE`? How should each assembly's locus count for the published dsRNase-2 CDS be reported?
 
 ## Evidence
 
 1. Existence and versioned identity of the assemblies, queried from NCBI for taxid 74065 on 2026-11-15 (`directly demonstrated`; the survey and the three accessions it returned are recorded in [`data/reference/nb01_dsrnase_locus_panel.json`](../../../../data/reference/nb01_dsrnase_locus_panel.json) and in the run record). This was treated as the first question to answer, not as an assumption: had no usable assembly existed, that finding would have been the result.
-2. ADR 0004 and the [NB01 dsRNase-2 identity run record](../runs/2026-10-03_nb01-dsrnase2-identity.md): the two TSA records attributed to dsRNase-2 carry one identical CDS, and the 3' flank of `GITV01012450.1` carries tandem-repeat structure (`derived/computed`).
+2. ADR 0004, the [operational reference](../../../../data/reference/nb01_dsrnase2_operational_reference.json) and the [NB01 dsRNase-2 identity run record](../runs/2026-10-03_nb01-dsrnase2-identity.md) document equal CDS lengths and distinct CDS hashes for the two TSA records, as well as tandem repeats in the 3′ flank of `GITV01012450.1` (`derived/computed`).
 3. The family audit run record `2026-11-13_nb01-dsrnase-protein-audit.md` (on the unpublished branch `feat/nb01-dsrnase-protein-audit`), which states that locus attribution is outside its scope (`directly demonstrated`).
 4. Primary source: Dalaisón-Fuentes et al. 2023, Pestic. Biochem. Physiol. 196:105618 (DOI 10.1016/j.pestbp.2023.105618, PMID 37945254), Table 1 ORF coordinates and Supplementary File S1 (`directly demonstrated` for the printed coordinates).
 5. Implementation: [`nb01_locus.py`](../../../zeaguard/nb01_locus.py) and its [tests](../../../../tests/test_nb01_locus.py).
@@ -50,7 +50,7 @@ Every material claim of this record, in the weakest category the evidence suppor
 | Coverage, identity, locus span, assembly-gap content and contiguity of each locus | `derived/computed` |
 | The exon/intron structure of a locus | `inferred/interpreted` — read from the gaps of an HSP tiling, not from an annotation or a spliced aligner |
 | That a locus with one alignment per CDS is a single genomic copy | `inferred/interpreted` — conditional on the assembly not having collapsed a duplication |
-| Which of the two TSA records came from which locus | `unresolved` by construction: the two records carry one CDS, so one query stands for both |
+| Genomic origin of `GITV01012450.1` and whether the two TSA records share a locus | `unresolved` in this run, which queried the published CDS |
 | Any statement about enzymatic activity | out of scope; not made |
 
 All thresholds below are `operational assumption`. None has bibliographic or empirical calibration for *D. maidis*, and none is adapted after seeing results.
@@ -84,7 +84,7 @@ Apply the following, in this order, without adapting any criterion after seeing 
 
 8. **Distinctness, decided pairwise and separately from similarity.** Two assigned loci are `DETERMINED` distinct when they lie on different assembly sequences, or on one sequence with non-overlapping spans, in which case the gap between the spans is reported. They are `INDETERMINATE / OVERLAPPING_SPANS_ON_ONE_SEQUENCE` when their spans overlap: that is the configuration a repeat and a true shared locus both produce, and the method does not separate them. If either locus is unassigned, the pair is `INDETERMINATE / UNASSIGNED_LOCUS`.
 
-9. **Genomic copy number, for question 2.** Because the two TSA records attributed to dsRNase-2 carry one identical CDS (ADR 0004), one query stands for both and no mapping can say which record came from which locus. That is `unresolved` by construction and is stated as such. What is reported instead is the number of genomic loci carrying that CDS per assembly, as a count with a neutral key (`ONE_LOCUS_DETECTED`, `MULTIPLE_LOCI_DETECTED`, `NO_LOCUS_DETECTED`) and never as a verdict on paralogy. The readings a count permits, and the evidence that would be needed to choose between them, belong in the run record.
+9. **Locus counts for the published dsRNase-2 CDS.** Report the number of loci that meet the assignment criteria for the published CDS in each assembly using the keys `ONE_LOCUS_DETECTED`, `MULTIPLE_LOCI_DETECTED` and `NO_LOCUS_DETECTED`. The count applies to the published query, which matches `GITV01008430.1`. The genomic origin of `GITV01012450.1` remains `unresolved`.
 
 10. **Alternate haplotype.** When an alternate pseudohaplotype of the same biosample is available it is mapped as a second, independent target, because a heterozygous duplication collapsed in one pseudohaplotype may be resolved in the other. Agreement between the two haplotypes strengthens a copy-number observation; it does not convert it into a demonstration, because both derive from one individual.
 
@@ -96,7 +96,7 @@ The 50,000 nt locus distance is deliberately generous relative to insect intron 
 
 Reporting contiguity and repeat context with every locus, as rule 7 requires, is what keeps rule 8 honest. The task that motivated this record states the risk directly: two sequences mapping to one region do not establish one locus if the region is repetitive or the assembly fragmented. The repeat measure for the query is the count of other loci the same CDS reaches at the reporting threshold; the fragmentation measure is the gap content of the span and the distance to the sequence ends. Both are computed from the declared input at every run, so a reviewer never has to take the locus call on trust.
 
-Rule 9 exists because the honest answer to part of question 2 is that sequence mapping cannot give one. Recording the copy number under a neutral key, instead of a paralogy verdict, keeps the computed observation separable from the interpretation of it.
+Rule 9 ties the count to the query and the declared criteria. The genomic relationship between the TSA records remains open.
 
 ## Consequences
 
@@ -110,15 +110,15 @@ Rule 9 exists because the honest answer to part of question 2 is that sequence m
 
 - BLASTn HSP tiling is not a splice-aware alignment. Exons shorter than the effective seed length may be missed, junction coordinates are approximate within the tolerated overlap, and the inferred structure is weaker evidence than a spliced aligner or an annotation would give.
 - Neither declared assembly carries a gene annotation, so no locus call can be checked against an independent gene model.
-- Both declared assemblies derive from one biosample (`SAMEA117578701`). Copy number observed in them is copy number in one individual, and population-level copy-number variation is outside the run.
-- An assembly can collapse a recent duplication. Without read-depth evidence, a single-locus observation cannot exclude a collapsed duplication; the alternate haplotype reduces but does not remove this possibility.
+- Both declared assemblies derive from one biosample (`SAMEA117578701`). The locus counts pertain to those assemblies. Population level variation remains unresolved.
+- The run detected one locus for the published dsRNase-2 CDS in the primary assembly. The search of the alternate assembly detected no locus under the applied parameters, leaving the comparison between haplotypes inconclusive. A collapsed duplication remains possible.
 - The 98 % identity threshold assumes that allelic divergence between the sequenced individuals is below 2 %. That assumption is not calibrated for *D. maidis*.
 - The published transcripts and the assemblies come from different individuals and different studies; no statement about the same individual is available.
 
 ## What this decision does NOT establish
 
 - It does not establish that any locus call is correct, that any assembly is correct, or that the inferred exon/intron structure is the true gene structure.
-- It does not establish which TSA record originates from which genomic locus; with one identical CDS behind both records, that remains `unresolved` whatever the mapping shows.
+- The genomic origin of `GITV01012450.1` and its relationship to the locus detected for the published CDS remain `unresolved`.
 - It does not establish gene identity, orthology, paralogy, gene family size, or copy number in the species.
 - It does not establish or bear on enzymatic activity, substrate specificity, expression, or any phenotype. No such claim is made anywhere in the mapping.
 - It does not establish scientific validity. A successful execution and a reproducible result are neither.
@@ -172,7 +172,7 @@ Proposed
 
 ## Contexto / problema
 
-A [ADR 0004](0004-nb01-dsrnase2-identity-criteria.md) classificou a identidade de Dmai-dsRNase-2 como `AMBIGUOUS` nos níveis de acesso, CDS e proteína: dois registros do TSA `GITV00000000.1`, `GITV01008430.1` e `GITV01012450.1`, reproduzem **a mesma** CDS de 1425 nt e a mesma proteína de 474 aa. A auditoria de família do NB01 confirmou a integridade das regiões codificantes e a classificação PF01223 das três proteínas publicadas e declarou explicitamente que **não** estabelece atribuição a loci. Seu registro de execução, `2026-11-13_nb01-dsrnase-protein-audit.md`, não está nesta árvore: está na branch não publicada `feat/nb01-dsrnase-protein-audit`, por isso é citado pelo nome e não por link, e nada neste registro nem em sua implementação depende daquela branch.
+O [ADR 0004](0004-nb01-dsrnase2-identity-criteria.md) classificou Dmai-dsRNase-2 como `AMBIGUOUS` nos níveis de acesso, CDS e proteína. A [referência operacional](../../../../data/reference/nb01_dsrnase2_operational_reference.json) registra CDS de 1425 nt para os dois acessos do TSA, `GITV01008430.1` e `GITV01012450.1`, com hashes SHA256 distintos. A CDS de `GITV01008430.1` coincide exatamente com a publicada. A auditoria de família do NB01 confirmou a integridade das regiões codificantes e a classificação PF01223 das três proteínas publicadas e declarou explicitamente que **não** estabelece atribuição a loci. Seu registro de execução, `2026-11-13_nb01-dsrnase-protein-audit.md`, não está nesta árvore: está na branch não publicada `feat/nb01-dsrnase-protein-audit`, por isso é citado pelo nome e não por link, e nada neste registro nem em sua implementação depende daquela branch.
 
 Duas perguntas ficaram abertas, e ambas são perguntas sobre o genoma, não sobre o transcriptoma:
 
@@ -187,12 +187,12 @@ Este registro **não** modifica a ADR 0003, a ADR 0004 nem a auditoria de famíl
 
 ## Questão sendo decidida
 
-Sob quais critérios computacionais pré-registrados uma CDS publicada de Dmai-dsRNase pode ser atribuída a um locus genômico de uma montagem declarada de *D. maidis*; quando duas dessas atribuições devem ser chamadas de loci distintos, do mesmo locus, ou `INDETERMINADO`; e como o número de cópias genômicas da CDS de dsRNase-2 deve ser relatado para que não se leia como resposta a uma pergunta que o método não pode responder?
+Sob quais critérios definidos previamente uma CDS publicada de Dmai-dsRNase pode ser atribuída a um locus em uma montagem declarada de *D. maidis*? Quando duas atribuições podem ser classificadas como loci distintos, como o mesmo locus ou como `INDETERMINADO`? Como relatar a contagem de loci para a CDS publicada de dsRNase-2 em cada montagem?
 
 ## Evidências
 
 1. Existência e identidade versionada das montagens, consultadas no NCBI para o taxid 74065 em 2026-11-15 (`diretamente demonstrado`; o levantamento e os três acessos retornados estão em [`data/reference/nb01_dsrnase_locus_panel.json`](../../../../data/reference/nb01_dsrnase_locus_panel.json) e no registro de execução). Isso foi tratado como a primeira pergunta a responder, não como pressuposto: se não houvesse montagem utilizável, esse achado seria o resultado.
-2. ADR 0004 e o [registro de execução da identidade de dsRNase-2](../runs/2026-10-03_nb01-dsrnase2-identity.md): os dois registros do TSA atribuídos a dsRNase-2 carregam uma CDS idêntica, e o flanco 3' de `GITV01012450.1` carrega estrutura de repetição em tandem (`derivado/computado`).
+2. O ADR 0004, a [referência operacional](../../../../data/reference/nb01_dsrnase2_operational_reference.json) e o [registro de execução da identidade de dsRNase-2](../runs/2026-10-03_nb01-dsrnase2-identity.md) documentam CDS de mesmo comprimento e hashes distintos nos dois registros do TSA, além de repetições em tandem no flanco 3′ de `GITV01012450.1` (`derivado/computado`).
 3. O registro da auditoria de família `2026-11-13_nb01-dsrnase-protein-audit.md` (na branch não publicada `feat/nb01-dsrnase-protein-audit`), que declara a atribuição a loci fora de seu escopo (`diretamente demonstrado`).
 4. Fonte primária: Dalaisón-Fuentes et al. 2023, Pestic. Biochem. Physiol. 196:105618 (DOI 10.1016/j.pestbp.2023.105618, PMID 37945254), coordenadas de ORF da Tabela 1 e Arquivo Suplementar S1 (`diretamente demonstrado` para as coordenadas impressas).
 5. Implementação: [`nb01_locus.py`](../../../zeaguard/nb01_locus.py) e seus [testes](../../../../tests/test_nb01_locus.py).
@@ -210,7 +210,7 @@ Cada afirmação material deste registro, na categoria mais fraca que a evidênc
 | Cobertura, identidade, extensão do locus, conteúdo de lacunas de montagem e contiguidade de cada locus | `derivado/computado` |
 | A estrutura éxon/íntron de um locus | `inferido/interpretado` — lida das lacunas de um empilhamento de HSPs, não de uma anotação nem de um alinhador splice-aware |
 | Que um locus com um alinhamento por CDS é uma cópia genômica única | `inferido/interpretado` — condicional a a montagem não ter colapsado uma duplicação |
-| Qual dos dois registros do TSA veio de qual locus | `não resolvido` por construção: os dois registros carregam uma só CDS, logo uma consulta representa ambos |
+| Origem genômica de `GITV01012450.1` e eventual compartilhamento de locus entre os dois registros do TSA | `não resolvido` nesta execução, que consultou a CDS publicada |
 | Qualquer afirmação sobre atividade enzimática | fora de escopo; não feita |
 
 Todos os limiares abaixo são `pressuposto operacional`. Nenhum tem calibração bibliográfica ou empírica para *D. maidis*, e nenhum é adaptado depois de ver resultados.
@@ -244,7 +244,7 @@ Aplicar o seguinte, nesta ordem, sem adaptar nenhum critério depois de ver resu
 
 8. **Distinção, decidida par a par e separada da similaridade.** Dois loci atribuídos são `DETERMINED` distintos quando estão em sequências diferentes da montagem, ou em uma sequência com extensões não sobrepostas, caso em que a lacuna entre as extensões é relatada. São `INDETERMINATE / OVERLAPPING_SPANS_ON_ONE_SEQUENCE` quando as extensões se sobrepõem: é a configuração que tanto uma repetição quanto um locus verdadeiramente compartilhado produzem, e o método não as separa. Se qualquer um dos loci não estiver atribuído, o par é `INDETERMINATE / UNASSIGNED_LOCUS`.
 
-9. **Número de cópias genômicas, para a pergunta 2.** Como os dois registros do TSA atribuídos a dsRNase-2 carregam uma CDS idêntica (ADR 0004), uma consulta representa ambos e nenhum mapeamento pode dizer qual registro veio de qual locus. Isso é `não resolvido` por construção e é declarado como tal. O que se relata, em lugar disso, é o número de loci genômicos que carregam aquela CDS por montagem, como contagem com uma chave neutra (`ONE_LOCUS_DETECTED`, `MULTIPLE_LOCI_DETECTED`, `NO_LOCUS_DETECTED`) e nunca como veredito sobre paralogia. As leituras que uma contagem permite, e a evidência necessária para escolher entre elas, pertencem ao registro de execução.
+9. **Contagem de loci para a CDS publicada de dsRNase-2.** Relatar o número de loci que atendem aos critérios de atribuição para a CDS publicada em cada montagem com as chaves `ONE_LOCUS_DETECTED`, `MULTIPLE_LOCI_DETECTED` e `NO_LOCUS_DETECTED`. A contagem se aplica à consulta publicada, cuja CDS coincide com a de `GITV01008430.1`. A origem genômica de `GITV01012450.1` permanece `não resolvida`.
 
 10. **Haplótipo alternativo.** Quando houver um pseudo-haplótipo alternativo do mesmo biosample, ele é mapeado como segundo alvo independente, porque uma duplicação heterozigota colapsada em um pseudo-haplótipo pode estar resolvida no outro. Concordância entre os dois haplótipos fortalece uma observação de número de cópias; não a converte em demonstração, pois ambos derivam de um único indivíduo.
 
@@ -256,7 +256,7 @@ A distância de 50.000 nt é deliberadamente generosa em relação aos comprimen
 
 Relatar contiguidade e contexto repetitivo com todo locus, como exige a regra 7, é o que mantém a regra 8 honesta. A tarefa que motivou este registro declara o risco diretamente: duas sequências que mapeiam em uma mesma região não estabelecem um mesmo locus se a região for repetitiva ou a montagem fragmentada. A medida de repetição para a consulta é a contagem de outros loci que a mesma CDS atinge no limiar de relato; a medida de fragmentação é o conteúdo de lacunas da extensão e a distância às extremidades da sequência. Ambas são computadas do insumo declarado a cada execução, de modo que um revisor nunca precisa aceitar a chamada de locus por confiança.
 
-A regra 9 existe porque a resposta honesta a parte da pergunta 2 é que o mapeamento de sequência não pode dar uma. Registrar o número de cópias sob chave neutra, em vez de um veredito de paralogia, mantém a observação computada separável de sua interpretação.
+A regra 9 vincula a contagem à consulta e aos critérios declarados. A relação genômica entre os registros do TSA permanece em aberto.
 
 ## Consequências
 
@@ -270,15 +270,15 @@ A regra 9 existe porque a resposta honesta a parte da pergunta 2 é que o mapeam
 
 - O empilhamento de HSPs do BLASTn não é alinhamento splice-aware. Éxons menores que o comprimento efetivo de semente podem passar sem detecção, as coordenadas de junção são aproximadas dentro da sobreposição tolerada, e a estrutura inferida é evidência mais fraca do que daria um alinhador splice-aware ou uma anotação.
 - Nenhuma das montagens declaradas carrega anotação de genes, logo nenhuma chamada de locus pode ser conferida contra um modelo gênico independente.
-- As duas montagens declaradas derivam de um único biosample (`SAMEA117578701`). O número de cópias observado nelas é número de cópias em um indivíduo, e variação populacional de número de cópias está fora da execução.
-- Uma montagem pode colapsar uma duplicação recente. Sem evidência de profundidade de leituras, a observação de um locus único não exclui uma duplicação colapsada; o haplótipo alternativo reduz, mas não elimina, essa possibilidade.
+- As duas montagens declaradas derivam de um único biosample (`SAMEA117578701`). As contagens de loci se referem a essas montagens. A variação populacional permanece em aberto.
+- A execução detectou um locus para a CDS publicada de dsRNase-2 na montagem principal. A busca na montagem alternativa ficou sem locus detectado sob os parâmetros aplicados, deixando inconclusiva a comparação entre haplótipos. Uma duplicação colapsada pela montagem permanece possível.
 - O limiar de 98 % de identidade pressupõe divergência alélica abaixo de 2 % entre os indivíduos sequenciados. Esse pressuposto não é calibrado para *D. maidis*.
 - Os transcritos publicados e as montagens vêm de indivíduos e estudos diferentes; nenhuma afirmação sobre um mesmo indivíduo está disponível.
 
 ## O que esta decisão NÃO estabelece
 
 - Não estabelece que qualquer chamada de locus esteja correta, que qualquer montagem esteja correta, nem que a estrutura éxon/íntron inferida seja a estrutura gênica verdadeira.
-- Não estabelece qual registro do TSA se origina de qual locus genômico; com uma CDS idêntica por trás dos dois registros, isso permanece `não resolvido` qualquer que seja o resultado do mapeamento.
+- A origem genômica de `GITV01012450.1` e sua relação com o locus detectado para a CDS publicada permanecem em aberto.
 - Não estabelece identidade gênica, ortologia, paralogia, tamanho de família gênica nem número de cópias na espécie.
 - Não estabelece nem toca em atividade enzimática, especificidade de substrato, expressão ou qualquer fenótipo. Nenhuma afirmação desse tipo é feita em qualquer parte do mapeamento.
 - Não estabelece validade científica. Uma execução bem sucedida e um resultado reprodutível não são validade científica.

@@ -24,7 +24,7 @@ Implemented in a separate git worktree rather than by switching branches in the 
 
 `COMPLETED`
 
-Completed means the mapping ran end to end from the declared inputs in an empty output directory, every integrity check it performs passed, and every question it was given received either an answer or an explicit `INDETERMINATE` with a reason. It does **not** mean the locus calls are correct, that the inferred exon/intron structures are the true gene structures, or that anything was established about enzymatic activity. The copy-number cross-check the method planned to make against the alternate haplotype **could not be made**; see Results and Anomalies item 1.
+Completed means the mapping ran end to end from the declared inputs in an empty output directory and passed its integrity checks. The status records execution of the declared method. The alternate assembly search yielded no locus under the applied parameters, leaving the comparison between haplotypes inconclusive. See Results and Anomalies item 1.
 
 Ran in the canonical Linux environment (conda env `zeaguard`, WSL2, Python 3.12.14, BLAST+ 2.17.0).
 
@@ -130,7 +130,7 @@ Per declared assembly: verify the hash, expand the `.gz`, verify the hash of the
 3. **screen** on coverage *before* reading any genomic sequence — with word size 11 against 972 Mb most clusters are short incidental matches, and loading every sequence carrying one would mean loading most of the genome;
 4. **measure** coverage, identity over the tiling, span, inferred exon and intron structure, junction offsets, splice termini, assembly-gap content of the span, distance to the sequence ends, and colinearity;
 5. **assign** a locus only when exactly one meets both assignment criteria;
-6. **decide distinctness** pairwise, and **report copy number** under a neutral key.
+6. **decide distinctness** pairwise and **report the locus count** for each published CDS under a neutral key.
 
 The expanded FASTA and the BLAST database go to a temporary directory and are deleted when the run ends. They are derived, not results, and together are about 2.5x the assembly in size. Keeping them off the working tree also matters for speed: building the primary database on a 9p-mounted Windows working tree did not finish in 13 minutes, and finished in about 7 seconds on native disk.
 
@@ -162,7 +162,7 @@ Written to `results/bioinformatics/nb01/mappings/dsrnase_locus_mapping` (git-ign
 - Every declared hash agreed with the observed one: both assemblies by `sha256` and by `sha256_decompressed`, and the anchor FASTA by its LF-normalised hash (`declared_hash_agrees` true throughout `manifest.json`).
 - Every declared assembly statistic agreed with the file as read, for both assemblies.
 - `-max_target_seqs` provably did not truncate: `observed_subjects_below_limit` is true for both assemblies (1 and 0 subjects with HSPs, against a limit of 20,000).
-- **Controls for the alternate-haplotype result**, run because "no hits" is the one result that an empty or broken database also produces. All three are recorded in Results; in short: the database is sound, and the absence is real.
+- **Controls for the alternate haplotype search.** The positive control produced the expected self match. The Results section records that control and the sensitivity sweep.
 - **Internal consistency of the tiling.** For each locus the total block-column count exceeds the CDS length by exactly the total query overlap at the junctions: 11 = 11, 25 = 25, 13 = 13 for dsRNase-1, -2 and -3. With the union query coverage at 100 % and no positive offset anywhere, this means each tiling accounts for the whole CDS — counted once except at the tolerated overlaps, where those positions are counted twice — and nothing outside it. So the aggregate identity is computed over alignment columns that all belong to the CDS, with the overlap fully quantified rather than unknown. Asserted as an invariant in the tests as well.
 - **Clean-clone reconstruction, executed against the delivered commit `f00b87d`.** The reconstruction commands reproduce both declared hashes, the mapping refuses with exit 2 while the inputs are absent, 50 tests pass in the clone, and all five output tables come back byte-identical to the run recorded here. Full outcome in the dedicated section below.
 
@@ -205,22 +205,22 @@ All three pairs are `DETERMINED` distinct, by `SAME_SEQUENCE_NON_OVERLAPPING_SPA
 
 The distinctness does not rest on coordinates alone, which is what ADR 0009 rule 7 exists for. The three loci carry **no assembly gap** inside any span, all sit inside a 122.9 Mb assembled chromosome rather than an unplaced scaffold, each tiling is colinear, and each CDS reaches the 50 % reporting threshold at **exactly one** place in the whole 972 Mb assembly — `n_related_loci` is 0 for all three. That last number is the repeat measure for the query: the three paralogues are divergent enough that none of them reaches half-coverage at the other's locus, so there is no repetitive region in which two of them could be confused. The nearest locus to a sequence end is dsRNase-3, 863,268 nt from the end of the chromosome.
 
-### Question 2 — the two TSA records of dsRNase-2: one locus detected, with a stated residual
+### Question 2: one locus detected for the published dsRNase-2 CDS
 
-Part of this question cannot be answered by sequence mapping, and that was stated before the run. `GITV01008430.1` and `GITV01012450.1` reproduce **the same** 1425 nt CDS (ADR 0004), so one query stands for both and no alignment can say which record came from which locus. That part remains `unresolved` by construction.
+The [operational reference](../../../../data/reference/nb01_dsrnase2_operational_reference.json) records CDS of 1425 nt with distinct SHA256 hashes for `GITV01008430.1` and `GITV01012450.1`. The run queried the published CDS, which exactly matches `GITV01008430.1`. The genomic origin of `GITV01012450.1` remains `unresolved`.
 
-What the mapping does answer is the genomic copy number of that CDS:
+The locus counts below apply to the published CDS query under the declared criteria.
 
 | assembly | loci at assignment criteria | related loci | key |
 | --- | --- | --- | --- |
 | `ihDalMaid1.1_primary` | **1** | 0 | `ONE_LOCUS_DETECTED` |
 | `ihDalMaid1.1_alternate` | 0 | 0 | `NO_LOCUS_DETECTED` |
 
-In the chromosome-level assembly the dsRNase-2 CDS is found at exactly one genomic location, with every one of its 1,425 coding positions covered by the union of the tiled alignment blocks and an aggregate identity of 99.931 % over those blocks' 1,450 columns (25 query positions counted twice, at the six overlapping junctions), and with no second place in the genome reaching even half coverage. Two distinct loci would require two genomic copies, and none was detected.
+In the primary assembly, one locus met the assignment criteria for the published dsRNase-2 CDS. The union of the tiled alignment blocks covered all 1,425 coding positions. Aggregate identity was 99.931 % across 1,450 alignment columns (25 query positions counted twice at the six overlapping junctions). No other locus in that assembly reached the 50 % reporting threshold.
 
-### The alternate haplotype gave no cross-check, and the controls say why
+### Alternate assembly search and controls
 
-ADR 0009 rule 10 declared the alternate pseudohaplotype as the one copy-number cross-check available without read depth. **It did not apply.** `blastn` returned **0 HSPs** for all three CDS against `GCA_975739835.1`, so all three are `INDETERMINATE / NO_LOCUS_MEETS_ASSIGNMENT_CRITERIA` there and all three pairs are `INDETERMINATE / UNASSIGNED_LOCUS`.
+Under the parameters applied for ADR 0009 rule 10, `blastn` returned **0 HSPs** for all three published CDS against `GCA_975739835.1`. All three queries are `INDETERMINATE / NO_LOCUS_MEETS_ASSIGNMENT_CRITERIA` in that assembly and all three pairs are `INDETERMINATE / UNASSIGNED_LOCUS`.
 
 Since "no hits" is also what an empty or broken database produces, three controls were run before reading anything into it:
 
@@ -228,7 +228,7 @@ Since "no hits" is also what an empty or broken database produces, three control
 2. **Sensitivity sweep.** The same three CDS against the same database: 0 HSPs at e-value 1e-5, 9 at 1, 55 at 10, 3,781 at 1,000; 0 with `dc-megablast` at e-value 10. At e-value 1,000 the best hits are 23 to 53 nt fragments with bit scores 39 to 43 — noise-length matches, nothing resembling an exon of a 1.2 to 1.4 kb CDS.
 3. **Calibration on the primary.** The same sweep against `GCA_975739785.1` gives 57 HSPs at 1e-5 (the 18 tiled exons plus their lower-scoring alternatives) and 187 at e-value 10 spread over all ten chromosomes, confirming that the declared 1e-5 cutoff is what isolates the real loci from relaxed-threshold noise.
 
-So the three loci are genuinely **not represented** in the alternate pseudohaplotype. That is a property of that assembly — an alternate pseudohaplotype carries only the regions where the assembler resolved two haplotypes, here 488 Mb against the primary's 972 Mb — and not a search failure. It is reported as the absence of a cross-check, not as evidence of absence in the genome.
+The search detected no locus in the alternate assembly under the applied parameters. The comparison between haplotypes remains inconclusive.
 
 ### Inferred exon/intron structure, and the candidate `GT..AG` motifs found at its junctions
 
@@ -250,11 +250,9 @@ Conditional on the declared method and ADR 0009:
 
 The distinctness rests on the three intervals being disjoint and megabases apart, which is a statement about genomic position and is unaffected by how the within-locus coverage and identity are aggregated. The inferred exon boundaries inside each interval are a separate, weaker claim and are not what the answer to question 1 depends on.
 
-**Question 2 is answered in one direction only.** The dsRNase-2 CDS has one detected genomic locus, so the two TSA records attributed to it are consistent with one locus represented twice in the transcriptome assembly, and are not consistent with two distinct paralogous loci. Combined with ADR 0004's finding that both records carry a byte-identical CDS, the reading that the two records are redundant representations of one gene is the one the evidence supports; two paralogues would have to be identical over all 1,425 coding nucleotides *and* collapsed into one place by the genome assembly.
+**Question 2 remains open.** The single locus detected in the primary assembly is a result for the published dsRNase-2 CDS. The genomic origin of `GITV01012450.1` and whether the two TSA records share a locus remain unresolved.
 
-That residual is real and is not dismissed. A recent duplication can be collapsed by an assembler, and this run has no read-depth evidence over the locus. The cross-check that was meant to reduce that possibility, the alternate haplotype, returned nothing usable. So the honest statement is: **one locus detected; a collapsed duplication is not excluded.** Nor can the mapping say which record came from which locus — with one CDS behind both, that stays `unresolved` whatever the genome shows.
-
-The allele hypothesis named in the original question can be addressed more sharply, and it is addressed by ADR 0004 rather than by this run: two alleles of one locus differing in CDS would give two different CDS, and the two records carry the same one. Two identical alleles are indistinguishable from one sequence by any sequence method.
+A collapsed duplication remains possible. The run lacks read depth evidence over the locus, and the search of the alternate assembly yielded no locus under the applied parameters.
 
 The inferred gene structures — 6, 7 and 5 exons, with introns from 293 nt to 5,125 nt — are consistent with insect gene structure and with three paralogues that have diverged in intron content while keeping coding-region integrity and the PF01223 classification the family audit established. They remain `inferred/interpreted`: they come from the gaps of an HSP tiling, the offset search found a candidate `GT..AG` motif at fewer than half of their inferred junctions inside the declared window, and neither assembly carries an annotation to check them against.
 
@@ -296,9 +294,9 @@ The clean clone also settles Anomalies item 4: in an ordinary checkout the manif
 ## What this run does NOT establish
 
 - It does not establish that any locus call is correct, that either assembly is correct, or that the inferred exon/intron structures are the true gene structures. The offset search found a candidate `GT..AG` motif at fewer than half of the inferred junctions within the declared window, a candidate motif is not a confirmed splice boundary, and no annotation exists to check any of them against.
-- It does not establish which of `GITV01008430.1` and `GITV01012450.1` came from which genomic locus. One identical CDS stands for both records, so this is `unresolved` by construction, not for want of data.
-- It does not exclude a duplication collapsed by the genome assembler. That would require read-depth evidence over the locus, which this run does not have, and the alternate-haplotype cross-check returned nothing usable.
-- It does not establish that the three loci are absent from the alternate pseudohaplotype **of the genome**; it establishes that they are absent from that assembly, which represents about half of it.
+- The genomic origin of `GITV01012450.1` and its relationship to the locus detected for the published CDS remain `unresolved`.
+- A duplication collapsed by the assembler remains possible. The run lacks read depth evidence over the locus.
+- The comparison between haplotypes remains inconclusive because the search detected no locus in `GCA_975739835.1` under the applied parameters.
 - It does not establish gene identity, orthology, paralogy, gene family size, or copy number in the species. Both declared assemblies come from one individual (`SAMEA117578701`); population-level copy-number variation is outside the run.
 - It does not establish that each locus is a complete gene: the query is the CDS, so UTRs, promoters and any additional exons outside the coding region were never searched for.
 - It does not establish anything about enzymatic activity, substrate specificity, expression, regulation, or any phenotype.
@@ -307,7 +305,7 @@ The clean clone also settles Anomalies item 4: in an ordinary checkout the manif
 
 ## Anomalies / deviations
 
-1. **The declared alternate-haplotype cross-check did not apply.** ADR 0009 rule 10 declared it as the one available copy-number cross-check; `blastn` returned 0 HSPs for all three CDS against it. This is recorded as a deviation rather than quietly dropped, because the ADR committed to a check that the data could not supply. Three controls (Results) establish that the database and the search are sound and that the absence is a property of the assembly. The rule itself is not amended: it is correct as written, and it simply did not fire here.
+1. **The alternate assembly search yielded no locus for comparison.** `blastn` returned 0 HSPs for all three published CDS against `GCA_975739835.1` under the parameters applied. The Results section records the controls and the inconclusive comparison between haplotypes.
 
 2. **The splice-site check was wrong in the first implementation and was corrected before the recorded run.** It read the two nucleotides straight off the HSP boundary and reported a canonical `GT..AG` at 1, 0 and 0 inferred junctions for the three loci. That was an artefact: BLAST extends an HSP a few nucleotides past the exon into the intron, which is visible in the negative junction offsets, so the termini at the alignment edge are the wrong two nucleotides. Reporting them would have been evidence against a structure the data do not argue against. The check now reports the termini at the boundary *and* the smallest shift within the declared +/-10 nt window at which the intron reads `GT..AG`, which raised the inferred junctions carrying a candidate `GT..AG` motif to 2, 3 and 2. The window was fixed in ADR 0009 before any alignment and was **not** widened after seeing which shifts were found.
 
@@ -327,7 +325,7 @@ No deviation from the declared canonical environment: conda env `zeaguard`, BLAS
 
 ## Related decisions
 
-[ADR 0009](../decisions/0009-nb01-dsrnase-locus-assignment-criteria.md) (`Proposed`), written before any alignment was run, carries the criteria this run applies. It depends on, and does not modify, [ADR 0004](../decisions/0004-nb01-dsrnase2-identity-criteria.md) (the identical CDS behind the two dsRNase-2 records, and the discovery parameters and 50 % coverage threshold reused here) and [ADR 0003](../decisions/0003-nb01-target-identity-resolution-policy.md).
+[ADR 0009](../decisions/0009-nb01-dsrnase-locus-assignment-criteria.md) (`Proposed`) records the mapping criteria, which were set before alignment. The run reused the discovery parameters and 50 % reporting threshold from [ADR 0004](../decisions/0004-nb01-dsrnase2-identity-criteria.md). [ADR 0003](../decisions/0003-nb01-target-identity-resolution-policy.md) records the earlier target identity policy.
 
 Preceding run records: [2026-10-03 dsRNase-2 identity](2026-10-03_nb01-dsrnase2-identity.md), and the dsRNase protein audit of 2026-11-13 (`2026-11-13_nb01-dsrnase-protein-audit.md`, on the unpublished branch `feat/nb01-dsrnase-protein-audit`, hence unlinked), whose open questions this run addresses.
 
@@ -341,5 +339,5 @@ Not pushed and no pull request opened: publication and merge are the repository 
 
 1. `directly demonstrated`: the existence, versioned accessions and declared properties of the three *D. maidis* assemblies; the absence of any RefSeq assembly or gene annotation for the species; the hash and statistic agreement of every declared input; the agreement between the derived and published ORF coordinates; the BLAST counts, including 0 HSPs against the alternate haplotype; the positive control's self-match at 100 % over 3,000 nt and the sensitivity sweep; the reconciliation of the 141st record as the mitochondrion; the test results; the clean-clone reconstruction.
 2. `derived/computed`: the three CDS queries; every locus coordinate, span, coverage, identity, colinearity, assembly-gap content and distance to sequence end; the pairwise distinctness verdicts and the gaps between spans; the per-assembly locus counts.
-3. `inferred/interpreted`: the exon/intron structures and intron sizes, read from the gaps of an HSP tiling rather than from an annotation or a splice-aware alignment; the inferred junctions at which the offset search found a candidate `GT..AG` motif, which depend on the declared ambiguity window and are not confirmed splice boundaries; that one detected locus per CDS means one genomic copy, which is conditional on the assembly not having collapsed a duplication; that the two dsRNase-2 TSA records are redundant representations of one gene; that the three loci being absent from the alternate pseudohaplotype reflects that assembly's partial coverage of the genome.
-4. `unresolved`: which TSA record came from which genomic locus; whether a duplication was collapsed by the genome assembler; copy number in the species and any population-level variation; the true splice boundaries of the eight junctions without a canonical pair inside the declared window; the complete gene structure outside the coding region; enzymatic activity, specificity, expression and any phenotype for all three proteins.
+3. `inferred/interpreted`: the exon/intron structures and intron sizes, read from the gaps of an HSP tiling rather than from an annotation or a splice-aware alignment; the inferred junctions at which the offset search found a candidate `GT..AG` motif, which depend on the declared ambiguity window and are not confirmed splice boundaries; that one detected locus per CDS means one genomic copy, which is conditional on the assembly not having collapsed a duplication.
+4. `unresolved`: the genomic origin of `GITV01012450.1` and whether the two dsRNase-2 TSA records share a locus; concordance between haplotypes; whether a duplication was collapsed by the genome assembler; copy number in the species and any population-level variation; the true splice boundaries of the eight junctions without a canonical pair inside the declared window; the complete gene structure outside the coding region; enzymatic activity, specificity, expression and any phenotype for all three proteins.
