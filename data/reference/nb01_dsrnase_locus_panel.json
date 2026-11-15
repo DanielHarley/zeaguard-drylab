@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "kind": "nb01_dsrnase_locus_panel",
+  "description": "Declared inputs for the NB01 dsRNase locus mapping: the three published Dmai-dsRNase coding sequences against the public genome assemblies of Dalbulus maidis. Every value below is a DECLARATION; zeaguard.nb01_locus verifies each one before use and refuses to run on any disagreement. The hash of each assembly file is checked, and so are the assembly statistics: a hash proves the bytes did not change, not that the file is the assembly this panel describes. The three queries are derived from the repository anchors and checked against the ORF coordinates printed in Table 1 of the primary article. Criteria, thresholds and what the mapping does not establish live in ADR 0009, not here.",
+  "coordinates": {
+    "base": 1,
+    "interval": "inclusive",
+    "query": "position along the CDS in coding orientation",
+    "subject": "position along the genomic sequence as the assembly distributes it; the gene's orientation on that sequence is reported in the strand column, never folded into the coordinates"
+  },
+  "primary_article": {
+    "citation": "Dalaison-Fuentes LI et al., Pestic Biochem Physiol 196:105618 (2023)",
+    "doi": "10.1016/j.pestbp.2023.105618",
+    "pubmed": 37945254,
+    "note": "Table 1 of this article prints the ORF coordinates declared under `queries` below. The mapping does not read the article or its supplement: the CDS are derived from the repository anchor FASTA and only compared with the printed coordinates."
+  },
+  "assembly_survey": {
+    "performed_utc": "2026-11-15",
+    "question": "Does a public, versioned genome assembly of Dalbulus maidis exist? This was treated as the first question to answer, not as an assumption; had the answer been no, that finding would have been the result of the run.",
+    "taxon": {
+      "name": "Dalbulus maidis",
+      "taxid": 74065,
+      "resolved_by": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=taxonomy&term=Dalbulus+maidis&retmode=json"
+    },
+    "queries_executed": [
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term=Dalbulus+maidis%5BOrganism%5D&retmode=json",
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term=Dalbulus%5BOrganism%5D&retmode=json",
+      "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCA_975739785.1/dataset_report",
+      "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCA_975739835.1/dataset_report",
+      "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCA_054756405.1/dataset_report"
+    ],
+    "answer": "Yes. Three assemblies are registered for taxid 74065; two of them are declared as mapping targets below and the third is recorded under `surveyed_not_used` with the reason it was not used. No RefSeq (GCF_) assembly and no gene annotation exists for any of the three, so no locus call in this mapping can be checked against an independent gene model.",
+    "accessions_returned": ["GCA_975739785.1", "GCA_975739835.1", "GCA_054756405.1"]
+  },
+  "repository_inputs": {
+    "target_anchor_sequences": {
+      "role": "QUERY_SOURCE",
+      "path": "data/reference/target_anchor_sequences.fasta",
+      "verify": "sha256_lf_normalized",
+      "sha256_lf_normalized": "10cd666816d76fd4a87ae769849008551a40ddfde4081722d33f73e54cbea89b",
+      "sha256_working_copy_crlf": "da38253dfdf01e521d20d367129d1e08dcc7b68f5376e0c026b2b93fd83806f5",
+      "note": "Tracked by git and not pinned to eol=lf in .gitattributes, so the raw hash of the working copy depends on the checkout (CRLF on Windows, LF elsewhere). Only the LF-normalised hash is authoritative; sha256_working_copy_crlf is recorded for reference and is not checked.",
+      "reconstruction": "Present in any checkout of this repository."
+    }
+  },
+  "assemblies": [
+    {
+      "id": "ihDalMaid1.1_primary",
+      "role": "PRIMARY_MAPPING_TARGET",
+      "organism": "Dalbulus maidis",
+      "taxid": 74065,
+      "accession_version": "GCA_975739785.1",
+      "assembly_name": "ihDalMaid1.1",
+      "assembly_level": "Chromosome",
+      "assembly_type": "haploid",
+      "refseq_category": "reference genome",
+      "submitter": "WELLCOME SANGER INSTITUTE",
+      "bioproject": "PRJEB97791",
+      "biosample": "SAMEA117578701",
+      "release_date": "2025-10-26",
+      "genbank_release_date": "2025-11-25",
+      "sequencing_coverage": "75x",
+      "path": "data/external/nb01_locus_mapping/GCA_975739785.1_ihDalMaid1.1_genomic.fna.gz",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/975/739/785/GCA_975739785.1_ihDalMaid1.1/GCA_975739785.1_ihDalMaid1.1_genomic.fna.gz",
+      "verify": "sha256",
+      "sha256": "aef4d8ec0891bece052bc58afa5b0da3e2a2bf047f9283032bbf253459509184",
+      "sha256_decompressed": "54411d6ee12a6c3f290428c08d3a046fb4e27bec83b9a75e9f42b866fc5d8a04",
+      "bytes": 281678035,
+      "bytes_decompressed": 984393372,
+      "assembly_stats": {
+        "number_of_sequences": 141,
+        "total_sequence_length": 972225736,
+        "total_ungapped_length": 972186836,
+        "scaffold_n50": 93705284,
+        "number_of_assembled_molecules": 10,
+        "number_of_organelle_sequences": 1
+      },
+      "assembly_stats_note": "These are the statistics of the declared FILE, recomputed from it at every run. They are deliberately not copied from the NCBI report, which describes the nuclear assembly only; see ncbi_reported_stats below for the reconciliation.",
+      "ncbi_reported_stats": {
+        "source": "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCA_975739785.1/dataset_report",
+        "retrieved_utc": "2026-11-15",
+        "number_of_scaffolds": 140,
+        "number_of_contigs": 499,
+        "total_sequence_length": 972206121,
+        "total_ungapped_length": 972167221,
+        "scaffold_n50": 93705284,
+        "contig_n50": 5293657,
+        "total_number_of_chromosomes": 10,
+        "gc_percent": 35,
+        "reconciliation": "The file carries 141 records and 972225736 nt; the NCBI report counts 140 scaffolds and 972206121 nt. The difference is exactly one record, OZ319714.1 ('organelle: mitochondrion', 19615 nt): 972225736 - 972206121 = 19615. NCBI's scaffold count and lengths cover the nuclear assembly only. The organelle sequence is left in the search space rather than removed, because removing a sequence from a declared input would make the hash unverifiable; it is classified under its own role so a count including it always reconciles. The 10 chromosomes are 1-9 and X. NCBI's contig_n50 and number_of_contigs describe the pre-scaffolding components, which a FASTA of scaffolds does not contain, so neither is declared or checked."
+      },
+      "reconstruction": "curl -sL --retry 3 -o data/external/nb01_locus_mapping/GCA_975739785.1_ihDalMaid1.1_genomic.fna.gz https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/975/739/785/GCA_975739785.1_ihDalMaid1.1/GCA_975739785.1_ihDalMaid1.1_genomic.fna.gz"
+    },
+    {
+      "id": "ihDalMaid1.1_alternate",
+      "role": "ALTERNATE_HAPLOTYPE_OF_THE_SAME_BIOSAMPLE",
+      "organism": "Dalbulus maidis",
+      "taxid": 74065,
+      "accession_version": "GCA_975739835.1",
+      "assembly_name": "ihDalMaid1.1 alternate haplotype",
+      "assembly_level": "Scaffold",
+      "assembly_type": "alternate-pseudohaplotype",
+      "submitter": "WELLCOME SANGER INSTITUTE",
+      "bioproject": "PRJEB97790",
+      "biosample": "SAMEA117578701",
+      "release_date": "2025-10-26",
+      "genbank_release_date": "2025-11-12",
+      "sequencing_coverage": "75x",
+      "path": "data/external/nb01_locus_mapping/GCA_975739835.1_ihDalMaid1.1_alternate_haplotype_genomic.fna.gz",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/975/739/835/GCA_975739835.1_ihDalMaid1.1_alternate_haplotype/GCA_975739835.1_ihDalMaid1.1_alternate_haplotype_genomic.fna.gz",
+      "verify": "sha256",
+      "sha256": "90e6c6ab4abcd7fb4fd8c53610e65c7dcc86a1cab406d9573c9b25743f8e1757",
+      "sha256_decompressed": "131755bbd68759ba9164eebc9e41cb944a9a2ce8593c9cfbd1b1b150f4f9036e",
+      "bytes": 135019545,
+      "bytes_decompressed": 495423734,
+      "assembly_stats": {
+        "number_of_sequences": 7864,
+        "total_sequence_length": 488450451,
+        "total_ungapped_length": 488344051,
+        "scaffold_n50": 492899,
+        "number_of_assembled_molecules": 0,
+        "number_of_organelle_sequences": 0
+      },
+      "ncbi_reported_stats": {
+        "source": "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCA_975739835.1/dataset_report",
+        "retrieved_utc": "2026-11-15",
+        "number_of_scaffolds": 7864,
+        "number_of_contigs": 8928,
+        "total_sequence_length": 488450451,
+        "total_ungapped_length": 488344051,
+        "scaffold_n50": 492899,
+        "contig_n50": 328147,
+        "gc_percent": 34.5,
+        "reconciliation": "Every declared statistic agrees with the NCBI report; this assembly carries no organelle sequence and no assembled molecule."
+      },
+      "why_declared": "An alternate pseudohaplotype of the SAME biosample as the primary target. A heterozygous duplication collapsed in one pseudohaplotype may be resolved in the other, so mapping both is the one copy-number cross-check available without read-depth evidence. Both derive from one individual, so agreement between them strengthens an observation without demonstrating it; see ADR 0009, rule 10.",
+      "reconstruction": "curl -sL --retry 3 -o data/external/nb01_locus_mapping/GCA_975739835.1_ihDalMaid1.1_alternate_haplotype_genomic.fna.gz https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/975/739/835/GCA_975739835.1_ihDalMaid1.1_alternate_haplotype/GCA_975739835.1_ihDalMaid1.1_alternate_haplotype_genomic.fna.gz"
+    }
+  ],
+  "surveyed_not_used": [
+    {
+      "accession_version": "GCA_054756405.1",
+      "assembly_name": "CIAP v1",
+      "organism": "Dalbulus maidis",
+      "taxid": 74065,
+      "assembly_level": "Contig",
+      "submitter": "Instituto de Patologia Vegetal CIAP-INTA",
+      "bioproject": "PRJNA1120083",
+      "biosample": "SAMN41674197",
+      "release_date": "2026-01-26",
+      "sequencing_coverage": "20x",
+      "ncbi_reported_stats": {
+        "number_of_contigs": 22333,
+        "contig_n50": 50514,
+        "total_sequence_length": 585210080
+      },
+      "excluded_because": "Contig level, scaffold N50 50514 nt, 20x coverage, and from a different individual than the declared targets. At that contiguity a dsRNase locus with introns can straddle a contig boundary, so observing one locus there could not be distinguished from contig fragmentation, and a collapsed duplication is more likely than in the 75x chromosome-level assembly. It could therefore neither confirm nor refute a copy-number observation, which is the only question it would have been added to answer. Recorded here so the survey is complete and the exclusion is reviewable, not silent."
+    }
+  ],
+  "queries": [
+    {
+      "target_id": "dsRNase-1",
+      "published_name": "Dmai-dsRNase-1",
+      "transcript_id": "TRINITY_DN13786_c0_g1_i8",
+      "published_orf_start": 1640,
+      "published_orf_end": 318,
+      "cds_length": 1323,
+      "protein_length": 440,
+      "note": "ORF coordinates as printed in Table 1 of the primary article, in the article's own order (start first, stop second); start > end because the ORF is on the minus strand of the published transcript. The mapping derives the ORF from the anchor FASTA independently and aborts unless the derivation reproduces these three values exactly."
+    },
+    {
+      "target_id": "dsRNase-2",
+      "published_name": "Dmai-dsRNase-2",
+      "transcript_id": "TRINITY_DN22752_c0_g2_i1",
+      "published_orf_start": 1461,
+      "published_orf_end": 37,
+      "cds_length": 1425,
+      "protein_length": 474,
+      "note": "This is the CDS that ADR 0004 found reproduced identically by BOTH TSA records attributed to dsRNase-2, GITV01008430.1 and GITV01012450.1. One query therefore stands for both records, and no mapping of it can say which record came from which locus; see ADR 0009, rule 9. The tandem-repeat structure the NB01 investigation observed in the 3' flank of GITV01012450.1 lies outside this CDS and so outside the query."
+    },
+    {
+      "target_id": "dsRNase-3",
+      "published_name": "Dmai-dsRNase-3",
+      "transcript_id": "TRINITY_DN5008_c0_g1_i24",
+      "published_orf_start": 1539,
+      "published_orf_end": 304,
+      "cds_length": 1236,
+      "protein_length": 411,
+      "note": "Whether this CDS occupies a locus of its own, distinct from those of dsRNase-1 and dsRNase-2, is question 1 of the mapping."
+    }
+  ],
+  "criteria_reference": {
+    "adr": "src/workstreams/bioinformatics/decisions/0009-nb01-dsrnase-locus-assignment-criteria.md",
+    "note": "Thresholds and parameters are constants of zeaguard.nb01_locus and are recorded in the manifest of every run. They are pre-registered in ADR 0009 and are not declared here, so that there is one place to change them and no chance of a panel and a module disagreeing silently."
+  }
+}
