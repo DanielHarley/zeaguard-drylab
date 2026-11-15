@@ -163,7 +163,7 @@ Written to `results/bioinformatics/nb01/mappings/dsrnase_locus_mapping` (git-ign
 - Every declared assembly statistic agreed with the file as read, for both assemblies.
 - `-max_target_seqs` provably did not truncate: `observed_subjects_below_limit` is true for both assemblies (1 and 0 subjects with HSPs, against a limit of 20,000).
 - **Controls for the alternate-haplotype result**, run because "no hits" is the one result that an empty or broken database also produces. All three are recorded in Results; in short: the database is sound, and the absence is real.
-- **Internal consistency of the tiling.** For each locus the tiled alignment length exceeds the CDS length by exactly the total junction overlap: 11 = 11, 25 = 25, 13 = 13 for dsRNase-1, -2 and -3. With coverage at 100 % and no positive offset anywhere, this means each tiling accounts for the whole CDS, counted once except at the tolerated overlaps, and nothing outside it — so the identity computed over the tiled length has the right denominator. Asserted as an invariant in the tests as well.
+- **Internal consistency of the tiling.** For each locus the total block-column count exceeds the CDS length by exactly the total query overlap at the junctions: 11 = 11, 25 = 25, 13 = 13 for dsRNase-1, -2 and -3. With the union query coverage at 100 % and no positive offset anywhere, this means each tiling accounts for the whole CDS — counted once except at the tolerated overlaps, where those positions are counted twice — and nothing outside it. So the aggregate identity is computed over alignment columns that all belong to the CDS, with the overlap fully quantified rather than unknown. Asserted as an invariant in the tests as well.
 - **Clean-clone reconstruction, executed against the delivered commit `f00b87d`.** The reconstruction commands reproduce both declared hashes, the mapping refuses with exit 2 while the inputs are absent, 50 tests pass in the clone, and all five output tables come back byte-identical to the run recorded here. Full outcome in the dedicated section below.
 
 ## Results
@@ -172,11 +172,28 @@ Written to `results/bioinformatics/nb01/mappings/dsrnase_locus_mapping` (git-ign
 
 In the primary assembly all three CDS are assigned, each to exactly one locus, and all three loci lie on **chromosome 1** (`OZ319704.1`, 122,877,750 nt), on the plus strand, megabases apart:
 
-| CDS | span on `OZ319704.1` | span nt | coverage | identity | aligned nt | mismatch | gaps | exons | introns | colinear | assembly gaps in span | related loci |
+| CDS | span on `OZ319704.1` | span nt | union query coverage | aggregate block identity | block columns | mismatch | gaps | inferred exon blocks | inferred introns | colinear | assembly gaps in span | related loci |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| dsRNase-1 | 60,966,751-60,973,368 | 6,618 | 100.0 % | 99.850 % | 1,334 | 2 | 0 | 6 | 5 | yes | 0 | 0 |
-| dsRNase-2 | 69,024,822-69,037,412 | 12,591 | 100.0 % | 99.931 % | 1,450 | 1 | 0 | 7 | 6 | yes | 0 | 0 |
-| dsRNase-3 | 122,005,058-122,014,482 | 9,425 | 100.0 % | 99.600 % | 1,249 | 5 | 0 | 5 | 4 | yes | 0 | 0 |
+| dsRNase-1 | 60,966,751-60,973,368 | 6,618 | 100.0 % (1,323 / 1,323 nt) | 99.850 % | 1,334 | 2 | 0 | 6 | 5 | yes | 0 | 0 |
+| dsRNase-2 | 69,024,822-69,037,412 | 12,591 | 100.0 % (1,425 / 1,425 nt) | 99.931 % | 1,450 | 1 | 0 | 7 | 6 | yes | 0 | 0 |
+| dsRNase-3 | 122,005,058-122,014,482 | 9,425 | 100.0 % (1,236 / 1,236 nt) | 99.600 % | 1,249 | 5 | 0 | 5 | 4 | yes | 0 | 0 |
+
+**How to read those two columns, because neither is a single end-to-end alignment.** No locus here was aligned to its CDS in one piece; each is a set of local BLAST alignment blocks (HSPs) tiled together by the method of ADR 0009 rule 4.
+
+- **Union query coverage** is the union of CDS query positions covered by at least one of those blocks, divided by the CDS length. 100.0 % means every one of the 1,323 / 1,425 / 1,236 coding positions falls inside some block — not that any one alignment spans the CDS.
+- **Aggregate block identity** is computed over the columns of the tiled blocks taken together: matched columns divided by total block columns. Because consecutive blocks **overlap on the query** at the tolerated junctions, some query positions sit in two blocks and therefore enter that calculation **more than once**. This is why the block-column count exceeds the CDS length in every row (1,334 > 1,323; 1,450 > 1,425; 1,249 > 1,236). The overlap is confined to the junctions and is small, but the figure is an aggregate over alignment columns, not a per-position identity over the CDS.
+
+Confirmed per CDS from the recorded HSP table (`raw/blastn_ihDalMaid1.1_primary.outfmt6.tsv`) and the `exon_blocks_query` column of `loci.tsv`; the query blocks do overlap in all three, though not at every junction:
+
+| CDS | query blocks | junctions with query overlap | overlap sizes (nt) | query positions counted twice |
+| --- | --- | --- | --- | --- |
+| dsRNase-1 | `1-121;122-252;251-487;482-672;671-901;901-1323` | 4 of 5 | 2, 6, 2, 1 | 11 |
+| dsRNase-2 | `1-66;59-179;176-459;458-668;667-900;896-1184;1181-1425` | 6 of 6 | 8, 4, 2, 2, 5, 4 | 25 |
+| dsRNase-3 | `1-102;99-458;457-643;639-872;871-1236` | 4 of 4 | 4, 2, 5, 2 | 13 |
+
+dsRNase-1 is the one exception worth naming: its first junction (blocks `1-121` and `122-252`) is contiguous with no overlap, so 4 of its 5 junctions overlap, not all 5. For dsRNase-2 and dsRNase-3 every junction overlaps. In all three the doubly counted total equals the excess of block columns over CDS length exactly (11, 25, 13), so the overlap is fully accounted for and nothing outside the CDS enters the identity.
+
+**The exon blocks and introns are inferred, not observed.** The two columns above count tiled alignment blocks and the gaps between them; they are not an annotation and no splice-aware alignment was used. The boundaries carry real uncertainty: the junction overlaps above *are* that uncertainty, and the first implementation of the splice check read the wrong two nucleotides straight off a block edge for exactly this reason (Anomalies item 2). Across these 15 inferred junctions the offset search found a **candidate** `GT..AG` motif at 7; a motif found by shifting a boundary inside its ambiguity window locates a position that could be a donor-acceptor pair, and does not confirm that any intron is spliced there.
 
 All three pairs are `DETERMINED` distinct, by `SAME_SEQUENCE_NON_OVERLAPPING_SPANS`:
 
@@ -199,7 +216,7 @@ What the mapping does answer is the genomic copy number of that CDS:
 | `ihDalMaid1.1_primary` | **1** | 0 | `ONE_LOCUS_DETECTED` |
 | `ihDalMaid1.1_alternate` | 0 | 0 | `NO_LOCUS_DETECTED` |
 
-In the chromosome-level assembly the dsRNase-2 CDS is found at exactly one genomic location, at 100 % coverage and 99.931 % identity, with no second place in the genome reaching even half coverage. Two distinct loci would require two genomic copies, and none was detected.
+In the chromosome-level assembly the dsRNase-2 CDS is found at exactly one genomic location, with every one of its 1,425 coding positions covered by the union of the tiled alignment blocks and an aggregate identity of 99.931 % over those blocks' 1,450 columns (25 query positions counted twice, at the six overlapping junctions), and with no second place in the genome reaching even half coverage. Two distinct loci would require two genomic copies, and none was detected.
 
 ### The alternate haplotype gave no cross-check, and the controls say why
 
@@ -213,23 +230,25 @@ Since "no hits" is also what an empty or broken database produces, three control
 
 So the three loci are genuinely **not represented** in the alternate pseudohaplotype. That is a property of that assembly — an alternate pseudohaplotype carries only the regions where the assembler resolved two haplotypes, here 488 Mb against the primary's 972 Mb — and not a search failure. It is reported as the absence of a cross-check, not as evidence of absence in the genome.
 
-### Inferred exon/intron structure, and how far the splice sites corroborate it
+### Inferred exon/intron structure, and the candidate `GT..AG` motifs found at its junctions
 
-| CDS | exons | inferred intron sizes (5'->3', nt) | junction offsets (nt) | canonical `GT..AG` junctions within the window |
+| CDS | inferred exon blocks | inferred intron sizes (5'->3', nt) | junction offsets (nt) | candidate `GT..AG` motifs found in the window |
 | --- | --- | --- | --- | --- |
 | dsRNase-1 | 6 | 293; 1,139; 1,230; 1,606; 1,016 | 0; -2; -6; -2; -1 | 2 of 5 (shifts 0, +6) |
 | dsRNase-2 | 7 | 2,294; 2,525; 1,575; 1,189; 1,494; 2,064 | -8; -4; -2; -2; -5; -4 | 3 of 6 (shifts +9, +2, +2) |
 | dsRNase-3 | 5 | 403; 1,240; 5,125; 1,408 | -4; -2; -5; -2 | 2 of 4 (shifts +2, +7) |
 
-A negative junction offset is alignment ambiguity, not missing CDS: consecutive exon blocks overlap by a few query nucleotides, which is why coverage is 100 % everywhere. No junction has a positive offset, so no part of any CDS is left unaccounted for by the inferred structure.
+A negative junction offset is alignment ambiguity, not missing CDS: consecutive blocks overlap by a few query nucleotides there, so those positions are covered twice rather than not at all. In each of the three queries the union of the blocks covers every position of the CDS, which is the observation behind the 100 % union query coverage. The overlaps explain something separate: the repeated counting in the aggregate block identity, where those doubly covered positions enter the calculation twice.
 
-Seven of the fifteen inferred introns have a canonical `GT..AG` pair within the +/-10 nt junction ambiguity window; eight do not. Two of the shifts that were found, +9 and +7, sit near the edge of that window, which suggests a wider window would corroborate more junctions. **The window was not widened.** It is tied to the tiling tolerance, it was fixed in ADR 0009 before any alignment was run, and changing it after seeing the results is exactly what that rule forbids. A wider, independently justified window is recorded as a revision condition instead.
+Across the fifteen inferred junctions the offset search found a candidate `GT..AG` motif at seven, inside the +/-10 nt ambiguity window, and none at the other eight. Seven candidate motifs are not seven confirmed intron boundaries: the search reports that some shift within the window puts a `GT..AG` at the junction, which is consistent with a canonical intron there and is not evidence that the intron is spliced at that position. Two of the shifts found, +9 and +7, sit near the edge of the window, which suggests a wider window would turn up further candidates. **The window was not widened.** It is tied to the tiling tolerance, it was fixed in ADR 0009 before any alignment was run, and changing it after seeing the results is exactly what that rule forbids. A wider, independently justified window is recorded as a revision condition instead.
 
 ## Interpretation
 
 Conditional on the declared method and ADR 0009:
 
-**Question 1 is answered.** Dmai-dsRNase-3 occupies its own locus, distinct from those of dsRNase-1 and dsRNase-2. The three published CDS correspond to three separate genomic locations on chromosome 1 of `GCA_975739785.1`, separated by 8.1, 53.0 and 61.0 Mb, each accounting for 100 % of its CDS at 99.6 % identity or better, each in gap-free sequence inside an assembled chromosome, and each the only place in the assembly where its CDS reaches half coverage. The three are a gene family dispersed along one chromosome, not alleles or assembly duplicates of one another. This is the locus attribution the family audit declared outside its own scope.
+**Question 1 is answered.** Dmai-dsRNase-3 occupies its own locus, distinct from those of dsRNase-1 and dsRNase-2. The three published CDS correspond to three separate genomic locations on chromosome 1 of `GCA_975739785.1` — three colinear, mutually disjoint intervals separated by 8.1, 53.0 and 61.0 Mb. For each, the union of its tiled alignment blocks covers every coding position of its CDS, the aggregate identity over those blocks' columns is 99.6 % or better, the span is gap-free sequence inside an assembled chromosome, and it is the only place in the assembly where that CDS reaches half coverage. The three are a gene family dispersed along one chromosome, not alleles or assembly duplicates of one another. This is the locus attribution the family audit declared outside its own scope.
+
+The distinctness rests on the three intervals being disjoint and megabases apart, which is a statement about genomic position and is unaffected by how the within-locus coverage and identity are aggregated. The inferred exon boundaries inside each interval are a separate, weaker claim and are not what the answer to question 1 depends on.
 
 **Question 2 is answered in one direction only.** The dsRNase-2 CDS has one detected genomic locus, so the two TSA records attributed to it are consistent with one locus represented twice in the transcriptome assembly, and are not consistent with two distinct paralogous loci. Combined with ADR 0004's finding that both records carry a byte-identical CDS, the reading that the two records are redundant representations of one gene is the one the evidence supports; two paralogues would have to be identical over all 1,425 coding nucleotides *and* collapsed into one place by the genome assembly.
 
@@ -237,7 +256,7 @@ That residual is real and is not dismissed. A recent duplication can be collapse
 
 The allele hypothesis named in the original question can be addressed more sharply, and it is addressed by ADR 0004 rather than by this run: two alleles of one locus differing in CDS would give two different CDS, and the two records carry the same one. Two identical alleles are indistinguishable from one sequence by any sequence method.
 
-The inferred gene structures — 6, 7 and 5 exons, with introns from 293 nt to 5,125 nt — are consistent with insect gene structure and with three paralogues that have diverged in intron content while keeping coding-region integrity and the PF01223 classification the family audit established. They remain `inferred/interpreted`: they come from the gaps of an HSP tiling, less than half their junctions are corroborated by a canonical splice pair inside the declared window, and neither assembly carries an annotation to check them against.
+The inferred gene structures — 6, 7 and 5 exons, with introns from 293 nt to 5,125 nt — are consistent with insect gene structure and with three paralogues that have diverged in intron content while keeping coding-region integrity and the PF01223 classification the family audit established. They remain `inferred/interpreted`: they come from the gaps of an HSP tiling, the offset search found a candidate `GT..AG` motif at fewer than half of their inferred junctions inside the declared window, and neither assembly carries an annotation to check them against.
 
 Nothing here bears on enzymatic activity, substrate specificity, expression, or any phenotype, and no such claim is made.
 
@@ -276,7 +295,7 @@ The clean clone also settles Anomalies item 4: in an ordinary checkout the manif
 
 ## What this run does NOT establish
 
-- It does not establish that any locus call is correct, that either assembly is correct, or that the inferred exon/intron structures are the true gene structures. Fewer than half the inferred junctions are corroborated by a canonical splice pair within the declared window, and no annotation exists to check them against.
+- It does not establish that any locus call is correct, that either assembly is correct, or that the inferred exon/intron structures are the true gene structures. The offset search found a candidate `GT..AG` motif at fewer than half of the inferred junctions within the declared window, a candidate motif is not a confirmed splice boundary, and no annotation exists to check any of them against.
 - It does not establish which of `GITV01008430.1` and `GITV01012450.1` came from which genomic locus. One identical CDS stands for both records, so this is `unresolved` by construction, not for want of data.
 - It does not exclude a duplication collapsed by the genome assembler. That would require read-depth evidence over the locus, which this run does not have, and the alternate-haplotype cross-check returned nothing usable.
 - It does not establish that the three loci are absent from the alternate pseudohaplotype **of the genome**; it establishes that they are absent from that assembly, which represents about half of it.
@@ -290,7 +309,7 @@ The clean clone also settles Anomalies item 4: in an ordinary checkout the manif
 
 1. **The declared alternate-haplotype cross-check did not apply.** ADR 0009 rule 10 declared it as the one available copy-number cross-check; `blastn` returned 0 HSPs for all three CDS against it. This is recorded as a deviation rather than quietly dropped, because the ADR committed to a check that the data could not supply. Three controls (Results) establish that the database and the search are sound and that the absence is a property of the assembly. The rule itself is not amended: it is correct as written, and it simply did not fire here.
 
-2. **The splice-site check was wrong in the first implementation and was corrected before the recorded run.** It read the two nucleotides straight off the HSP boundary and reported 1, 0 and 0 canonical junctions for the three loci. That was an artefact: BLAST extends an HSP a few nucleotides past the exon into the intron, which is visible in the negative junction offsets, so the termini at the alignment edge are the wrong two nucleotides. Reporting them would have been evidence against a structure the data do not argue against. The check now reports the termini at the boundary *and* the smallest shift within the declared +/-10 nt window at which the intron reads `GT..AG`, which raised the corroborated junctions to 2, 3 and 2. The window was fixed in ADR 0009 before any alignment and was **not** widened after seeing which shifts were found.
+2. **The splice-site check was wrong in the first implementation and was corrected before the recorded run.** It read the two nucleotides straight off the HSP boundary and reported a canonical `GT..AG` at 1, 0 and 0 inferred junctions for the three loci. That was an artefact: BLAST extends an HSP a few nucleotides past the exon into the intron, which is visible in the negative junction offsets, so the termini at the alignment edge are the wrong two nucleotides. Reporting them would have been evidence against a structure the data do not argue against. The check now reports the termini at the boundary *and* the smallest shift within the declared +/-10 nt window at which the intron reads `GT..AG`, which raised the inferred junctions carrying a candidate `GT..AG` motif to 2, 3 and 2. The window was fixed in ADR 0009 before any alignment and was **not** widened after seeing which shifts were found.
 
 3. **The primary assembly's sequence count does not match NCBI's, for a traceable reason.** The file carries 141 records and 972,225,736 nt; the NCBI Datasets report says 140 scaffolds and 972,206,121 nt. The difference is exactly one record, `OZ319714.1` (`organelle: mitochondrion`, 19,615 nt): 972,225,736 - 972,206,121 = 19,615. NCBI's scaffold count and lengths describe the nuclear assembly only. The panel declares the statistics **of the file** and records NCBI's alongside with this reconciliation; the mitochondrion is left in the search space, because removing a sequence from a declared input would make its hash unverifiable, and is classified under a role of its own so a count including it always reconciles. No dsRNase CDS has an HSP on it. NCBI's `number_of_contigs` and `contig_n50` describe pre-scaffolding components that a FASTA of scaffolds does not contain, so neither is declared or checked.
 
@@ -322,5 +341,5 @@ Not pushed and no pull request opened: publication and merge are the repository 
 
 1. `directly demonstrated`: the existence, versioned accessions and declared properties of the three *D. maidis* assemblies; the absence of any RefSeq assembly or gene annotation for the species; the hash and statistic agreement of every declared input; the agreement between the derived and published ORF coordinates; the BLAST counts, including 0 HSPs against the alternate haplotype; the positive control's self-match at 100 % over 3,000 nt and the sensitivity sweep; the reconciliation of the 141st record as the mitochondrion; the test results; the clean-clone reconstruction.
 2. `derived/computed`: the three CDS queries; every locus coordinate, span, coverage, identity, colinearity, assembly-gap content and distance to sequence end; the pairwise distinctness verdicts and the gaps between spans; the per-assembly locus counts.
-3. `inferred/interpreted`: the exon/intron structures and intron sizes, read from the gaps of an HSP tiling rather than from an annotation or a splice-aware alignment; the canonical-splice corroboration, which depends on the declared ambiguity window; that one detected locus per CDS means one genomic copy, which is conditional on the assembly not having collapsed a duplication; that the two dsRNase-2 TSA records are redundant representations of one gene; that the three loci being absent from the alternate pseudohaplotype reflects that assembly's partial coverage of the genome.
+3. `inferred/interpreted`: the exon/intron structures and intron sizes, read from the gaps of an HSP tiling rather than from an annotation or a splice-aware alignment; the inferred junctions at which the offset search found a candidate `GT..AG` motif, which depend on the declared ambiguity window and are not confirmed splice boundaries; that one detected locus per CDS means one genomic copy, which is conditional on the assembly not having collapsed a duplication; that the two dsRNase-2 TSA records are redundant representations of one gene; that the three loci being absent from the alternate pseudohaplotype reflects that assembly's partial coverage of the genome.
 4. `unresolved`: which TSA record came from which genomic locus; whether a duplication was collapsed by the genome assembler; copy number in the species and any population-level variation; the true splice boundaries of the eight junctions without a canonical pair inside the declared window; the complete gene structure outside the coding region; enzymatic activity, specificity, expression and any phenotype for all three proteins.
