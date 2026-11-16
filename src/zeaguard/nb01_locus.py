@@ -1,6 +1,6 @@
 """NB01 dsRNase locus mapping: the three published CDS against the Dalbulus maidis genome.
 
-The mapping answers two questions the NB01 family audit left explicitly open, and nothing
+The mapping addresses two questions the NB01 family audit left explicitly open, and nothing
 else:
 
 1. does Dmai-dsRNase-3 occupy a locus of its own, distinct from those of dsRNase-1 and
@@ -8,11 +8,15 @@ else:
 2. do the two complete TSA records attributed to dsRNase-2, ``GITV01008430.1`` and
    ``GITV01012450.1``, come from one genomic locus or from distinct loci.
 
-Question 2 needs one statement made before any result is read. ADR 0004 established that the
-two records reproduce **the same** 1425 nt CDS, so a single query sequence stands for both.
-Sequence mapping therefore cannot say which record came from which locus; it can only count
-how many genomic loci carry that CDS. That count is what this module reports, and the two
-readings it permits are stated in the run record, not here.
+Question 2 needs one statement made before any result is read. The query this module maps is
+the **published** dsRNase-2 CDS, which is identical to the CDS of ``GITV01008430.1``. The two
+records carry a CDS of the same length, 1425 nt, but with **distinct** SHA256, so one query
+does not stand for both. Mapping it therefore cannot say which record came from which locus;
+it can only count the number of loci that meet the assignment criteria for the published CDS
+in each assembly. That count is what this module reports, and the two readings it permits are
+stated in the run record, not here. Addendum 3 of that record holds the separate
+per-accession analysis, which queries each record on its own; it keeps the biological origin
+of the two records ``INDETERMINATE``.
 
 What the module does *not* do is as important. It never equates "aligns to the same region"
 with "is the same locus": a locus call is reported together with the contiguity of the

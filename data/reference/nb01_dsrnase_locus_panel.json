@@ -176,7 +176,7 @@
       "published_orf_end": 37,
       "cds_length": 1425,
       "protein_length": 474,
-      "note": "This is the CDS that ADR 0004 found reproduced identically by BOTH TSA records attributed to dsRNase-2, GITV01008430.1 and GITV01012450.1. One query therefore stands for both records, and no mapping of it can say which record came from which locus; see ADR 0009, rule 9. The tandem-repeat structure the NB01 investigation observed in the 3' flank of GITV01012450.1 lies outside this CDS and so outside the query."
+      "note": "The query is the published dsRNase-2 CDS, which is identical to the CDS of GITV01008430.1. Both TSA records attributed to dsRNase-2 carry a CDS of this length, 1425 nt, but with distinct sha256, as the operational reference records, so one query does not stand for both and no mapping of it can say which record came from which locus; see ADR 0009, rule 9. Addendum 3 of the run record 2026-11-15_nb01-dsrnase-locus-mapping.md is the record of the separate per-accession analysis, which queries each record on its own and preserves INDETERMINATE for the biological origin of the records. The tandem-repeat structure the NB01 investigation observed in the 3' flank of GITV01012450.1 lies outside this CDS and so outside the query."
     },
     {
       "target_id": "dsRNase-3",
