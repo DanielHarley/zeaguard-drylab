@@ -15,6 +15,10 @@ dependencies:
   - blast>=2.14
   - hmmer>=3.3
 
+  # Required by the NB01 splice-aware junction check. Pinned: the recorded
+  # alignment was produced by 2.31-r1302 and the check verifies that version.
+  - minimap2=2.31
+
   # Development and notebook execution.
   - pytest
   - jupyter
