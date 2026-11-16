@@ -344,6 +344,118 @@ These three query ranges are not three disjoint pieces that partition the 1,236 
 
 The original BLAST tiling produced three disjoint alignment intervals. The Ensembl comparison leaves the assignment of the full published dsRNase-3 CDS to a single gene indeterminate. The three loci's genomic spans remain three disjoint, colinear intervals on chromosome 1, megabases apart, exactly as recorded above and in the Interpretation section; nothing in this addendum relocates any span or merges any two of them. What changes is narrower: whether the *published CDS*, as a whole, is the product of one gene. For dsRNase-3 it is not determinable from this comparison, and a specific, falsifiable mechanism — a chimeric transcript assembly — is recorded above as a hypothesis, one candidate explanation among others that have not been examined, not as the established or sole account.
 
+## Addendum 2 (2026-11-16): splice-aware alignment of the three published CDS
+
+A second, independent check on the same question, added after the addendum above. **The original BLAST execution is untouched and remains the record of this run:** every coordinate, count and verdict in the Results, Interpretation and Anomalies sections stands as written, no `blastn` search was re-run, and nothing here replaces the HSP tiling of ADR 0009 rules 4 and 7. What this adds is a different method applied to some of the same inputs — a splice-aware aligner, which assigns each junction a single pair of coordinates instead of leaving it inside the ambiguity window that the tiling's negative junction offsets represent.
+
+**The check and the aligner.** [`scripts/check_nb01_dsrnase_splicing.py`](../../../../scripts/check_nb01_dsrnase_splicing.py), committed at **`7e5f748459f730fcdf512175c4d8a48dc5418cbf`** on this branch with its tests in `tests/test_check_nb01_dsrnase_splicing.py` (41 tests, passing at that commit). Aligner **minimap2 2.31-r1302**, pinned as `minimap2=2.31` in `environment.yml`, with the parameters:
+
+```
+-a -x splice:hq -uf --eqx --cs=long -G 50k -p 0.8 -N 5
+```
+
+The 50 kb intron limit keeps the scale of the historical clustering (`MAX_INTRON_NT` = 50,000 nt) and admits the candidate transition discussed below. `--eqx` puts `=`/`X` in the CIGAR, so substitutions are read from the alignment itself rather than inferred. `-p 0.8 -N 5` retains up to five secondary alignments as alternatives; **none was emitted** for any of the three queries.
+
+**Declared inputs, verified by `sha256` before the check runs.** The check refuses on any mismatch. Two of the four are material the original BLAST execution also used; the other two enter only in the comparison that follows the alignment, and never reach the aligner:
+
+| input | role in this check | `sha256` | relation to the original BLAST execution |
+| --- | --- | --- | --- |
+| `results/.../dsrnase_locus_mapping/raw/cds_queries.fna` | query | `7e378f84688253a78fbaa0aa631b536e94bcccca9d2a0433eb44bad7dd214bf2` | **shared**: written by that run and used as its `blastn` query |
+| `data/external/nb01_locus_mapping/GCA_975739785.1_ihDalMaid1.1_genomic.fna.gz` | alignment target | `aef4d8ec0891bece052bc58afa5b0da3e2a2bf047f9283032bbf253459509184` | **shared**: the same declared primary mapping target |
+| `data/external/nb01_locus_mapping/GCA_975739785.1_ensembl_2026_02_genes.gff3.gz` | post-alignment comparison only | `2606dd4fbb71b9555c643656656bb2f2aad82a072422236df57eaed483cb411d` | not used by it; this is the annotation of the first addendum |
+| `results/.../dsrnase_locus_mapping/loci.tsv` | post-alignment comparison only | `57b0d68ce3d0460c832f15ab24bd8ab1214dd90e3dc63807140d62ed6ff172e4` | not an input to it; it is that run's own output, read here only to reconcile junctions |
+
+The queries are the same three published CDS the original run derived; nothing was re-derived here.
+
+**The decompressed assembly is verified only on the path that runs the aligner.** The two paths read the assembly differently, and only one of them produces a decompressed file to hash.
+
+- **Reanalysis**, the path these tables come from, never expands the assembly. It reads the compressed FASTA **as a stream**, decompressing on the fly and keeping only the sequences the SAM actually refers to — here `OZ319704.1` alone — which is how the genomic dinucleotides at each assigned junction and the sequence of each block are obtained. No temporary FASTA is written, so there is no decompressed file to hash: the manifest records `genome_decompressed_sha256: null`.
+- **Alignment** additionally expands the `.gz` into a temporary uncompressed FASTA, because minimap2 needs a file to index, and checks that expansion against the already-declared `54411d6ee12a6c3f290428c08d3a046fb4e27bec83b9a75e9f42b866fc5d8a04` before calling the aligner. The expansion and its hash check exist to serve the aligner and belong to that path alone; the temporary file is deleted when the run ends.
+
+Both paths verify the compressed `.gz` by its own declared `sha256` before reading a byte of it, and both take their genomic sequence from that same compressed file by streaming. The decompressed hash quoted here was therefore verified on the alignment run that produced the SAM, not on the reanalysis that produced these tables.
+
+**The GFF3 was used only after the alignment.** It is never passed to minimap2: the alignment is annotation-free, and the annotation enters afterwards, to compare junction coordinates and to name the models. The manifest records this as `annotation_used_after_alignment_only`. The same applies to `loci.tsv`, which is read only to reconcile the new junctions against the historical ones.
+
+**The saved alignment, and the reanalysis these numbers come from.** The alignment was run once and its SAM preserved in full, with every record emitted, at `results/.../splice_check_v1/raw/minimap2_splice_hq.sam`:
+
+- `sha256` `41b1bf583b132feb101b4155b5f901647e65450b3921a3fe85ef3c0078a773fc`
+- `sha256` of the same file excluding its `@PG` line: `786097c3d3aec1e40644923e819ca7e4ad4cfb43d91994b9ce5c90300e42e5df`
+
+The whole-file hash is **run-dependent**, because minimap2 writes the command line into `@PG` and that line carries the temporary path of the decompressed genome; the `@PG`-excluded hash does not depend on that path. The tables reported here were produced by **re-analysing that saved SAM**, not by a fresh alignment — the check reads the aligner version from the SAM's own `@PG` line and refuses if it is not 2.31-r1302.
+
+The command that produced the tables reported here, recorded as the historical command and kept for provenance rather than for re-execution:
+
+```bash
+python scripts/check_nb01_dsrnase_splicing.py --root . --sam results/bioinformatics/nb01/mappings/dsrnase_locus_mapping/splice_check_v1/raw/minimap2_splice_hq.sam --out-subdir results/bioinformatics/nb01/mappings/dsrnase_locus_mapping/splice_check_v4_reanalysis
+```
+
+Re-running it verbatim is **refused**, by design: the check claims its output directory exclusively and will not write into one that already holds results. To reproduce the tables from the same SAM, give it a destination that does not yet exist:
+
+```bash
+python scripts/check_nb01_dsrnase_splicing.py --root . --sam results/bioinformatics/nb01/mappings/dsrnase_locus_mapping/splice_check_v1/raw/minimap2_splice_hq.sam --out-subdir results/bioinformatics/nb01/mappings/dsrnase_locus_mapping/splice_check_v5_reanalysis
+```
+
+The outputs of the historical command are in `results/.../dsrnase_locus_mapping/splice_check_v4_reanalysis/` (git-ignored), and the reference manifest for the numbers below is that directory's `manifest.json`, `sha256` **`3eddf06a565e5bc8562f0919712fba9b3e6f226cb16235d271fbdc60149aa51a`**, which records `mode: reanalysis_of_saved_alignment`, the source SAM with both hashes above, and `produced_in_this_run: false`. Earlier output directories of this check are kept as they were and are not overwritten.
+
+**What was compared, and what that does and does not support.** A full alignment run was executed into a separate, temporary destination and its seven TSVs came back byte-identical to those of the reanalysis of the saved SAM. That supports one claim: the tables reported here do not depend on whether the SAM is read from disk or produced in the same process. It does **not** establish that a new alignment emits a SAM whose records are all identical to the saved one — the TSVs carry the fields this check derives, not every field of every record, so equality of the tables cannot stand in for equality of the alignment output. No such comparison of two independently produced SAMs is recorded here.
+
+**All three queries align as a single primary record.** Three SAM records, all primary, all on `OZ319704.1`, all on the plus strand, all at MAPQ 60, with no secondary and no supplementary record, no clipping and no indel anywhere:
+
+| CDS | span on `OZ319704.1` | blocks | junctions | query nt aligned to the genome | `NM` | substitutions at query position |
+| --- | --- | --- | --- | --- | --- | --- |
+| dsRNase-1 | 60,966,751-60,973,368 | 6 | 5 | 1,323 / 1,323 | 1 | 840 |
+| dsRNase-2 | 69,024,822-69,037,412 | 7 | 6 | 1,425 / 1,425 | 0 | none |
+| dsRNase-3 | 122,005,058-122,014,482 | 5 | 4 | 1,236 / 1,236 | 5 | 756; 1,059; 1,073; 1,078; 1,167 |
+
+The three spans are the same intervals the BLAST tiling reported, to the nucleotide. At all **15** assigned junctions the genomic dinucleotides read a canonical `GT..AG` in the transcript's orientation. Each assigned intron equals the corresponding historical intron widened by exactly the query overlap that junction already carried, at all 15 (`junction_vs_historical.tsv`): the negative junction offsets this run recorded were alignment ambiguity, as stated, and the aligner replaces each ambiguous edge with one chosen coordinate.
+
+**Controls.** dsRNase-1 and dsRNase-2 are not in question here, and both recover their expected locus and their annotated junctions. The check reports a control as `AS_EXPECTED` only when every declared requirement holds — primary record, full coverage, no clipping, no indels, the expected sequence, strand and genomic interval, the expected junction count, the expected nucleotide differences at the expected positions, and the expected transcript lying on the alignment's own strand — and names any requirement that fails:
+
+| control | junctions matching the expected transcript | expected transcript | nucleotide differences | verdict |
+| --- | --- | --- | --- | --- |
+| dsRNase-1 | **5 / 5** | `ENSCHMT00000004227` (strand `+`) | 1, at query position 840 | `AS_EXPECTED` |
+| dsRNase-2 | **6 / 6** | `ENSCHMT00000006229` (strand `+`) | 0 | `AS_EXPECTED` |
+
+Every junction of both controls coincides *exactly*, on both edges, with an annotated intron of the expected transcript. This is the independent corroboration the addendum above could not give from boundary comparison alone, and it reproduces that addendum's reconstruction result for dsRNase-1 at the same query position, 840.
+
+**dsRNase-3: one chain covers the whole published CDS and crosses both annotated gene regions.** A single primary record accounts for all 1,236 nt, contiguously — its five blocks tile query 1-1,236 with no gap, no overlap and no indel — while its alignment blocks overlap annotated CDS segments from **two different genes**:
+
+| block | query | genomic | substitutions | overlap with annotated CDS |
+| --- | --- | --- | --- | --- |
+| 1 | 1-100 | 122,005,058-122,005,157 | 0 | within `ENSCHMG00000003138` |
+| 2 | 101-456 | 122,005,565-122,005,920 | 0 | within `ENSCHMG00000003138` |
+| 3 | 457-642 | 122,007,163-122,007,348 | 0 | within `ENSCHMG00000003138` |
+| 4 | 643-870 | 122,012,479-122,012,706 | 1 | **partial** overlap with `ube2w` (`ENSCHMG00000002609`) |
+| 5 | 871-1,236 | 122,014,117-122,014,482 | 4 | within `ube2w` (`ENSCHMG00000002609`) |
+
+**Block 4 overlaps the annotated `ube2w` CDS only in part.** Of its 228 nt, the first **65 nt** — query 643-707, genomic 122,012,479-122,012,543 — fall inside an intron of the model `ENSCHMT00000004222`, which the annotation does not place in any coding segment. The remaining **163 nt** — query 708-870, genomic 122,012,544-122,012,706 — coincide with that model's annotated CDS segment. The block is therefore not contained in the annotated CDS; it begins 65 nt upstream of it.
+
+Three of the four junctions coincide exactly with annotated introns — the first two with `ENSCHMT00000005294` and `ENSCHMT00000005281` of `ENSCHMG00000003138`, the last with `ENSCHMT00000004222` of `ube2w`. Throughout this addendum a junction means **the coordinates the aligner assigned** to a gap between two aligned blocks, under the parameters above; it is not an observed splice event, and a coincidence with an annotated intron is agreement between two computational calls, not confirmation that the intron is spliced there. The check's labels record this as `CHAIN_SPANS_BOTH_ANNOTATED_GENES` = `OBSERVED` and `CHAIN_MATCHES_SINGLE_ANNOTATED_MODEL` = `NOT_OBSERVED`; `COVERAGE_ONLY_BY_SEPARATE_ALIGNMENTS` is `NOT_OBSERVED`, because one record covers the CDS on its own rather than the coverage being assembled from separate alignments.
+
+**The transition, between query nucleotides 642 and 643.** The remaining junction is the one that leads from the `ENSCHMG00000003138` region into the `ube2w` region:
+
+| | |
+| --- | --- |
+| genomic gap, as assigned by the aligner | 122,007,349-122,012,478 |
+| jump | **5,130 nt** |
+| query positions | between **642** and **643** |
+| coding phase | 0 — the junction falls on a codon boundary, the chain stays in frame |
+| motif at the assigned coordinates | `GT..AG`, canonical |
+| annotated intron at the same coordinates | **none** |
+
+It sits at the position the BLAST tiling already pointed to, after query 642, and its length is the historical 5,125 nt widened by the 5 nt overlap that junction carried — the same reconciliation that holds for all 15 junctions.
+
+**No annotated transcript has an intron with both of these boundaries**, checked across all 6,523 transcripts annotated on `OZ319704.1`. The two edges behave differently, and the difference is worth stating precisely:
+
+- On the **donor** side there is a coincidence of boundaries: 122,007,348, the last base before the assigned gap, is the same coordinate at which annotated exon 4 of `ENSCHMT00000005294` ends (122,007,163-122,007,348). The two calls agree on that edge. They do not agree on what follows it: that transcript's own next exon starts at 122,007,664, so the intron the annotation places at that donor is 315 nt, where the aligner assigned 5,130.
+- On the **acceptor** side there is no such coincidence: no annotated exon starts at 122,012,479. `ube2w`'s nearest annotated CDS segment begins at 122,012,544, **65 nt downstream**, which is the same 65 nt by which block 4 precedes the annotated segment.
+
+So the assigned gap shares its donor coordinate with an annotated exon boundary while its acceptor coordinate matches none. The nearest annotated intron by combined edge distance is `ENSCHMT00000004222`'s, at −4,715 nt and −65 nt.
+
+**What this settles, and what it does not.** What is on record is a **chain of splice-aware alignment covering all 1,236 nt of the query**: one primary record, five blocks tiling the query contiguously and in frame, four assigned junctions, each carrying a canonical `GT..AG` at the coordinates assigned. Concatenating the genomic sequence of those five blocks gives a sequence of **1,236 nt, the same length as the published CDS, differing from it by five substitutions** at query positions 756, 1,059, 1,073, 1,078 and 1,167. The concatenation is therefore not the published sequence, and no claim is made here that the assembly contains, or could yield, that sequence exactly. This is a statement about coordinates and about sequence read from the assembly, not about any transcript.
+
+**The biological origin of the full published transcript remains `INDETERMINATE`.** An alignment chain is not transcript evidence: a canonical motif marks coordinates at which a donor-acceptor pair could sit, the junction that carries the whole chain is annotated in neither gene, and its acceptor coordinate matches no annotated boundary. The transcriptomic-chimera hypothesis recorded in the addendum above **remains a hypothesis** and is neither confirmed nor refuted here; what this check adds is that a single alignment chain spans both regions, which was not established before, and it removes none of the alternatives. Settling it needs RNA evidence spanning the 642/643 transition — RNA-seq reads crossing that junction, the original Trinity assembly graph for `TRINITY_DN5008_c0_g1_i24`, or an independent transcript assembly — none of which this run, the addendum above or this addendum has.
+
 ## What this run does NOT establish
 
 - It does not establish that any locus call is correct, that either assembly is correct, or that the inferred exon/intron structures are the true gene structures. The offset search found a candidate `GT..AG` motif at fewer than half of the inferred junctions within the declared window, and a candidate motif is not a confirmed splice boundary. This run's own declared inputs did not include a GFF3; the addendum above checks, for the first time in this repository, an Ensembl AEGIS annotation of the primary assembly against them, which corroborates the boundary structure of dsRNase-1 and dsRNase-2 but does not turn a candidate `GT..AG` motif into a confirmed splice junction, and finds dsRNase-3's full CDS does not correspond to a single annotated gene.
@@ -385,13 +497,13 @@ Preceding run records: [2026-10-03 dsRNase-2 identity](2026-10-03_nb01-dsrnase2-
 
 ## Related Issue / PR / commits
 
-Branch `feat/nb01-dsrnase-locus-mapping`, cut from `origin/master` at `08079cd`. `f00b87d` carries the implementation, the panel, ADR 0009 and this record; the commit that follows adds this record's clean-clone outcome, which could not be written before the verification it reports; `e1befb9069818e16d691ada54e04403327d9cee0` adds `scripts/compare_nb01_locus_to_ensembl_aegis.py` and its tests, the comparator the addendum above reports on.
+Branch `feat/nb01-dsrnase-locus-mapping`, cut from `origin/master` at `08079cd`. `f00b87d` carries the implementation, the panel, ADR 0009 and this record; the commit that follows adds this record's clean-clone outcome, which could not be written before the verification it reports; `e1befb9069818e16d691ada54e04403327d9cee0` adds `scripts/compare_nb01_locus_to_ensembl_aegis.py` and its tests, the comparator the first addendum above reports on; `7e5f748459f730fcdf512175c4d8a48dc5418cbf` adds `scripts/check_nb01_dsrnase_splicing.py` and its tests, the splice-aware check the second addendum reports on, together with the `minimap2=2.31` pin it requires.
 
 Not pushed and no pull request opened: publication and merge are the repository owner's decisions (CONTRIBUTING.md §2 and §9).
 
 ## Evidence classification
 
-1. `directly demonstrated`: the existence, versioned accessions and declared properties of the three *D. maidis* assemblies; the absence of any RefSeq assembly for the species, at the time of this run and since; the hash and statistic agreement of every declared input; the agreement between the derived and published ORF coordinates; the BLAST counts, including 0 HSPs against the alternate haplotype; the positive control's self-match at 100 % over 3,000 nt and the sensitivity sweep; the reconciliation of the 141st record as the mitochondrion; the test results; the clean-clone reconstruction. Added by the addendum: the existence, URL, `sha256` and `md5` of the Ensembl AEGIS GFF3 for the primary assembly; the four-way chromosome 1 / `OZ319704.1` correspondence; the raw BLAST HSP identity and mismatch counts for every dsRNase-3 query segment discussed in the addendum (0, 0, 0, 1 and 4 mismatches respectively); the genomic location of the dsRNase-3 query's middle 234 nt block, 122,012,475–122,012,708, per the recorded HSP; the byte-for-byte identity, with matching `sha256`, between the reconstructed Ensembl dsRNase-2 CDS and the published CDS; the single mismatch (position 840) between the reconstructed Ensembl dsRNase-1 CDS and the published CDS.
+1. `directly demonstrated`: the existence, versioned accessions and declared properties of the three *D. maidis* assemblies; the absence of any RefSeq assembly for the species, at the time of this run and since; the hash and statistic agreement of every declared input; the agreement between the derived and published ORF coordinates; the BLAST counts, including 0 HSPs against the alternate haplotype; the positive control's self-match at 100 % over 3,000 nt and the sensitivity sweep; the reconciliation of the 141st record as the mitochondrion; the test results; the clean-clone reconstruction. Added by the addendum: the existence, URL, `sha256` and `md5` of the Ensembl AEGIS GFF3 for the primary assembly; the four-way chromosome 1 / `OZ319704.1` correspondence; the raw BLAST HSP identity and mismatch counts for every dsRNase-3 query segment discussed in the addendum (0, 0, 0, 1 and 4 mismatches respectively); the genomic location of the dsRNase-3 query's middle 234 nt block, 122,012,475–122,012,708, per the recorded HSP; the byte-for-byte identity, with matching `sha256`, between the reconstructed Ensembl dsRNase-2 CDS and the published CDS; the single mismatch (position 840) between the reconstructed Ensembl dsRNase-1 CDS and the published CDS. Added by the second addendum: the minimap2 2.31-r1302 alignment records themselves, preserved in the saved SAM — for each query the single primary record, its span, its block and junction coordinates, its canonical `GT..AG` motifs, its `NM` and the query positions of its substitutions; that no annotated transcript on `OZ319704.1` carries an intron with both boundaries of the 122,007,349-122,012,478 junction, that an annotated exon of `ENSCHMT00000005294` ends at 122,007,348, and that no annotated exon starts at 122,012,479.
 2. `derived/computed`: the three CDS queries; every locus coordinate, span, coverage, identity, colinearity, assembly-gap content and distance to sequence end; the pairwise distinctness verdicts and the gaps between spans; the per-assembly locus counts. Added by the addendum: the comparator's `gene_support_status` and `structural_match_status` for each locus and tolerance mode, and the per-block correspondence of the dsRNase-3 CDS's five query blocks to coding segments of the two annotated genes (not a partition of the CDS: the blocks overlap each other, as every junction in this run already does).
 3. `inferred/interpreted`: the exon/intron structures and intron sizes, read from the gaps of an HSP tiling rather than from an annotation or a splice-aware alignment; the inferred junctions at which the offset search found a candidate `GT..AG` motif, which depend on the declared ambiguity window and are not confirmed splice boundaries; that one detected locus per CDS means one genomic copy, which is conditional on the assembly not having collapsed a duplication. Added by the addendum, and explicitly a hypothesis rather than a finding: that the published Dmai-dsRNase-3 TSA transcript is a transcriptomic chimera of two unrelated genomic loci.
-4. `unresolved`: the genomic origin of `GITV01012450.1` and whether the two dsRNase-2 TSA records share a locus; concordance between haplotypes; whether a duplication was collapsed by the genome assembler; copy number in the species and any population-level variation; the true splice boundaries of the eight junctions without a canonical pair inside the declared window; the complete gene structure outside the coding region; enzymatic activity, specificity, expression and any phenotype for all three proteins. Added by the addendum: single-gene attribution for the full dsRNase-3 CDS; confirmation or refutation of the transcriptomic-chimera hypothesis; whether the dsRNase-3 query's middle 234 nt block (located at 122,012,475–122,012,708, directly demonstrated above) is part of one continuous transcript together with the flanking blocks, or evidence of a chimeric assembly instead.
+4. `unresolved`: the genomic origin of `GITV01012450.1` and whether the two dsRNase-2 TSA records share a locus; concordance between haplotypes; whether a duplication was collapsed by the genome assembler; copy number in the species and any population-level variation; the true splice boundaries of the eight junctions without a canonical pair inside the declared window; the complete gene structure outside the coding region; enzymatic activity, specificity, expression and any phenotype for all three proteins. Added by the addendum: single-gene attribution for the full dsRNase-3 CDS; confirmation or refutation of the transcriptomic-chimera hypothesis; whether the dsRNase-3 query's middle 234 nt block (located at 122,012,475–122,012,708, directly demonstrated above) is part of one continuous transcript together with the flanking blocks, or evidence of a chimeric assembly instead. Added by the second addendum, and unchanged by it: the biological origin of the full published dsRNase-3 transcript. What that addendum records is a splice-aware alignment chain covering all 1,236 nt of the query, whose five concatenated genomic blocks give a sequence of the same length as the published CDS differing from it by five substitutions; whether any transcript is actually spliced across the 642/643 transition is not addressed by a canonical motif at coordinates whose acceptor matches no annotated boundary, and needs RNA evidence spanning that junction.
