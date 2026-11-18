@@ -68,14 +68,17 @@ length agrees with the 2026-11-15 run record, which states `OZ319704.1` at 122,8
 ### Index
 
 Built once by the first command of the declared recipe and reused by all four libraries,
-with its provenance recorded in `index_build.json` and re-verified before each library:
+with its provenance recorded in `index_build.json`:
 
 ```
 hisat2-build -p 20 <assembly>.fna ihDalMaid1.1
 ```
 
-Eight `.ht2` files, each with its byte count and `sha256` in the record. All eight were
-recomputed after the run and match.
+Eight `.ht2` files, each with its byte count and `sha256` in the record. The executor
+verifies that record **once, before the loop over the libraries** — the declared assembly
+accession and both of its hashes, the index name, and the presence, byte count and `sha256`
+of all eight files — not once per library. Independently of that, all eight were recomputed
+after the run and match.
 
 ### Libraries
 
@@ -101,10 +104,17 @@ working directory, not of a catalogue copy. The full values are in `pilot_report
 
 ### How the reads were obtained, and a deviation from the catalogue's URL
 
-The catalogue records ENA FASTQ URLs and their md5. ENA's HTTP mirror delivered about
-0.45 MB/s from here, against about 8 MB/s from the NCBI SRA Open Data bucket, so the reads
-were taken from the latter as `.sra` and converted locally. The verification chain therefore
-differs from the catalogue's and is stated in full:
+The versioned catalogue does **not** record FASTQ URLs or md5 values: its library entries
+carry accessions, library and instrument metadata, spot and base counts and the condition
+fields, and its four `sources` are metadata queries only. The ENA FASTQ URLs and md5 values
+were obtained from a separate `filereport` query during this round, for the download, and
+were never versioned — so there is no catalogue field to compare a read file against, and
+none is claimed.
+
+ENA's HTTP mirror delivered about 0.45 MB/s from here, against about 8 MB/s from the NCBI
+SRA Open Data bucket, so the reads were taken from the latter as `.sra` and converted
+locally. The verification chain is therefore the following, stated in full because it is the
+only one that applies:
 
 1. the `.sra` was resumed until its size equalled the bucket's `Content-Length`;
 2. its `sha256` was recorded (`SRR11822340`: 3,101,541,872 bytes,
@@ -115,8 +125,8 @@ differs from the catalogue's and is stated in full:
 5. each FASTQ's `sha256`, spot count and base count were recorded, and the two mates were
    required to agree before any alignment ran.
 
-The ENA md5 values were **not** used and are not claimed to hold for these files: a
-`fasterq-dump` conversion is not byte-identical to ENA's own FASTQ.
+The ENA md5 values from that query were **not** used against these files and are not claimed
+to hold for them: a `fasterq-dump` conversion is not byte-identical to ENA's own FASTQ.
 
 ### Criteria
 
@@ -175,8 +185,18 @@ Per library, under `results/bioinformatics/nb01/dsrnase3_transcript_evidence/pil
 | `SRR11822345` | `a7430e13c25360b66901e8fa35fa9a6c375478fc75253951e653dc2760625e41` | 1,522,056,412 | `2d26468d3c81684af8457c49bb31b6407758a99e6394b7d54af76293b68d48bc` |
 | `SRR11822341` | `947b7df013c76e14e594c1107236c30e14015ec3a8718b94668b1f8be27aa731` | 1,445,301,091 | `a3863f30760a3ed7e4a935ceacf4fee9db0c4daea2fd8a2ea09754a880299bce` |
 
-The SAMs total 6.0 GB and stay outside the repository; `results/` is git-ignored and the
-copies kept for inspection exclude them.
+**Where the artifacts are.** The run executed in a clean clone of this branch at
+`~/zeaguard-dsrnase3-pilot`, on native Linux disk, and every output above — including the
+four extracted SAMs, 6.0 GB in total — **remains only there**. `results/` is git-ignored in
+both checkouts, so nothing of this is in version control.
+
+Copied into the implementation worktree's own git-ignored
+`results/bioinformatics/nb01/dsrnase3_transcript_evidence/pilot_v1/` for review, 26 files
+and 360 KB: `pilot_report.json`, `index_build.json`, and per library `panel.json`, the
+hisat2 summary and the whole `counted/` directory. **The four SAMs and every alignment
+intermediate were deliberately not copied.** The intermediates — `raw.sam`, `pos.bam`,
+`markdup.bam` and the `.bai` — were deleted by the executor after each library was counted;
+only the extracted region SAM survives, in the pilot clone.
 
 ## Validation / QC
 
@@ -191,10 +211,18 @@ copies kept for inspection exclude them.
 - **Internal detectability control.** Both annotated junctions of the same chain are
   supported in every library under the same rule, so a spliced read at this locus is
   demonstrably detectable in all four.
-- **Software verification** is recorded separately: 87 tests of the command and 329 of the
-  NB01 selection pass at `4c842fcd`, and the synthetic FASTQ-to-TSV recipe check runs the
-  six recipe steps and reproduces the three verdicts. None of that is evidence about this
-  locus.
+- **Software verification** is recorded separately, and its two synthetic exercises are not
+  the same thing. None of it is evidence about this locus.
+  - 87 tests of the command and 329 of the NB01 selection pass at `4c842fcd`.
+  - The **counter-only** check feeds three hand-built synthetic SAMs straight to the
+    counter, with no aligner involved, and reproduces one verdict each:
+    `JUNCTION_SUPPORTED`, `NO_SUPPORT_WITH_INFORMATIVE_COVERAGE` and
+    `INCONCLUSIVE_INSUFFICIENT_COVERAGE`. It exercises the classification, not the recipe.
+  - The **FASTQ-to-TSV** check builds a synthetic `OZ319704.1` of the declared length, writes
+    paired FASTQs, executes the six recipe commands, and counts the SAM it extracts. It
+    yields **one** library, `SYNTH_RECIPE`, with verdict `JUNCTION_SUPPORTED`, plus the
+    anchor sweep (spliced from 15 nt upstream, 18 nt downstream). It exercises the recipe
+    end to end, and it is the only one of the two that runs hisat2 or samtools.
 
 ## Results
 
@@ -219,27 +247,72 @@ In every library the single failed requirement is the same:
 | `SRR11822345` | 3,872,526 | 1,924,317 | 186/186 nt (100 %) | 201/228 nt (88.16 %) |
 | `SRR11822341` | 3,663,211 | 1,837,652 | 186/186 nt (100 %) | 201/228 nt (88.16 %) |
 
-The uncovered part of the downstream flank is **one contiguous interval, identical in all
-four libraries: `122,012,479-122,012,505`, 27 nt**, computed from qualifying records only.
-Coverage of that flank begins at 122,012,506 and is unbroken to its end. So the first 27 nt
-of the published CDS block 4 — CDS positions 643 to 669 — carry no qualifying aligned
-coverage in any of these libraries, while the remaining 201 nt do.
+The part of the downstream flank without eligible coverage is **one contiguous interval,
+identical in all four libraries: `122,012,479-122,012,505`, 27 nt**, computed from
+qualifying records only. Eligible coverage of that flank begins at 122,012,506 and is
+unbroken to its end. So the first 27 nt of the published CDS block 4 — CDS positions 643 to
+669 — carry **no coverage in the eligible alignments of this recipe** in any of these
+libraries, while the remaining 201 nt do.
 
-### Every spliced read at the exact donor goes somewhere else, and to the same place
+That is a statement about the alignments this recipe retains, not about transcription. It
+does not locate a transcription start, an exon boundary or a 5' end: reads over those 27 nt
+could be absent, or present but discarded by the quality filters, or present and placed
+elsewhere by the aligner. Where transcription of this region begins is not addressed here.
 
-| run | fragments spliced from donor `122,007,349` | acceptor they reach | implied intron | fragments reaching `122,012,479` |
-| --- | --- | --- | --- | --- |
-| `SRR11822340` | 41 | `122,007,663` | 315 nt | **0** |
-| `SRR11822336` | 27 | `122,007,663` | 315 nt | **0** |
-| `SRR11822345` | 64 | `122,007,663` | 315 nt | **0** |
-| `SRR11822341` | 39 | `122,007,663` | 315 nt | **0** |
+### The shared donor is used, for a different acceptor
 
-The donor coordinate is shared exactly with the junction in question. In all four libraries,
-**every** qualifying spliced read at that donor — 171 fragments in total, with no exception
-in any library — ends its intron at 122,007,663 and resumes at 122,007,664, an intron of
-315 nt. That is the intron the Ensembl AEGIS annotation places at that donor for
-`ENSCHMT00000005294`, as the 2026-11-15 run record states. Not one read took the 5,130 nt
-jump.
+The junction in question starts at donor `122,007,349`. Spliced reads do start there, and
+they end their intron elsewhere. Three counts are reported, because they have three
+different denominators and only the third is comparable with the eligible-fragment counts
+used for 642/643 above:
+
+| run | alignment records | fragments after the quality filters | fragments anchored on both sides |
+| --- | --- | --- | --- |
+| `SRR11822340` | 41 | 23 | **17** |
+| `SRR11822336` | 27 | 17 | **10** |
+| `SRR11822345` | 64 | 47 | **31** |
+| `SRR11822341` | 39 | 30 | **15** |
+| total | 171 | 117 | **73** |
+
+- **alignment records**: SAM lines on `OZ319704.1` whose CIGAR carries an `N` junction
+  beginning at 122,007,349 and ending anywhere other than 122,012,478. One line per
+  alignment, no filter applied, so both mates of a fragment and any flagged record count
+  separately.
+- **fragments after the quality filters**: distinct `QNAME`s among those records once the
+  counter's own filters are applied — flagged duplicate, secondary, supplementary, `NH` > 1,
+  `MAPQ` < 30.
+- **fragments anchored on both sides**: of those, the distinct `QNAME`s where one read
+  covers all 20 reference bases of **both** anchor zones of the junction it actually takes,
+  by `M`, `=` or `X`. This is the eligible count under exactly the rule applied to 642/643,
+  and it is the figure to compare with the 0 eligible fragments there.
+
+All **73** anchored fragments follow one intron: it ends at **122,007,663** and the
+alignment resumes at **122,007,664**, an intron of 315 nt, with no other acceptor among them
+in any library. That is the intron the Ensembl AEGIS annotation places at that donor for
+`ENSCHMT00000005294`, as the 2026-11-15 run record states. No read in any of the four
+libraries took the 5,130 nt jump to 122,012,479.
+
+**The `donor_only` figures in the output tables are not this count.** In
+`junction_observations.tsv` a `donor_only` row is one alignment record, and for a non-exact
+boundary match the category is assigned before the quality check, so records that failed it
+appear under it; those rows give the first column, 41/27/64/39. The
+`donor_only_fragments` column of `per_library.tsv` deduplicates by `QNAME` but still
+includes those records, giving 30/22/57/37. Neither is the number of fragments that could
+have carried a junction at that donor. A record quoting the output tables for this must say
+which column it is quoting; this record quotes the third.
+
+**Reproducing the three counts from the SAMs**, with the counter's own filters and anchor
+rule applied through its own code:
+
+```bash
+python scripts/recount_nb01_dsrnase3_donor.py \
+    results/bioinformatics/nb01/dsrnase3_transcript_evidence/pilot_v1
+```
+
+It reads each library's extracted SAM, prints the three counts per library with the
+acceptors the anchored fragments reach, and takes about 23 s for the four. Its acceptor
+tally counts occurrences rather than fragments — 18, 10, 33, 15 — because in two libraries a
+fragment had both mates anchored at that junction; every occurrence is at 122,007,663.
 
 `acceptor_only` and `neighbour` counts are **0** in every library: no qualifying read
 reaches 122,012,479 from any donor, and none carries a junction within 20 nt of either
@@ -260,26 +333,31 @@ qualifying coverage at all. The criteria are built so that an absence of crossin
 only called interpretable where a crossing read could have been seen. Here it could not,
 so **zero eligible crossings is not reported as zero support** in any library.
 
-Three things are nevertheless on record, and they point the same way in all four libraries:
+Stated per library, the two facts the verdict rests on are: **zero eligible crossings at
+642/643**, and **27 nt without eligible coverage, `122,012,479-122,012,505`**, in each of
+the four.
+
+Three further things are on record, and they point the same way in all four libraries:
 
 1. The locus is not short of reads. Each library puts 3.7 to 4.5 million records on this
    chromosome, covers the upstream flank completely and the downstream flank to 88 %, and
    supports both annotated junctions of the same chain tens of times over. Splicing at this
-   locus is detectable in these data.
+   locus is detectable in the eligible alignments of these data.
 2. The acceptor the junction in question requires, 122,012,479, is reached by **no**
-   qualifying read, and the 27 nt from it onward are uncovered in every library, as one
-   contiguous interval with identical boundaries. Coverage resumes at 122,012,506, which is
-   38 nt before the annotated `ube2w` coding segment begins at 122,012,544.
-3. At the donor the junction shares, 171 fragments across the four libraries splice, and all
-   of them take the annotated 315 nt intron to 122,007,664 instead.
+   qualifying read, and the 27 nt from it onward carry no eligible coverage in any library,
+   as one contiguous interval with identical boundaries. Eligible coverage resumes at
+   122,012,506, which is 38 nt before the annotated `ube2w` coding segment begins at
+   122,012,544.
+3. At the donor the junction shares, **73** eligible fragments across the four libraries
+   splice, and every one of them takes the annotated 315 nt intron to 122,007,664 instead.
 
 Taken together these are consistent with the donor being a real, used splice donor whose
-acceptor in these libraries is the annotated one, and with the published block 4 beginning
-27 nt before anything these libraries transcribe. They are **not** a refutation of the
-642/643 junction: a junction can be real and absent from four libraries of one isolate, one
-tissue preparation, one locality and one temperature, and an uncovered footprint cannot
-carry an absence claim. The declared verdict stands as the result; the three observations
-above are the evidence a later round would have to explain.
+acceptor, in the eligible alignments of these libraries, is the annotated one. They are
+**not** a refutation of the 642/643 junction: a junction can be real and absent from four
+libraries of one isolate, one tissue preparation, one locality and one temperature, and a
+footprint without eligible coverage cannot carry an absence claim. The declared verdict
+stands as the result; the three observations above are the evidence a later round would have
+to explain.
 
 **What a single eligible crossing would have meant.** One eligible crossing fragment
 supports the local 642/643 junction in the library it was found in. None was found, and
@@ -298,6 +376,9 @@ also contributed to that assembly is neither established nor excluded.
   California isolate collected in Wooster, Ohio, whole insects, pooled sexes, at 30 °C,
   naive or MRFV-exposed at 4 h and 7 days, are a narrow sample.
 - It does not establish that the junction is spliced anywhere. No read supports it here.
+- It does not establish where transcription of this region begins. The 27 nt without
+  eligible coverage is a property of the alignments this recipe retains, not a 5' end, an
+  exon boundary or a transcription start.
 - It does not refute the transcriptomic-chimera hypothesis the 2026-11-15 record carries,
   and does not confirm it.
 - It does not bound the sensitivity of this pipeline on real libraries. The 20 nt
@@ -355,10 +436,17 @@ Results items 6 and 9.
 ## Related Issue / PR / commits
 
 Branch `feat/nb01-dsrnase3-transcript-evidence`. `7519219` adds the command, `e65d86d`,
-`48d563a` and `4c842fc` correct it; all four are pushed. This record is committed and **not
-pushed**: it is scientific documentation, and the disclosure, privacy, pertinence and
-integrity review that precedes its publication is the repository owner's decision under
-CONTRIBUTING.md §8. No pull request has been opened.
+`48d563a` and `4c842fc` correct it; all four are pushed.
+
+**The first version of this record, `62f1d6f`, was pushed**, on an instruction that the
+process sections of CONTRIBUTING.md were not to be treated as gates. The owner then asked
+for it to be held; by then it was already on `origin` and publication is irreversible in
+practice. The documentary correction that produced the version you are reading is committed
+on the same branch and is **not pushed**, pending the owner's decision under
+CONTRIBUTING.md §8. Anyone reading `62f1d6f` from the remote is reading the superseded
+version, whose donor-count column was an alignment-record count labelled as fragments.
+
+No pull request has been opened.
 
 ## Evidence classification
 
@@ -368,21 +456,24 @@ CONTRIBUTING.md §8. No pull request has been opened.
    of all eight FASTQ files and their agreement with the ENA catalogue and with
    `fasterq-dump`; the hisat2 alignment rates; the record and fragment counts on
    `OZ319704.1` per library; the coverage of both flanks and of both anchor zones per
-   library; the 27 nt uncovered interval `122,012,479-122,012,505` and its identity across
-   all four libraries; the fragment counts supporting both annotated control junctions; that
-   no qualifying read in any of the four libraries carries an `N` operation ending at
-   122,012,478 or beginning an aligned block at 122,012,479; and that every qualifying
-   spliced read at donor 122,007,349 ends its intron at 122,007,663.
+   library; the 27 nt interval `122,012,479-122,012,505` without eligible coverage and its
+   identity across all four libraries; the fragment counts supporting both annotated control
+   junctions; that no qualifying read in any of the four libraries carries an `N` operation
+   ending at 122,012,478 or beginning an aligned block at 122,012,479; and the three donor
+   counts 171 / 117 / 73 with their stated denominators, together with the fact that every
+   one of the 73 anchored fragments ends its intron at 122,007,663.
 2. `derived/computed`: the per-library verdicts under the declared criteria; the
    per-fragment deduplication; the ambiguous, duplicate, mate-bridge, short-anchor and
    neighbour counts.
-3. `inferred/interpreted`: that splicing is detectable at this locus in these libraries,
-   inferred from the annotated control junctions being supported; that the donor is a real
-   splice donor whose acceptor in these libraries is the annotated one at 122,007,664; that
-   the published block 4 begins upstream of anything these libraries transcribe. Each is a
-   reading of the counts above and not an observation of a splice event.
-4. `unresolved`: whether the 642/643 junction is spliced in any transcript; the biological
-   origin of the published dsRNase-3 transcript; which reads and which assembly produced
-   `TRINITY_DN5008_c0_g1_i24`; whether the complete CDS belongs to one molecule; the
-   sensitivity of this pipeline on real libraries; and whether the 25 °C libraries of
+3. `inferred/interpreted`: that splicing is detectable at this locus in the eligible
+   alignments of these libraries, inferred from the annotated control junctions being
+   supported; and that the donor is a real splice donor whose acceptor, in those eligible
+   alignments, is the annotated one at 122,007,664. Each is a reading of the counts above
+   and not an observation of a splice event. No inference is drawn here about where
+   transcription of the region begins.
+4. `unresolved`: whether the 642/643 junction is spliced in any transcript; where
+   transcription of this region begins, and why the 27 nt carry no eligible coverage; the
+   biological origin of the published dsRNase-3 transcript; which reads and which assembly
+   produced `TRINITY_DN5008_c0_g1_i24`; whether the complete CDS belongs to one molecule;
+   the sensitivity of this pipeline on real libraries; and whether the 25 °C libraries of
    PRJNA579843, or the remaining twelve runs of PRJNA631706, would change any count here.
