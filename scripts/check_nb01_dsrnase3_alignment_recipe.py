@@ -330,8 +330,18 @@ def main(argv: list[str] | None = None) -> int:
                         if row["spliced_at_target"]})
     missed = sorted({row["designed_anchor_nt"] for row in recovery
                      if not row["spliced_at_target"]})
+    # Per side, because the two sides do not behave alike at this junction.
+    per_side = {}
+    for side in ("upstream", "downstream"):
+        spliced = [row["designed_anchor_nt"] for row in recovery
+                   if row["designed_side"] == side and row["spliced_at_target"]]
+        per_side[side] = min(spliced) if spliced else None
+    both_sides = (max(per_side.values())
+                  if all(value is not None for value in per_side.values()) else None)
     print(f"[anchors] spliced at the declared coordinates: {recovered}", file=sys.stderr)
     print(f"[anchors] not spliced there: {missed}", file=sys.stderr)
+    print(f"[anchors] shortest spliced per side: {per_side}; both sides: {both_sides}; "
+          f"operational cut: {criteria.min_anchor_nt}", file=sys.stderr)
 
     panel = {
         "reference": {key: ev.REFERENCE[key] for key in
@@ -361,13 +371,20 @@ def main(argv: list[str] | None = None) -> int:
         "anchor_lengths_spliced_at_declared_coordinates": recovered,
         "anchor_lengths_not_spliced": missed,
         "min_anchor_nt_declared": criteria.min_anchor_nt,
+        "shortest_anchor_spliced_per_side_nt": per_side,
+        "shortest_anchor_spliced_on_both_sides_nt": both_sides,
         "calibration_statement": (
-            "These are the lengths TESTED, on a synthetic reference with random flanking "
-            "sequence, at one read length and one set of alignment penalties. "
-            "min_anchor_nt is a conservative operational cut equal to the shortest tested "
-            "length that recovered the junction on both sides; it is not a measured "
-            "detection threshold, and the sensitivity of this pipeline on real libraries "
-            "remains unknown."),
+            f"The sweep recovered the junction from {per_side['upstream']} nt upwards on "
+            f"the upstream side and from {per_side['downstream']} nt upwards on the "
+            f"downstream side, so the shortest anchor recovered on BOTH sides is "
+            f"{both_sides} nt. The operational cut is min_anchor_nt "
+            f"{criteria.min_anchor_nt} nt, "
+            f"{criteria.min_anchor_nt - both_sides if both_sides else '?'} above that "
+            f"value, kept as a margin because the two sides do not behave alike. These "
+            f"are the lengths TESTED on a synthetic reference with random flanking "
+            f"sequence, at one read length and one set of alignment penalties. It is not "
+            f"a measured detection threshold, and the sensitivity of this pipeline on "
+            f"real libraries remains unknown."),
         "extracted_sam": {"path": extracted.relative_to(root).as_posix(),
                           "sha256": ev.sha256_file(extracted)},
         "panel": {"path": panel_path.relative_to(root).as_posix(),

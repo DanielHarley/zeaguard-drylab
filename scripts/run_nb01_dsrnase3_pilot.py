@@ -62,9 +62,20 @@ def versions() -> dict:
 
 
 def run_command(command: str, cwd: Path) -> dict:
+    """Run one recipe command, failing if ANY element of a pipeline fails.
+
+    The recipe's third step is a three-stage pipeline. A shell reports only the
+    last stage's status, and `samtools sort` exits 0 on a truncated or empty
+    stream, so a failure in `collate` or `fixmate` would otherwise pass as
+    success and the run would continue on a BAM missing its mate tags. `bash -o
+    pipefail` makes the pipeline's status the first non-zero one. The command
+    string recorded is the substituted recipe itself, unchanged.
+    """
     print(f"[run] {command}", file=sys.stderr)
-    done = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True)
-    record = {"command": command, "returncode": done.returncode,
+    done = subprocess.run(["/bin/bash", "-o", "pipefail", "-c", command],
+                          cwd=cwd, capture_output=True, text=True)
+    record = {"command": command, "shell": "/bin/bash -o pipefail -c",
+              "returncode": done.returncode,
               "stderr_tail": done.stderr.strip().splitlines()[-6:]}
     if done.returncode != 0:
         raise SystemExit(f"step failed ({done.returncode}): {command}\n{done.stderr}")
@@ -78,12 +89,59 @@ def decompress(source: Path, target: Path) -> str:
     return ev.sha256_file(target)
 
 
+def verify_index(index_dir: Path) -> dict:
+    """Validate a recorded index before reusing it.
+
+    A reused index is an undeclared input unless it is checked: the record must
+    name the reference this command's coordinates are defined on, and all eight
+    `.ht2` files must be present with the size and sha256 the build recorded.
+    Anything else and the alignment would run against something unknown.
+    """
+    record_path = index_dir / INDEX_RECORD
+    if not record_path.is_file():
+        raise SystemExit(f"no {INDEX_RECORD} in {index_dir}: build the index with "
+                         f"--prepare-index-only, so its provenance is recorded")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+
+    assembly = record.get("assembly", {})
+    if assembly.get("accession") != ev.REFERENCE["assembly_accession"]:
+        raise SystemExit(f"recorded index is for assembly "
+                         f"{assembly.get('accession')!r}, not "
+                         f"{ev.REFERENCE['assembly_accession']!r}")
+    for key, declared in (("sha256_gz", GENOME_SHA256),
+                          ("sha256_decompressed", GENOME_SHA256_DECOMPRESSED)):
+        if assembly.get(key) != declared:
+            raise SystemExit(f"recorded index {key} is {assembly.get(key)!r}, "
+                             f"declared {declared}")
+    if record.get("index_name") != INDEX_NAME:
+        raise SystemExit(f"recorded index name is {record.get('index_name')!r}, "
+                         f"expected {INDEX_NAME!r}")
+
+    files = record.get("files") or {}
+    if len(files) != 8:
+        raise SystemExit(f"recorded index has {len(files)} files, expected 8; "
+                         f"rebuild it in a new directory")
+    for name, facts in sorted(files.items()):
+        path = index_dir / name
+        if not path.is_file():
+            raise SystemExit(f"index file missing: {path}")
+        size = path.stat().st_size
+        if size != facts["bytes"]:
+            raise SystemExit(f"index file {name}: {size} bytes on disk, "
+                             f"{facts['bytes']} recorded")
+        observed = ev.sha256_file(path)
+        if observed != facts["sha256"]:
+            raise SystemExit(f"index file {name}: sha256 {observed}, "
+                             f"recorded {facts['sha256']}")
+    print(f"[index] verified: 8 files against {record_path}", file=sys.stderr)
+    return record
+
+
 def prepare_index(genome_gz: Path, index_dir: Path, threads: int) -> dict:
     index_dir.mkdir(parents=True, exist_ok=True)
-    record_path = index_dir / INDEX_RECORD
-    if record_path.is_file():
-        print(f"[index] reusing {record_path}", file=sys.stderr)
-        return json.loads(record_path.read_text(encoding="utf-8"))
+    if (index_dir / INDEX_RECORD).is_file():
+        print(f"[index] reusing {index_dir / INDEX_RECORD}", file=sys.stderr)
+        return verify_index(index_dir)
 
     observed = ev.sha256_file(genome_gz)
     if observed != GENOME_SHA256:
@@ -112,21 +170,51 @@ def prepare_index(genome_gz: Path, index_dir: Path, threads: int) -> dict:
         "files": {path.name: {"bytes": path.stat().st_size, "sha256": ev.sha256_file(path)}
                   for path in sorted(index_dir.glob(f"{INDEX_NAME}.*.ht2"))},
     }
-    record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n",
-                           encoding="utf-8", newline="\n")
+    (index_dir / INDEX_RECORD).write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     print(f"[index] built, {len(record['files'])} files", file=sys.stderr)
-    return record
+    return verify_index(index_dir)
 
 
 def fastq_facts(path: Path) -> dict:
+    """Spot count, base count and sha256 of the file at `path` as it is on disk.
+
+    Call this on the path the aligner will open, not on the catalogue copy: the
+    point of the hash is to identify the bytes that were read.
+    """
     spots = bases = 0
     with gzip.open(path, "rt", encoding="ascii") as handle:
         for number, line in enumerate(handle):
             if number % 4 == 1:
                 spots += 1
                 bases += len(line) - 1
-    return {"file": path.name, "bytes": path.stat().st_size, "sha256": ev.sha256_file(path),
+    resolved = path.resolve()
+    return {"path_opened_by_aligner": str(path), "resolves_to": str(resolved),
+            "bytes": path.stat().st_size, "sha256": ev.sha256_file(path),
             "spots": spots, "bases": bases}
+
+
+def stage_input(source: Path, target: Path) -> None:
+    """Put the declared FASTQ where the recipe expects it, refusing anything else there.
+
+    A file already at `target` is only acceptable when it resolves to the
+    declared source. Otherwise the aligner would read one file while the
+    manifest describes another, which is the whole point of hashing the inputs.
+    """
+    if not source.is_file():
+        raise SystemExit(f"declared read file is missing: {source}")
+    if target.is_symlink() or target.exists():
+        if not target.is_symlink():
+            raise SystemExit(
+                f"{target} already exists and is not a link to the declared input; "
+                f"a leftover file here would be aligned instead of {source}. Use a new "
+                f"--work-dir rather than reusing this one.")
+        if target.resolve() != source.resolve():
+            raise SystemExit(
+                f"{target} points at {target.resolve()}, not at the declared "
+                f"{source.resolve()}; use a new --work-dir.")
+        return
+    target.symlink_to(source)
 
 
 def process_library(run: str, reads_dir: Path, index_dir: Path, work: Path,
@@ -135,14 +223,15 @@ def process_library(run: str, reads_dir: Path, index_dir: Path, work: Path,
     library_work = work / run
     library_work.mkdir(parents=True, exist_ok=True)
     for mate in (1, 2):
-        source = reads_dir / f"{run}_{mate}.fastq.gz"
-        if not source.is_file():
-            raise SystemExit(f"{run}: missing {source}")
-        link = library_work / f"{run}_{mate}.fastq.gz"
-        if not link.exists():
-            link.symlink_to(source)
+        stage_input(reads_dir / f"{run}_{mate}.fastq.gz",
+                    library_work / f"{run}_{mate}.fastq.gz")
 
-    reads = [fastq_facts(reads_dir / f"{run}_{mate}.fastq.gz") for mate in (1, 2)]
+    # Hashed where the aligner opens them, under the working directory, so the
+    # recorded sha256 is the sha256 of the bytes hisat2 read.
+    reads = [fastq_facts(library_work / f"{run}_{mate}.fastq.gz") for mate in (1, 2)]
+    if reads[0]["spots"] != reads[1]["spots"]:
+        raise SystemExit(f"{run}: mate1 has {reads[0]['spots']} spots and mate2 "
+                         f"{reads[1]['spots']}; the pair is not intact")
     print(f"[{run}] {reads[0]['spots']} spots per mate", file=sys.stderr)
 
     genome = index_dir / "GCA_975739785.1_ihDalMaid1.1_genomic.fna"
@@ -190,12 +279,29 @@ def process_library(run: str, reads_dir: Path, index_dir: Path, work: Path,
     for leftover in library_work.glob("*.sam"):
         leftover.unlink()
 
+    # Bind the counted manifest back to the artefacts: the SAM the counter
+    # verified must be the SAM written here, on the reference declared here.
+    sam_sha256 = ev.sha256_file(extracted)
+    counted_manifest = json.loads((counted / "manifest.json").read_text(encoding="utf-8"))
+    entry = counted_manifest["libraries"][0]
+    if entry["observed_sha256"] != sam_sha256 or entry["declared_sha256"] != sam_sha256:
+        raise SystemExit(f"{run}: the counted manifest describes a different SAM "
+                         f"({entry['observed_sha256']}) than the one written ({sam_sha256})")
+    if counted_manifest["reference"]["sequence_length_nt"] != \
+            ev.REFERENCE["sequence_length_nt"]:
+        raise SystemExit(f"{run}: the counted manifest names another reference length")
+
     return {
         "run_accession": run,
         "reads": reads,
         "commands": executed,
+        "evidence_binding": {
+            "reads_hashed_at_the_path_the_aligner_opened": True,
+            "index_verified_against_its_build_record": True,
+            "counted_sam_sha256_matches_the_panel_and_the_manifest": True,
+        },
         "extracted_sam": {"path": extracted.relative_to(root).as_posix(),
-                          "sha256": ev.sha256_file(extracted),
+                          "sha256": sam_sha256,
                           "bytes": extracted.stat().st_size},
         "panel": {"path": panel_path.relative_to(root).as_posix(),
                   "sha256": ev.sha256_file(panel_path)},
@@ -239,11 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"destination is not empty: {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    index_record_path = index_dir / INDEX_RECORD
-    if not index_record_path.is_file():
-        raise SystemExit(f"no {INDEX_RECORD} in {index_dir}: build the index first with "
-                         f"--prepare-index-only, so its provenance is recorded")
-    index_record = json.loads(index_record_path.read_text(encoding="utf-8"))
+    index_record = verify_index(index_dir)
 
     criteria = ev.Criteria()
     work = Path(args.work_dir).resolve()

@@ -12,8 +12,11 @@ will.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -865,3 +868,148 @@ def test_a_run_outside_a_git_checkout_is_refused_before_anything_is_written(tmp_
     panel = make_panel(tmp_path, [library_entry(tmp_path, "SYNTH01", [])])
     with pytest.raises(ev.VerificationError, match="cannot record the commit"):
         ev.run(tmp_path, panel, tmp_path / "out", ev.Criteria())
+
+
+# --------------------------------------------------------------------------
+# The pilot executor: reuse of a working directory and of an index, and
+# failures inside the recipe's pipeline.
+# --------------------------------------------------------------------------
+
+_PILOT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "run_nb01_dsrnase3_pilot.py"
+_pilot_spec = importlib.util.spec_from_file_location("run_nb01_dsrnase3_pilot", _PILOT_PATH)
+pilot = importlib.util.module_from_spec(_pilot_spec)
+sys.modules[_pilot_spec.name] = pilot
+_pilot_spec.loader.exec_module(pilot)
+
+
+def test_staging_links_the_declared_input(tmp_path):
+    source = tmp_path / "SRR_1.fastq.gz"
+    source.write_bytes(b"x")
+    target = tmp_path / "work" / "SRR_1.fastq.gz"
+    target.parent.mkdir()
+    pilot.stage_input(source, target)
+    assert target.is_symlink() and target.resolve() == source.resolve()
+    # Staging again over its own link is accepted and changes nothing.
+    pilot.stage_input(source, target)
+    assert target.resolve() == source.resolve()
+
+
+def test_a_leftover_real_file_in_the_working_directory_is_refused(tmp_path):
+    """Regression: the aligner would read this file while the manifest hashed another."""
+    source = tmp_path / "SRR_1.fastq.gz"
+    source.write_bytes(b"declared")
+    target = tmp_path / "work" / "SRR_1.fastq.gz"
+    target.parent.mkdir()
+    target.write_bytes(b"stale and different")
+    with pytest.raises(SystemExit, match="not a link to the declared input"):
+        pilot.stage_input(source, target)
+    assert target.read_bytes() == b"stale and different"      # nothing was overwritten
+
+
+def test_a_link_to_another_input_is_refused(tmp_path):
+    source = tmp_path / "SRR_1.fastq.gz"
+    other = tmp_path / "other.fastq.gz"
+    for path in (source, other):
+        path.write_bytes(b"x")
+    target = tmp_path / "work" / "SRR_1.fastq.gz"
+    target.parent.mkdir()
+    target.symlink_to(other)
+    with pytest.raises(SystemExit, match="points at"):
+        pilot.stage_input(source, target)
+
+
+def test_a_missing_declared_read_file_is_refused(tmp_path):
+    with pytest.raises(SystemExit, match="declared read file is missing"):
+        pilot.stage_input(tmp_path / "absent.fastq.gz", tmp_path / "work.fastq.gz")
+
+
+def index_record(index_dir, **overrides):
+    files = {}
+    for number in range(1, 9):
+        path = index_dir / f"{pilot.INDEX_NAME}.{number}.ht2"
+        path.write_bytes(bytes([number]) * number)
+        files[path.name] = {"bytes": path.stat().st_size, "sha256": ev.sha256_file(path)}
+    record = {
+        "assembly": {"accession": ev.REFERENCE["assembly_accession"],
+                     "sha256_gz": pilot.GENOME_SHA256,
+                     "sha256_decompressed": pilot.GENOME_SHA256_DECOMPRESSED},
+        "index_name": pilot.INDEX_NAME,
+        "files": files,
+    }
+    record.update(overrides)
+    (index_dir / pilot.INDEX_RECORD).write_text(json.dumps(record), encoding="utf-8")
+    return record
+
+
+def test_a_recorded_index_verifies_when_every_file_matches(tmp_path):
+    index_record(tmp_path)
+    assert len(pilot.verify_index(tmp_path)["files"]) == 8
+
+
+def test_an_index_without_a_build_record_is_refused(tmp_path):
+    with pytest.raises(SystemExit, match="build the index"):
+        pilot.verify_index(tmp_path)
+
+
+def test_an_index_for_another_assembly_is_refused(tmp_path):
+    index_record(tmp_path, assembly={"accession": "GCA_975739835.1",
+                                     "sha256_gz": pilot.GENOME_SHA256,
+                                     "sha256_decompressed": pilot.GENOME_SHA256_DECOMPRESSED})
+    with pytest.raises(SystemExit, match="recorded index is for assembly"):
+        pilot.verify_index(tmp_path)
+
+
+def test_an_index_whose_recorded_reference_hash_differs_is_refused(tmp_path):
+    index_record(tmp_path, assembly={"accession": ev.REFERENCE["assembly_accession"],
+                                     "sha256_gz": "0" * 64,
+                                     "sha256_decompressed": pilot.GENOME_SHA256_DECOMPRESSED})
+    with pytest.raises(SystemExit, match="sha256_gz"):
+        pilot.verify_index(tmp_path)
+
+
+def test_a_missing_index_file_is_refused(tmp_path):
+    index_record(tmp_path)
+    (tmp_path / f"{pilot.INDEX_NAME}.5.ht2").unlink()
+    with pytest.raises(SystemExit, match="index file missing"):
+        pilot.verify_index(tmp_path)
+
+
+def test_an_index_file_of_the_wrong_size_is_refused(tmp_path):
+    index_record(tmp_path)
+    # Truncated to a different length, so the size check is what rejects it.
+    (tmp_path / f"{pilot.INDEX_NAME}.5.ht2").write_bytes(b"ab")
+    with pytest.raises(SystemExit, match="bytes on disk"):
+        pilot.verify_index(tmp_path)
+
+
+def test_an_index_file_whose_content_changed_is_refused(tmp_path):
+    index_record(tmp_path)
+    path = tmp_path / f"{pilot.INDEX_NAME}.5.ht2"
+    path.write_bytes(b"\xff" * path.stat().st_size)     # same size, different bytes
+    with pytest.raises(SystemExit, match="sha256"):
+        pilot.verify_index(tmp_path)
+
+
+def test_an_index_record_with_fewer_than_eight_files_is_refused(tmp_path):
+    record = index_record(tmp_path)
+    record["files"].pop(f"{pilot.INDEX_NAME}.8.ht2")
+    (tmp_path / pilot.INDEX_RECORD).write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(SystemExit, match="expected 8"):
+        pilot.verify_index(tmp_path)
+
+
+def test_a_failing_pipeline_stage_fails_the_step_even_when_the_last_stage_exits_zero(tmp_path):
+    """Regression: samtools sort exits 0 on a truncated stream from a failed collate."""
+    # `false` stands for the failing stage; `cat` for a last stage that is happy
+    # with an empty stream and returns 0. Without pipefail this returns 0.
+    plain = subprocess.run("false | cat", shell=True, cwd=tmp_path)
+    assert plain.returncode == 0, "the shell really does report only the last stage"
+    with pytest.raises(SystemExit, match="step failed"):
+        pilot.run_command("false | cat", tmp_path)
+
+
+def test_a_pipeline_whose_every_stage_succeeds_is_recorded_verbatim(tmp_path):
+    record = pilot.run_command("true | cat", tmp_path)
+    assert record["returncode"] == 0
+    assert record["command"] == "true | cat"
+    assert "pipefail" in record["shell"]
