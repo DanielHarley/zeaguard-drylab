@@ -104,8 +104,12 @@ def test_exact_junction_with_long_anchors_is_support():
     assert junction["counted_as_support"] is True
     assert (junction["intron_ref_start"], junction["intron_ref_end"]) == \
         (TARGET.intron_start, TARGET.intron_end)
-    assert junction["anchor_upstream_aligned_nt"] == 50
-    assert junction["anchor_downstream_aligned_nt"] == 50
+    # Both anchor zones fully covered, which is what support requires.
+    assert junction["anchor_upstream_covered_nt"] == ANCHOR_NT
+    assert junction["anchor_downstream_covered_nt"] == ANCHOR_NT
+    assert junction["anchor_required_nt"] == ANCHOR_NT
+    assert junction["anchor_zone_upstream"] == "122007329-122007348"
+    assert junction["anchor_zone_downstream"] == "122012479-122012498"
 
 
 def test_one_base_shift_on_both_edges_is_a_neighbour_not_support():
@@ -126,31 +130,121 @@ def test_one_base_shift_on_the_acceptor_only_keeps_the_donor_but_is_not_support(
     assert junction["delta_intron_end_nt"] == 1
 
 
-def test_a_deletion_inside_the_upstream_block_leaves_the_junction_exact():
-    # 30M2D20M aligns 50 query bases over 52 reference bases and still ends on
-    # the declared donor, so the junction stays exact and the anchor is the
-    # aligned bases, not the reference span.
-    observation = observe(f"30M2D20M{TARGET.intron_len_nt}N50M", UP_WINDOW_START - 2)
+ANCHOR_NT = ev.Criteria().min_anchor_nt
+
+
+def test_a_deletion_outside_the_anchor_zone_still_supports():
+    # 30M2D20M: the deletion sits 20 nt before the donor, so all 20 zone bases
+    # are covered and the junction is supported.
+    observation = observe(f"30M2D{ANCHOR_NT}M{TARGET.intron_len_nt}N50M",
+                          TARGET.intron_start - ANCHOR_NT - 32)
     junction = target_junctions(observation)[0]
     assert junction["boundary_match"] == "exact"
+    assert junction["anchor_upstream_covered_nt"] == ANCHOR_NT
     assert junction["category"] == "support"
-    assert junction["anchor_upstream_aligned_nt"] == 50
 
 
-def test_an_insertion_does_not_inflate_the_anchor():
+# --------------------------------------------------------------------------
+# The review's finding: a deletion at the edge must not be compensated for by
+# bases further out. Coverage is counted on the reference axis, per read.
+# --------------------------------------------------------------------------
+
+
+def test_a_deletion_at_the_donor_edge_is_not_support():
+    """Regression: 30M2D5130N70M was counted as support.
+
+    The two reference bases immediately before the intron are deleted, so no
+    anchored crossing read could have been read there, yet the block as a whole
+    aligned 30 bases. Summing the block let those 30 compensate for the gap.
+    """
+    observation = observe(f"30M2D{TARGET.intron_len_nt}N70M", TARGET.intron_start - 32)
+    junction = target_junctions(observation)[0]
+    assert junction["boundary_match"] == "exact"
+    assert junction["anchor_upstream_covered_nt"] == ANCHOR_NT - 2      # 18 of 20
+    assert junction["anchor_downstream_covered_nt"] == ANCHOR_NT
+    assert junction["category"] == "short_anchor"
+    assert junction["counted_as_support"] is False
+
+
+def test_a_deletion_at_the_acceptor_edge_is_not_support():
+    observation = observe(f"50M{TARGET.intron_len_nt}N2D50M", TARGET.intron_start - 50)
+    junction = target_junctions(observation)[0]
+    assert junction["boundary_match"] == "exact"
+    assert junction["anchor_upstream_covered_nt"] == ANCHOR_NT
+    assert junction["anchor_downstream_covered_nt"] == ANCHOR_NT - 2
+    assert junction["category"] == "short_anchor"
+
+
+def test_a_deletion_immediately_after_n_does_not_refuse_the_library():
+    """A D straight after an N is valid SAM; the sibling walker raises on it."""
+    counts = count([
+        record_line("after_n", TARGET.intron_start - 50,
+                    f"50M{TARGET.intron_len_nt}N2D50M"),
+        record_line("plain", UP_WINDOW_START, "50M"),
+    ])
+    assert counts["n_records_on_target_sequence"] == 2
+    row = [j for observation in counts["observations"]
+           for j in observation["junctions"] if observation["qname"] == "after_n"][0]
+    assert row["category"] == "short_anchor"
+    # And the reference walk itself places the first aligned base after the gap.
+    walk = ev.walk_reference(ev.parse_cigar(f"50M{TARGET.intron_len_nt}N2D50M"),
+                             TARGET.intron_start - 50)
+    assert walk["junctions"][0]["intron_ref_start"] == TARGET.intron_start
+    assert walk["junctions"][0]["intron_ref_end"] == TARGET.intron_end
+    assert walk["aligned"][1][0] == TARGET.intron_end + 3
+
+
+def test_a_deletion_inside_the_anchor_zone_is_not_support():
+    # The gap is 10 nt in from the donor: still inside the 20 nt footprint.
+    observation = observe(f"30M2D10M{TARGET.intron_len_nt}N50M",
+                          TARGET.intron_start - 42)
+    junction = target_junctions(observation)[0]
+    assert junction["anchor_upstream_covered_nt"] == ANCHOR_NT - 2
+    assert junction["category"] == "short_anchor"
+
+
+def test_two_incomplete_anchor_fragments_do_not_make_the_junction_supported():
+    """The review's case: two such fragments reached JUNCTION_SUPPORTED."""
+    result = verdict_for(informative_background() + [
+        record_line("edge_del1", TARGET.intron_start - 32,
+                    f"30M2D{TARGET.intron_len_nt}N70M", flag=0x1 | 0x40),
+        record_line("edge_del2", TARGET.intron_start - 32,
+                    f"30M2D{TARGET.intron_len_nt}N70M", flag=0x1 | 0x40),
+    ])
+    counts = result["counts"]
+    assert counts["support_reads"] == 0
+    assert counts["support_fragments"] == 0
+    assert counts["short_anchor_fragments"] == 2
+    assert result["verdict"] != "JUNCTION_SUPPORTED"
+    assert result["verdict"] == "NO_SUPPORT_WITH_INFORMATIVE_COVERAGE"
+
+
+def test_the_same_rule_decides_the_annotated_controls():
+    counts = count([
+        record_line("ctl_ok", CONTROL_456.intron_start - 50,
+                    f"50M{CONTROL_456.intron_len_nt}N50M"),
+        record_line("ctl_edge_del", CONTROL_870.intron_start - 32,
+                    f"30M2D{CONTROL_870.intron_len_nt}N70M"),
+    ])
+    assert counts["controls"][CONTROL_456.name]["support_fragments"] == 1
+    assert counts["controls"][CONTROL_870.name]["support_fragments"] == 0
+
+
+def test_an_insertion_outside_the_zone_leaves_support_intact():
     observation = observe(f"24M4I24M{TARGET.intron_len_nt}N50M", TARGET.intron_start - 48)
     junction = target_junctions(observation)[0]
     assert junction["boundary_match"] == "exact"
-    # 48 aligned bases, not 52: the 4 inserted bases align to nothing.
-    assert junction["anchor_upstream_aligned_nt"] == 48
+    # The insertion sits 24 nt before the donor; the zone itself is covered.
+    assert junction["anchor_upstream_covered_nt"] == ANCHOR_NT
     assert junction["category"] == "support"
 
 
 def test_an_insertion_cannot_lift_a_short_anchor_over_the_minimum():
     observation = observe(f"8M8I8M{TARGET.intron_len_nt}N50M", TARGET.intron_start - 16)
     junction = target_junctions(observation)[0]
-    # 16 aligned bases and 8 inserted: 24 query bases, but only 16 anchored.
-    assert junction["anchor_upstream_aligned_nt"] == 16
+    # 16 reference bases covered and 8 inserted: 24 query bases consumed, but an
+    # insertion covers no reference base, so the 20 nt zone stays 4 nt short.
+    assert junction["anchor_upstream_covered_nt"] == 16
     assert junction["category"] == "short_anchor"
 
 
@@ -159,7 +253,7 @@ def test_a_short_anchor_is_recorded_separately_and_is_not_support():
     junction = target_junctions(observation)[0]
     assert junction["boundary_match"] == "exact"
     assert junction["category"] == "short_anchor"
-    assert junction["anchor_upstream_aligned_nt"] == 8
+    assert junction["anchor_upstream_covered_nt"] == 8
     assert junction["counted_as_support"] is False
 
 

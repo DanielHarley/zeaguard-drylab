@@ -64,17 +64,17 @@
     "status": "reconciled as two halves of one experiment, not as an either/or. This file records the reconciliation; it does not amend manifest.json, whose value is hash-pinned reference material outside this branch's scope."
   },
   "origin_assessment": {
-    "rule": "origin_class `confirmed_origin` requires documentary evidence tying the library to the assembly of TRINITY_DN5008_c0_g1_i24. Nothing below meets it.",
-    "what_is_documented": "The TSA master record of GITV00000000.1 lists these sixteen runs under its own Sequence Read Archive DBLINK, which ties them to THAT assembly.",
-    "why_that_is_not_enough": [
-      "The contig in question is named TRINITY_DN5008_c0_g1_i24, which is Trinity's naming convention, while the TSA master record declares its assembly method as CLC Genomics Workbench v.11 plus Sequencer 5.4.6. The published contig identifier therefore does not name a member of this assembly.",
-      "The NB01 run record of 2026-11-15 already records that an exact search of GITV00000000.1 returned zero records for the 642/643 junction and for each immediate flank in isolation, which is consistent with the contig not being part of it.",
-      "A link between a run and one assembly is not a link between that run and a different assembly of the same species, however related the projects."
+    "rule": "origin_class `confirmed_origin` requires documentary evidence tying the library to the assembly of TRINITY_DN5008_c0_g1_i24. Nothing below meets it, which is why every run is `comparative`.",
+    "what_is_documented": "The TSA master record of GITV00000000.1 lists these sixteen runs under its own Sequence Read Archive DBLINK, which ties them to THAT assembly. That link is documented and is not in question.",
+    "why_that_is_not_confirmed_origin": [
+      "A link between a run and one assembly is not a link between that run and a different assembly of the same species. `confirmed_origin` is about the assembly of the published contig, and no document examined here addresses it.",
+      "The contig identifier TRINITY_DN5008_c0_g1_i24 follows Trinity's naming convention, while the TSA master record declares its assembly method as CLC Genomics Workbench v.11 plus Sequencer 5.4.6. That is an observation about naming and declared method: it says the identifier does not look like a member of this TSA, and it does NOT establish that these reads were not used, since the same reads can be assembled again with a different assembler under different contig names.",
+      "`2026-10-03_nb01-dsrnase2-identity.md` is the record that documents the TSA search outcome for dsRNase-3, in its Results items 6 ('dsRNase-3 has no TSA record of its own') and 9 ('no dsRNase-3 hit', reproducing the historical parameters). No record in this repository documents an exact search of GITV00000000.1 for the 642/643 junction or for either immediate flank in isolation; that statement reached this round as a premise and is recorded here as unverified against a run record."
     ],
-    "consequence": "All sixteen runs are classified `comparative`. They are the right candidates for asking whether any public D. maidis RNA-seq crosses the 642/643 junction; they are not the reads that produced the published contig, and no run of the command may be read as establishing that."
+    "consequence": "All sixteen runs are classified `comparative`: the right candidates for asking whether any public D. maidis RNA-seq crosses the 642/643 junction. Whether any of them was also used in the assembly that produced TRINITY_DN5008_c0_g1_i24 REMAINS OPEN \u2014 it is neither established nor excluded by anything recorded here. No run of the command may be read as settling it in either direction."
   },
   "open_links": [
-    "Which reads assembled TRINITY_DN5008_c0_g1_i24, and under which assembly. No public record examined this round names a Trinity assembly of D. maidis containing that contig identifier.",
+    "Which reads assembled TRINITY_DN5008_c0_g1_i24, and under which assembly. No public record examined this round names a Trinity assembly of D. maidis containing that contig identifier. The libraries catalogued here are candidates for having contributed to it, neither confirmed nor ruled out.",
     "Whether the published dsRNase-3 CDS originates from the Dalaison-Fuentes/Argentine material rather than from the Ohio California-isolate libraries catalogued here. All sixteen runs are one isolate, one locality, one tissue preparation and one temperature (30 C), so they are a narrow sample of the species.",
     "The dissertation of Victorio Palacio (https://repositorio.unnoba.edu.ar/xmlui/handle/23601/481) is recorded as a lead for identifying the original libraries. It was not read this round and is not evidence here.",
     "The 25 C libraries of PRJNA579843 are declared as BioSamples of the assembly but were not retrievable as runs by the route used this round, so they are not catalogued.",

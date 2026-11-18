@@ -60,9 +60,10 @@ BLOCKS = {
     5: (122_014_117, 122_014_482),
 }
 
-# Anchor lengths probed on each side of the target junction. 10 is the counter's
-# declared min_anchor_nt, so the sweep straddles it.
-ANCHOR_LENGTHS = (4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 30, 50)
+# Anchor lengths probed on each side of the target junction. The sweep is
+# contiguous from 4 to 20 so no length below the counter's declared
+# min_anchor_nt is left unsampled, then thins out above it.
+ANCHOR_LENGTHS = (4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25, 30, 50)
 
 COMPLEMENT = str.maketrans("ACGTN", "TGCAN")
 
@@ -204,18 +205,6 @@ def write_fastqs(pairs, directory: Path, library: str) -> tuple[Path, Path]:
     return paths[0], paths[1]
 
 
-def fill(template: str, genome: Path, index: str, library: str, threads: int) -> str:
-    """Substitute paths and thread counts into a recipe command, nothing else."""
-    return (template
-            .replace("GCA_975739785.1_ihDalMaid1.1_genomic.fna", str(genome))
-            .replace("ihDalMaid1.1", index)
-            .replace("<LIB>_1.fastq.gz", f"{library}_1.fastq.gz")
-            .replace("<LIB>_2.fastq.gz", f"{library}_2.fastq.gz")
-            .replace("<LIB>", library)
-            .replace("-p 8", f"-p {threads}")
-            .replace("-@ 4", f"-@ {threads}"))
-
-
 def tool_version(command: list[str], pattern: str) -> str:
     done = subprocess.run(command, capture_output=True, text=True)
     for line in (done.stdout + done.stderr).splitlines():
@@ -224,32 +213,31 @@ def tool_version(command: list[str], pattern: str) -> str:
     return "unknown"
 
 
-def observed_junctions(sam_text: str) -> dict:
-    """Per read name, what the aligner reported for the target junction."""
+def observed_junctions(sam_text: str, criteria: ev.Criteria) -> dict:
+    """Per read name, what the aligner reported for the target junction.
+
+    The anchors reported here are the counter's own measure: reference bases of
+    each anchor zone covered by M, = or X in that read.
+    """
     _, records = ev.parse_sam(sam_text)
+    upstream_zone = ev.junction_anchor_zone(TARGET, "upstream", criteria)
+    downstream_zone = ev.junction_anchor_zone(TARGET, "downstream", criteria)
     observed: dict[str, dict] = {}
     for record in records:
         if record.is_unmapped or record.rname != ev.REFERENCE["sequence_name"]:
             continue
-        ops = ev.parse_cigar(record.cigar)
-        walk = ev.normalise_walk(ev.walk_record(ops, record.pos),
-                                 ev.read_length_from_cigar(ops), record.is_reverse)
-        blocks = sorted(walk["blocks"], key=lambda block: block["r_start"])
-        exact = next((junction for junction in walk["junctions"]
-                      if junction["intron_ref_start"] == TARGET.intron_start
-                      and junction["intron_ref_end"] == TARGET.intron_end), None)
+        walk = ev.walk_reference(ev.parse_cigar(record.cigar), record.pos)
+        exact = any(junction["intron_ref_start"] == TARGET.intron_start
+                    and junction["intron_ref_end"] == TARGET.intron_end
+                    for junction in walk["junctions"])
         entry = observed.setdefault(record.qname, {
-            "cigars": [], "spliced_at_target": False,
-            "anchor_upstream_nt": None, "anchor_downstream_nt": None, "mapq": record.mapq})
+            "cigars": [], "spliced_at_target": False, "anchor_upstream_nt": None,
+            "anchor_downstream_nt": None, "mapq": record.mapq})
         entry["cigars"].append(record.cigar)
-        if exact is not None:
-            upstream = next((b for b in blocks
-                             if b["r_end"] == TARGET.intron_start - 1), None)
-            downstream = next((b for b in blocks
-                               if b["r_start"] == TARGET.intron_end + 1), None)
+        if exact:
             entry["spliced_at_target"] = True
-            entry["anchor_upstream_nt"] = ev._aligned_nt(upstream) if upstream else 0
-            entry["anchor_downstream_nt"] = ev._aligned_nt(downstream) if downstream else 0
+            entry["anchor_upstream_nt"] = ev._overlap_nt(walk["aligned"], *upstream_zone)
+            entry["anchor_downstream_nt"] = ev._overlap_nt(walk["aligned"], *downstream_zone)
     return observed
 
 
@@ -295,7 +283,8 @@ def main(argv: list[str] | None = None) -> int:
 
         executed = []
         for template in ev.ALIGNMENT_RECIPE["commands"]:
-            command = fill(template, genome, "ihDalMaid1.1", LIBRARY_ID, args.threads)
+            command = ev.fill_recipe_command(template, genome, "ihDalMaid1.1",
+                                             LIBRARY_ID, args.threads)
             print(f"[recipe] {command}", file=sys.stderr)
             done = subprocess.run(command, shell=True, cwd=work,
                                   capture_output=True, text=True)
@@ -314,8 +303,9 @@ def main(argv: list[str] | None = None) -> int:
         if summary.is_file():
             shutil.copyfile(summary, out_dir / summary.name)
 
+    criteria = ev.Criteria()
     sam_text = extracted.read_text(encoding="utf-8")
-    observed = observed_junctions(sam_text)
+    observed = observed_junctions(sam_text, criteria)
 
     recovery = []
     for name, probe in sorted(design["anchor_probe"].items()):
@@ -361,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
 
     counted = out_dir / "counted"
     with ev.reserve_output_dir(counted) as reservation:
-        result = ev.run(root, panel_path, reservation.out_dir, ev.Criteria())
+        result = ev.run(root, panel_path, reservation.out_dir, criteria)
 
     report = {
         "versions": versions,
@@ -370,7 +360,14 @@ def main(argv: list[str] | None = None) -> int:
         "anchor_lengths_probed": list(ANCHOR_LENGTHS),
         "anchor_lengths_spliced_at_declared_coordinates": recovered,
         "anchor_lengths_not_spliced": missed,
-        "min_anchor_nt_declared": ev.Criteria().min_anchor_nt,
+        "min_anchor_nt_declared": criteria.min_anchor_nt,
+        "calibration_statement": (
+            "These are the lengths TESTED, on a synthetic reference with random flanking "
+            "sequence, at one read length and one set of alignment penalties. "
+            "min_anchor_nt is a conservative operational cut equal to the shortest tested "
+            "length that recovered the junction on both sides; it is not a measured "
+            "detection threshold, and the sensitivity of this pipeline on real libraries "
+            "remains unknown."),
         "extracted_sam": {"path": extracted.relative_to(root).as_posix(),
                           "sha256": ev.sha256_file(extracted)},
         "panel": {"path": panel_path.relative_to(root).as_posix(),

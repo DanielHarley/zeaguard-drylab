@@ -46,8 +46,12 @@ Scope of the counting
 ---------------------
 - Per library, and per fragment: each `QNAME` is counted once however many of
   its reads cross the junction.
-- A crossing requires **both** exact intron boundaries in one read's CIGAR,
-  with at least `min_anchor_nt` query bases aligned in the block on each side.
+- A crossing requires **both** exact intron boundaries in one read's CIGAR
+  **and**, in that same read, every one of the `min_anchor_nt` reference bases
+  immediately adjacent to each boundary covered by an `M`, `=` or `X`
+  operation. `D` and `I` add no reference coverage, so a deletion at or inside
+  that footprint leaves the anchor short and bases further out cannot
+  compensate for it. The same rule decides the annotated control junctions.
 - Mappings that are ambiguous, flagged as duplicates, secondary,
   supplementary, or short-anchored are counted in their own columns and never
   as support. So are junctions near the target but not at it, and pairs whose
@@ -111,14 +115,18 @@ _splice = _load_splice_check()
 VerificationError = _splice.VerificationError
 parse_cigar = _splice.parse_cigar
 parse_sam = _splice.parse_sam
-normalise_walk = _splice.normalise_walk
-read_length_from_cigar = _splice.read_length_from_cigar
 reserve_output_dir = _splice.reserve_output_dir
 sha256_file = _splice.sha256_file
 sha256_text = _splice.sha256_text
 union_length = _splice.union_length
-walk_record = _splice.walk_record
 write_tsv = _splice.write_tsv
+
+# The sibling's `walk_record` is deliberately NOT reused. It walks a CIGAR into
+# query-space blocks, which this command no longer needs, and it raises on a `D`
+# that immediately follows an `N` — a valid alignment, which would refuse a whole
+# library here. `walk_reference` below walks the reference axis instead, in the
+# only terms this command's rule is expressed in. The sibling's behaviour on
+# `N` followed by `D` is left for its own branch to address.
 
 # --------------------------------------------------------------------------
 # The question, declared. These coordinates are the subject of the run and are
@@ -223,18 +231,46 @@ ALIGNMENT_RECIPE = {
         "'samtools view <bam> OZ319704.1' fails rather than reading the region.",
         "The final view keeps the header, so @SQ and @PG reach the manifest; slicing to "
         "OZ319704.1 is what keeps the declared input small.",
-        "Anchor recovery measured on synthetic 100 nt reads crossing this junction "
-        "(scripts/check_nb01_dsrnase3_alignment_recipe.py): hisat2 2.2.1 with --dta "
-        "splices at the declared coordinates from a 20 nt anchor upwards on both "
-        "sides; 15 nt only on the upstream side; 11-15 nt align unspliced as a "
-        "full-length 100M carrying mismatches; 4-10 nt are soft-clipped. min_anchor_nt "
-        "is set to 20 for that reason. The 11-15 nt behaviour matters twice: such a "
-        "crossing read is invisible to this command, and it is reported as a confident "
-        "unspliced alignment rather than as nothing.",
-        "The boundary measured here is sequence-, read-length- and parameter-dependent, "
-        "so it is the recovery of this configuration and not a property of hisat2.",
+        "Anchor recovery swept contiguously from 4 to 20 nt on synthetic 100 nt reads "
+        "crossing this junction (scripts/check_nb01_dsrnase3_alignment_recipe.py): "
+        "hisat2 2.2.1 with --dta spliced at the declared coordinates from 15 nt "
+        "upwards on the upstream side but only from 18 nt upwards on the downstream "
+        "side, aligned 11-17 nt unspliced as a full-length 100M carrying mismatches, "
+        "and soft-clipped 4-10 nt. The shortest anchor recovered on BOTH sides is "
+        "18 nt; min_anchor_nt is 20, a conservative cut two nucleotides above it, "
+        "because the asymmetry shows the recovery point depends on the sequence at "
+        "each edge. The 11-17 nt behaviour matters twice: such a crossing read is "
+        "invisible to this command, and it is reported as a confident unspliced "
+        "alignment rather than as nothing.",
+        "The sweep was run on a synthetic reference with random flanking sequence, at "
+        "one read length, under one set of penalties. It states what this "
+        "configuration recovered on that fixture, not a property of hisat2, and it "
+        "does not bound the sensitivity of this pipeline on real libraries, which "
+        "remains unknown.",
     ],
 }
+
+
+def fill_recipe_command(template: str, genome: Path, index: str, library: str,
+                        threads: int) -> str:
+    """Substitute paths, index name, library and thread count into a recipe command.
+
+    Nothing else is substituted: the flags, the order of the steps and the
+    redirections are the declared ones, so whatever runs is the recipe. The
+    genome filename is lifted out before the index name is substituted and put
+    back afterwards: the declared filename contains the declared index name as a
+    substring, so substituting in place would corrupt whichever went second.
+    """
+    token = "\x00GENOME\x00"
+    return (template
+            .replace("GCA_975739785.1_ihDalMaid1.1_genomic.fna", token)
+            .replace("ihDalMaid1.1", index)
+            .replace(token, str(genome))
+            .replace("<LIB>_1.fastq.gz", f"{library}_1.fastq.gz")
+            .replace("<LIB>_2.fastq.gz", f"{library}_2.fastq.gz")
+            .replace("<LIB>", library)
+            .replace("-p 8", f"-p {threads}")
+            .replace("-@ 4", f"-@ {threads}"))
 
 
 @dataclass(frozen=True)
@@ -246,17 +282,27 @@ class Criteria:
     here is one the aligner placed at a single locus. Combined with `NH` when the
     aligner emits it, never replaced by it, since not every aligner does.
 
-    `min_anchor_nt` 20: set to what the declared recipe actually recovers, not
-    to a statistical floor. Measured on synthetic 100 nt reads crossing this
-    junction at anchors 4 to 50 nt (`scripts/check_nb01_dsrnase3_alignment_recipe.py`),
-    hisat2 2.2.1 with `--dta` reported a spliced alignment at the declared
-    coordinates only from 20 nt upwards on both sides: 15 nt was spliced on the
-    upstream side alone, 11 to 15 nt were aligned unspliced as a full-length
-    `100M` with mismatches, and 4 to 10 nt were soft-clipped. A shorter anchor
-    therefore never reaches this counter whatever it is set to, and a smaller
-    value would also shrink the anchor zone below the footprint a real crossing
-    read occupies. 20 aligned query bases on each side also put a chance match
-    far below any plausible background.
+    `min_anchor_nt` 20: a **conservative operational cut**, two nucleotides
+    above the shortest anchor that recovered the junction on both sides of a
+    synthetic reference. Swept contiguously from 4 to 20 nt with
+    `scripts/check_nb01_dsrnase3_alignment_recipe.py` on synthetic 100 nt reads
+    crossing this junction, hisat2 2.2.1 with `--dta` behaved asymmetrically:
+    it spliced at the declared coordinates from **15 nt** upwards on the
+    upstream side but only from **18 nt** upwards on the downstream side, so the
+    shortest anchor recovered on both sides is **18 nt**. Below that it either
+    aligned the read unspliced as a full-length `100M` carrying the mismatches
+    (11 to 17 nt) or soft-clipped the short side (4 to 10 nt). 20 is kept rather
+    than 18 because the asymmetry shows the recovery point depends on the
+    sequence at each edge, and a cut at the measured floor would sit exactly on
+    it.
+
+    Three limits on what that figure means. It was obtained on a synthetic
+    reference whose flanking sequence is random, at one read length, under one
+    set of alignment penalties. It says what this configuration recovered on
+    that fixture, not what hisat2 can recover in general. And the sensitivity
+    of the whole pipeline on real libraries, where sequence composition,
+    coverage, error profile and competing alignments all differ, **remains
+    unknown**: no measurement in this repository bounds it.
 
     `min_support_fragments` 2: one fragment is one library-preparation artefact
     away from being nothing. The observed count is reported whatever it is, so
@@ -423,30 +469,42 @@ def read_library_sam(path: Path, reference: dict) -> tuple[dict, list]:
 # --------------------------------------------------------------------------
 
 
-def ref_aligned_intervals(ops: list[tuple[int, str]], pos: int) -> list[tuple[int, int]]:
-    """Reference intervals an alignment actually covers with a base, 1-based inclusive.
+def walk_reference(ops: list[tuple[int, str]], pos: int) -> dict:
+    """Walk a CIGAR along the reference axis.
 
-    Deletions and junctions advance the reference without covering it, so a
-    coverage figure taken from here never counts a deleted or intronic base.
+    Returns the reference intervals the alignment actually covers with a base,
+    the `N` junctions it carries, and the last covered reference position. Only
+    `M`, `=` and `X` cover a reference base: `D` and `N` advance the reference
+    without covering it, and `I`, `S`, `H` and `P` do not touch it at all. So a
+    coverage figure taken from here never counts a deleted or intronic base, and
+    a `D` adjacent to an `N` on either side is walked like any other deletion
+    rather than refused.
     """
-    intervals: list[tuple[int, int]] = []
+    aligned: list[tuple[int, int]] = []
+    junctions: list[dict] = []
     reference = pos
     for length, op in ops:
         if op in ("M", "=", "X"):
-            intervals.append((reference, reference + length - 1))
+            aligned.append((reference, reference + length - 1))
             reference += length
-        elif op in ("D", "N"):
+        elif op == "D":
             reference += length
-    return intervals
+        elif op == "N":
+            junctions.append({"intron_ref_start": reference,
+                              "intron_ref_end": reference + length - 1,
+                              "intron_len": length})
+            reference += length
+    return {"aligned": aligned, "junctions": junctions,
+            "ref_end": aligned[-1][1] if aligned else pos - 1}
+
+
+def ref_aligned_intervals(ops: list[tuple[int, str]], pos: int) -> list[tuple[int, int]]:
+    """The reference intervals an alignment covers with a base, 1-based inclusive."""
+    return walk_reference(ops, pos)["aligned"]
 
 
 def _overlap_nt(intervals: list[tuple[int, int]], start: int, end: int) -> int:
     return sum(max(0, min(e, end) - max(s, start) + 1) for s, e in intervals)
-
-
-def _aligned_nt(block: dict) -> int:
-    """Query bases a block aligns to a reference base: M/=/X only, insertions excluded."""
-    return sum(end - start + 1 for start, end in block["aligned"])
 
 
 def is_duplicate(record) -> bool:
@@ -498,30 +556,33 @@ def _boundary_match(junction: dict, spec: JunctionSpec, criteria: Criteria) -> s
 
 def observe_record(record, index: int, specs: tuple[JunctionSpec, ...],
                    criteria: Criteria) -> dict:
-    """Everything one alignment record contributes, for every declared junction."""
+    """Everything one alignment record contributes, for every declared junction.
+
+    Support requires the `N` operation with both exact boundaries **and**, in
+    the same read, every base of both anchor zones covered by `M`, `=` or `X`.
+    Coverage is counted on the reference axis, so a deletion at or near an edge
+    leaves that zone short and bases further out cannot make up for it.
+    """
     ops = parse_cigar(record.cigar)
-    read_len = read_length_from_cigar(ops)
-    walk = normalise_walk(walk_record(ops, record.pos), read_len, record.is_reverse)
-    blocks = sorted(walk["blocks"], key=lambda block: block["r_start"])
+    walk = walk_reference(ops, record.pos)
+    intervals = walk["aligned"]
     disqualified_by = _disqualification(record, criteria)
 
     junction_rows: list[dict] = []
-    for junction in sorted(walk["junctions"], key=lambda j: j["intron_ref_start"]):
+    for junction in walk["junctions"]:
         for spec in specs:
             match = _boundary_match(junction, spec, criteria)
             if match is None:
                 continue
-            upstream = next((b for b in blocks if b["r_end"] == junction["intron_ref_start"] - 1),
-                            None)
-            downstream = next((b for b in blocks if b["r_start"] == junction["intron_ref_end"] + 1),
-                              None)
-            anchor_up = _aligned_nt(upstream) if upstream else 0
-            anchor_down = _aligned_nt(downstream) if downstream else 0
+            upstream_zone = junction_anchor_zone(spec, "upstream", criteria)
+            downstream_zone = junction_anchor_zone(spec, "downstream", criteria)
+            covered_up = _overlap_nt(intervals, *upstream_zone)
+            covered_down = _overlap_nt(intervals, *downstream_zone)
             if match != "exact":
                 category = match
             elif disqualified_by is not None:
                 category = "disqualified"
-            elif min(anchor_up, anchor_down) < criteria.min_anchor_nt:
+            elif min(covered_up, covered_down) < criteria.min_anchor_nt:
                 category = "short_anchor"
             else:
                 category = "support"
@@ -534,8 +595,11 @@ def observe_record(record, index: int, specs: tuple[JunctionSpec, ...],
                 "intron_len_nt": junction["intron_len"],
                 "delta_intron_start_nt": junction["intron_ref_start"] - spec.intron_start,
                 "delta_intron_end_nt": junction["intron_ref_end"] - spec.intron_end,
-                "anchor_upstream_aligned_nt": anchor_up,
-                "anchor_downstream_aligned_nt": anchor_down,
+                "anchor_zone_upstream": f"{upstream_zone[0]}-{upstream_zone[1]}",
+                "anchor_zone_downstream": f"{downstream_zone[0]}-{downstream_zone[1]}",
+                "anchor_upstream_covered_nt": covered_up,
+                "anchor_downstream_covered_nt": covered_down,
+                "anchor_required_nt": criteria.min_anchor_nt,
                 "counted_as_support": category == "support",
             })
 
@@ -551,24 +615,30 @@ def observe_record(record, index: int, specs: tuple[JunctionSpec, ...],
         "cigar": record.cigar,
         "ref_start": record.pos,
         "ref_end": walk["ref_end"],
-        "ref_aligned_intervals": ref_aligned_intervals(ops, record.pos),
+        "ref_aligned_intervals": intervals,
         "disqualified_by": disqualified_by,
         "junctions": junction_rows,
         "n_cigar_junctions": len(walk["junctions"]),
     }
 
 
-def anchor_zone(side: str, criteria: Criteria) -> tuple[int, int]:
-    """The bases a crossing read must align on `side` of the target junction.
+def junction_anchor_zone(spec: JunctionSpec, side: str, criteria: Criteria) -> tuple[int, int]:
+    """The reference bases a crossing read must cover on `side` of `spec`.
 
     Immediately against the boundary and extending away from the intron, so it
     is exactly the footprint an anchored crossing read occupies on that side.
+    Support requires every one of these bases to be covered by `M`, `=` or `X`
+    in the same read, which is what stops bases further out from compensating
+    for a deletion at the edge.
     """
     if side == "upstream":
-        return (TARGET_JUNCTION.intron_start - criteria.min_anchor_nt,
-                TARGET_JUNCTION.intron_start - 1)
-    return (TARGET_JUNCTION.intron_end + 1,
-            TARGET_JUNCTION.intron_end + criteria.min_anchor_nt)
+        return (spec.intron_start - criteria.min_anchor_nt, spec.intron_start - 1)
+    return (spec.intron_end + 1, spec.intron_end + criteria.min_anchor_nt)
+
+
+def anchor_zone(side: str, criteria: Criteria) -> tuple[int, int]:
+    """The anchor zone of the target junction, which informative coverage is judged over."""
+    return junction_anchor_zone(TARGET_JUNCTION, side, criteria)
 
 
 def _flank_statistics(observations: list[dict], criteria: Criteria) -> dict:
@@ -828,7 +898,8 @@ OBSERVATION_COLUMNS = [
     "disqualified_by", "ref_name", "ref_start", "ref_end", "cigar",
     "intron_ref_start", "intron_ref_end", "intron_len_nt",
     "delta_intron_start_nt", "delta_intron_end_nt",
-    "anchor_upstream_aligned_nt", "anchor_downstream_aligned_nt",
+    "anchor_zone_upstream", "anchor_zone_downstream",
+    "anchor_upstream_covered_nt", "anchor_downstream_covered_nt", "anchor_required_nt",
     "n_cigar_junctions",
 ]
 
@@ -1014,10 +1085,13 @@ def run(root: Path, panel_path: Path, out_dir: Path, criteria: Criteria) -> dict
             "produce.",
             "Counting reads coordinates that an aligner already assigned: a crossing read "
             "the aligner declined to splice is invisible here, so the counts are a lower "
-            "bound on crossing reads in the library. Measured on the declared recipe, "
-            "that applies below a 20 nt anchor, where hisat2 soft-clips the short side "
-            "or aligns the read unspliced with mismatches; such a pair is reported in "
-            "the mate-bridge column instead, if its mate lies in the other flank.",
+            "bound on crossing reads in the library. On the synthetic sweep of the "
+            "declared recipe that happened below an 18 nt anchor, where hisat2 soft-clips "
+            "the short side or aligns the read unspliced with mismatches; such a pair is "
+            "reported in the mate-bridge column instead, if its mate lies in the other "
+            "flank. min_anchor_nt 20 is a conservative operational cut two nucleotides "
+            "above that synthetic floor, not a measured detection threshold, and how far "
+            "the lower bound sits below the truth in a real library is unknown.",
             "MAPQ scales are aligner-specific. Where the aligner emits no NH tag, "
             "uniqueness rests on min_mapq alone.",
             "Flagged duplicates are reported but not re-derived; the duplicate call is the "
