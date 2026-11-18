@@ -4,7 +4,15 @@ Assign a published Dmai-dsRNase CDS to a genomic locus only on pre-registered co
 
 ## Status
 
-Proposed
+Accepted
+
+Ratified by the repository owner on 2026-11-18. Ratification adopts the ten criteria
+stated under Decision as the governing ones for mapping a published Dmai-dsRNase CDS to a
+genomic locus, and with them the verdicts already reported under those criteria. Unlike
+ADR 0008, this record was **not** on `master` when it was ratified: it is published on the
+branch `feat/nb01-dsrnase-locus-mapping`, where it entered in `f00b87d`, and its merge
+remains the repository owner's separate decision. Ratification settles the criteria, not
+the publication.
 
 ## Date
 
@@ -165,7 +173,15 @@ Atribuir uma CDS publicada de Dmai-dsRNase a um locus genômico somente sob crit
 
 ## Estado
 
-Proposed
+Accepted
+
+Ratificado pelo proprietário do repositório em 2026-11-18. A ratificação adota os dez
+critérios declarados em Decisão como os vigentes para atribuir uma CDS publicada de
+Dmai-dsRNase a um locus genômico, e com eles os vereditos já reportados sob esses
+critérios. Diferentemente da ADR 0008, este registro **não** estava no `master` quando foi
+ratificado: está publicado na branch `feat/nb01-dsrnase-locus-mapping`, onde entrou em
+`f00b87d`, e seu merge continua sendo decisão separada do proprietário. A ratificação
+resolve os critérios, não a publicação.
 
 ## Data
 

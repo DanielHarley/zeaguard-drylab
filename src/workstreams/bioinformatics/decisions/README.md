@@ -32,7 +32,7 @@ Current records:
 6. [0006 NB03 BicC candidate region policy](0006-nb03-bicc-candidate-region-policy.md)
 7. [0007 NB04 NTO sequence specificity policy](0007-nb04-nto-sequence-specificity-policy.md)
 8. [0008 NB03 BicC benchmark length discrepancy cause](0008-nb03-bicc-benchmark-length-discrepancy-cause.md) — `Accepted` on 2026-11-13. Implementation in `nb03_benchmark.py` and in the pinned BicC reference is deliberately deferred, so those artifacts still carry the superseded classification.
-9. [0009 NB01 dsRNase locus assignment criteria](0009-nb01-dsrnase-locus-assignment-criteria.md) — `Proposed` on 2026-11-15. Criteria for assigning a published Dmai-dsRNase CDS to a genomic locus and for deciding locus distinctness separately from sequence similarity.
+9. [0009 NB01 dsRNase locus assignment criteria](0009-nb01-dsrnase-locus-assignment-criteria.md) — `Accepted` on 2026-11-18, proposed on 2026-11-15 and ratified on the implementation branch, before merge. Criteria for assigning a published Dmai-dsRNase CDS to a genomic locus and for deciding locus distinctness separately from sequence similarity.
 
 ## Governance amendment A1
 
@@ -87,7 +87,7 @@ Registros atuais:
 6. [0006 Política de regiões candidatas de BicC do NB03](0006-nb03-bicc-candidate-region-policy.md)
 7. [0007 Política de especificidade de sequência NTO do NB04](0007-nb04-nto-sequence-specificity-policy.md)
 8. [0008 Causa da discrepância de comprimento do benchmark BicC do NB03](0008-nb03-bicc-benchmark-length-discrepancy-cause.md) — `Accepted` em 2026-11-13. A implementação em `nb03_benchmark.py` e na referência fixada de BicC está deliberadamente postergada, de modo que esses artefatos ainda carregam a classificação substituída.
-9. [0009 Critérios de atribuição a locus das dsRNase do NB01](0009-nb01-dsrnase-locus-assignment-criteria.md) — `Proposed` em 2026-11-15. Critérios para atribuir uma CDS publicada de Dmai-dsRNase a um locus genômico e para decidir a distinção entre loci separadamente da similaridade de sequência.
+9. [0009 Critérios de atribuição a locus das dsRNase do NB01](0009-nb01-dsrnase-locus-assignment-criteria.md) — `Accepted` em 2026-11-18, proposta em 2026-11-15 e ratificada na branch de implementação, antes do merge. Critérios para atribuir uma CDS publicada de Dmai-dsRNase a um locus genômico e para decidir a distinção entre loci separadamente da similaridade de sequência.
 
 ## Amendment de governança A1
 

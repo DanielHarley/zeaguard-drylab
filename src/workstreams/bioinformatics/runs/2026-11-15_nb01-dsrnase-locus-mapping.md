@@ -580,7 +580,7 @@ No deviation from the declared canonical environment: conda env `zeaguard`, BLAS
 
 ## Related decisions
 
-[ADR 0009](../decisions/0009-nb01-dsrnase-locus-assignment-criteria.md) (`Proposed`) records the mapping criteria, which were set before alignment. The run reused the discovery parameters and 50 % reporting threshold from [ADR 0004](../decisions/0004-nb01-dsrnase2-identity-criteria.md). [ADR 0003](../decisions/0003-nb01-target-identity-resolution-policy.md) records the earlier target identity policy.
+[ADR 0009](../decisions/0009-nb01-dsrnase-locus-assignment-criteria.md) (`Accepted` on 2026-11-18, on this branch and before its merge) records the mapping criteria. The record states they were set before alignment; the history of this repository does not separate them from the results, because the record, the panel, the module and this file all entered in `f00b87d`, so that ordering rests on this account and not on the commit sequence. The run reused the discovery parameters and 50 % reporting threshold from [ADR 0004](../decisions/0004-nb01-dsrnase2-identity-criteria.md). [ADR 0003](../decisions/0003-nb01-target-identity-resolution-policy.md) records the earlier target identity policy.
 
 Preceding run records: [2026-10-03 dsRNase-2 identity](2026-10-03_nb01-dsrnase2-identity.md), and the dsRNase protein audit of 2026-11-13 (`2026-11-13_nb01-dsrnase-protein-audit.md`, on the unpublished branch `feat/nb01-dsrnase-protein-audit`, hence unlinked), whose open questions this run addresses.
 
