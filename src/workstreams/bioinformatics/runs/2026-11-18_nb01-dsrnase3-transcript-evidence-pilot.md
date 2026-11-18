@@ -24,6 +24,25 @@ below comes from an earlier version.
 `feat/nb01-dsrnase3-transcript-evidence`, cut from `43b0ff75881775b96a48be048da6fd8d9fe52d37`
 of `feat/nb01-dsrnase-locus-mapping`.
 
+## Revisions of this record
+
+- **`62f1d6f`**, the first version. Its shared-donor table gave one figure per library —
+  41, 27, 64, 39 — and labelled it fragments. **That figure is a count of alignment
+  records**, not of fragments: it counts each mate separately and includes records the
+  counter's own quality filters reject. It was therefore not comparable with the zero
+  eligible fragments at 642/643 it was set against, and anyone reading `62f1d6f` is reading
+  that superseded unit.
+- **This version** corrects the counting unit. The shared donor is reported as three counts,
+  each with its denominator stated: **171 alignment records, 117 fragments after the quality
+  filters, and 73 fragments with both anchor zones completely covered**, the third being the
+  eligible figure. All three were verified by recounting the extracted SAMs directly, with
+  the command recorded under Results, and all 73 follow the annotated 315 nt intron.
+- **No result changed.** The four verdicts are `INCONCLUSIVE_INSUFFICIENT_COVERAGE` in both
+  versions, no library was recounted or rerun, and every output described here is the output
+  `4c842fcd` produced. The revision also corrected three provenance statements — on when the
+  index is verified, on what the versioned catalogue contains, and on which of the two
+  synthetic checks produced which result — each noted where it applies.
+
 ## Execution status
 
 `EXECUTED`. Four real RNA-seq libraries processed one at a time, each with its own
@@ -302,17 +321,37 @@ have carried a junction at that donor. A record quoting the output tables for th
 which column it is quoting; this record quotes the third.
 
 **Reproducing the three counts from the SAMs**, with the counter's own filters and anchor
-rule applied through its own code:
+rule applied through its own code. The script is run **from the checkout where it is
+versioned**, so the code that counts is the committed code, and it is pointed at the pilot
+clone, which is where the SAMs are:
 
 ```bash
+cd <checkout of this branch>
 python scripts/recount_nb01_dsrnase3_donor.py \
-    results/bioinformatics/nb01/dsrnase3_transcript_evidence/pilot_v1
+    <pilot clone>/results/bioinformatics/nb01/dsrnase3_transcript_evidence/pilot_v1
 ```
 
-It reads each library's extracted SAM, prints the three counts per library with the
-acceptors the anchored fragments reach, and takes about 23 s for the four. Its acceptor
-tally counts occurrences rather than fragments — 18, 10, 33, 15 — because in two libraries a
-fragment had both mates anchored at that junction; every occurrence is at 122,007,663.
+The script resolves `src/` from its own location, so running it from the versioned checkout
+is what makes it import that checkout's `nb01_dsrnase3_transcript_evidence`. Nothing needs
+to be copied into the pilot clone, and nothing should be: a copy of the script sitting there
+would be untracked, and an untracked copy is not the versioned code.
+
+Executed against the pilot outputs of `4c842fcd`, it takes about 24 s for the four libraries
+and prints:
+
+```
+shared donor 122007349, declared acceptor 122012478, min_anchor_nt 20, min_mapq 30
+run             records  fragments  anchored  acceptors
+SRR11822340          41         23        17  {122007663: 18}
+SRR11822336          27         17        10  {122007663: 10}
+SRR11822345          64         47        31  {122007663: 33}
+SRR11822341          39         30        15  {122007663: 15}
+total               171        117        73
+```
+
+The `acceptors` column counts occurrences rather than fragments — 18, 10, 33, 15 — because
+in two libraries a fragment had both mates anchored at that junction; every occurrence is at
+122,007,663.
 
 `acceptor_only` and `neighbour` counts are **0** in every library: no qualifying read
 reaches 122,012,479 from any donor, and none carries a junction within 20 nt of either
@@ -435,18 +474,14 @@ Results items 6 and 9.
 
 ## Related Issue / PR / commits
 
-Branch `feat/nb01-dsrnase3-transcript-evidence`. `7519219` adds the command, `e65d86d`,
-`48d563a` and `4c842fc` correct it; all four are pushed.
+Branch `feat/nb01-dsrnase3-transcript-evidence`. `7519219` adds the command; `e65d86d`,
+`48d563a` and `4c842fc` correct it, and `4c842fc` is the commit the pilot executed.
+`62f1d6f` is the first version of this record and was published; the revision that corrects
+its donor counting unit follows it on the same branch, and `Revisions of this record` above
+states what changed. Both versions remain reachable in the history, so a reader who arrives
+at `62f1d6f` should read that section.
 
-**The first version of this record, `62f1d6f`, was pushed**, on an instruction that the
-process sections of CONTRIBUTING.md were not to be treated as gates. The owner then asked
-for it to be held; by then it was already on `origin` and publication is irreversible in
-practice. The documentary correction that produced the version you are reading is committed
-on the same branch and is **not pushed**, pending the owner's decision under
-CONTRIBUTING.md §8. Anyone reading `62f1d6f` from the remote is reading the superseded
-version, whose donor-count column was an alignment-record count labelled as fragments.
-
-No pull request has been opened.
+No pull request has been opened. Merge is the repository owner's decision.
 
 ## Evidence classification
 
