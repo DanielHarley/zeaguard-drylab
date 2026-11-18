@@ -37,11 +37,13 @@ of `feat/nb01-dsrnase-locus-mapping`.
   filters, and 73 fragments with both anchor zones completely covered**, the third being the
   eligible figure. All three were verified by recounting the extracted SAMs directly, with
   the command recorded under Results, and all 73 follow the annotated 315 nt intron.
-- **No result changed.** The four verdicts are `INCONCLUSIVE_INSUFFICIENT_COVERAGE` in both
-  versions, no library was recounted or rerun, and every output described here is the output
-  `4c842fcd` produced. The revision also corrected three provenance statements — on when the
-  index is verified, on what the versioned catalogue contains, and on which of the two
-  synthetic checks produced which result — each noted where it applies.
+- **No result changed.** The alignments, the counter's artifacts — every panel, table and
+  manifest — and the four `INCONCLUSIVE_INSUFFICIENT_COVERAGE` verdicts are those produced
+  at `4c842fcd`. No library was realigned and the counter was not re-run. What the revision
+  did was **recount the shared-donor alignments from the preserved SAMs**, which is where
+  171, 117 and 73 come from. The revision also corrected three provenance statements — on
+  when the index is verified, on what the versioned catalogue contains, and on which of the
+  two synthetic checks produced which result — each noted where it applies.
 
 ## Execution status
 
@@ -365,16 +367,22 @@ short-anchor and disqualified fragments at the target junction 0 in all four.
 
 ## Interpretation
 
-**By library and by method.** In each of the four libraries, under this recipe and these
-criteria, the verdict is `INCONCLUSIVE_INSUFFICIENT_COVERAGE`, and for one reason: the 20
-reference bases a crossing read would have had to cover on the acceptor side carry no
-qualifying coverage at all. The criteria are built so that an absence of crossing reads is
-only called interpretable where a crossing read could have been seen. Here it could not,
-so **zero eligible crossings is not reported as zero support** in any library.
+**By library and by method.** What was observed, in each of the four libraries, under the
+recipe applied and these criteria:
 
-Stated per library, the two facts the verdict rests on are: **zero eligible crossings at
-642/643**, and **27 nt without eligible coverage, `122,012,479-122,012,505`**, in each of
-the four.
+- **No eligible alignment supported 642/643.** Zero eligible crossing fragments, zero
+  eligible crossing reads, in every library.
+- **The downstream anchor zone, `122,012,479-122,012,498`, had zero eligible coverage** in
+  all four libraries — 0 of its 20 bases, 0 fragments covering it — within a contiguous
+  27 nt stretch, `122,012,479-122,012,505`, that carried none.
+- **The sensitivity of this pipeline for detecting this junction remains unknown.** No
+  measurement here bounds it; the 20 nt anchor cut comes from a synthetic sweep, and what
+  fraction of real crossing reads the configuration would retain was not measured.
+
+The verdict is `INCONCLUSIVE_INSUFFICIENT_COVERAGE` in all four on those observations: the
+criteria reserve a zero-support reading for libraries whose anchor zones are both covered,
+and here one of the two carried no eligible coverage, so **zero eligible crossings is not
+reported as zero support** in any library.
 
 Three further things are on record, and they point the same way in all four libraries:
 
@@ -393,14 +401,15 @@ Three further things are on record, and they point the same way in all four libr
 Taken together these are consistent with the donor being a real, used splice donor whose
 acceptor, in the eligible alignments of these libraries, is the annotated one. They are
 **not** a refutation of the 642/643 junction: a junction can be real and absent from four
-libraries of one isolate, one tissue preparation, one locality and one temperature, and a
-footprint without eligible coverage cannot carry an absence claim. The declared verdict
-stands as the result; the three observations above are the evidence a later round would have
-to explain.
+libraries of one isolate, one tissue preparation, one locality and one temperature, and an
+anchor zone with zero eligible coverage leaves the absence unquantified rather than
+established. The declared verdict stands as the result; the three observations above are the
+evidence a later round would have to explain.
 
 **What a single eligible crossing would have meant.** One eligible crossing fragment
-supports the local 642/643 junction in the library it was found in. None was found, and
-none could have been recognised here.
+supports the local 642/643 junction in the library it was found in. None was observed in any
+of the four, under the recipe applied, with the downstream anchor zone at zero eligible
+coverage and the sensitivity of the pipeline unmeasured.
 
 **The two open questions are untouched.** The origin of the contig
 `TRINITY_DN5008_c0_g1_i24` — which reads and which assembly produced it — and the
