@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "kind": "nb01_dsrnase2_accession_panel",
+  "description": "Declared inputs for mapping the two complete TSA records attributed to Dmai-dsRNase-2 SEPARATELY, one query per accession, against the assemblies already declared for the NB01 locus mapping. The published-CDS mapping of the three dsRNases is a different run with its own panel and its own outputs, and is not modified or re-executed by this one. The repeat-bearing 3' flank of GITV01012450.1 is deliberately outside this round: the queries are the CDS only.",
+  "coordinates": {
+    "base": 1,
+    "interval": "inclusive",
+    "cds_tx_start_end": "1-based inclusive on the stored strand of the TSA record, as declared by the NB01 dsRNase-2 operational reference",
+    "informative_position": "1-based on the CDS in coding orientation"
+  },
+  "criteria_reference": {
+    "adr": "src/workstreams/bioinformatics/decisions/0009-nb01-dsrnase-locus-assignment-criteria.md",
+    "note": "Search parameters, locus formation, tiling, reporting tier and the one-locus assignment rule are taken unchanged from ADR 0009 via zeaguard.nb01_locus. This panel adds no threshold of its own."
+  },
+  "assemblies_panel": {
+    "path": "data/reference/nb01_dsrnase_locus_panel.json",
+    "note": "The two mapping targets are the ones this panel already declares, with their own sha256 and recomputed statistics. They are not redeclared here, so the two runs cannot drift apart in what they searched."
+  },
+  "tsa": {
+    "id": "tsa_GITV_primary",
+    "path": "data/external/tsa.GITV.1.fsa_nt.gz",
+    "sha256": "22d0cff8d0867344a76d615bdca62c31ce0f9133f574058e8daa6b6e41925ae6",
+    "hash_mode": "sha256",
+    "source_manifest": "data/reference/manifest.json",
+    "reconstruction": "curl -sL --retry 3 -o data/external/tsa.GITV.1.fsa_nt.gz https://ftp.ncbi.nlm.nih.gov/genbank/tsa/G/tsa.GITV.1.fsa_nt.gz"
+  },
+  "operational_reference": {
+    "path": "data/reference/nb01_dsrnase2_operational_reference.json",
+    "note": "Source of the CDS coordinates, strand, lengths and sha256 declared below, and of the variant classes the informative positions are checked against."
+  },
+  "queries": [
+    {
+      "query_id": "dsRNase-2@GITV01008430.1",
+      "accession": "GITV01008430.1",
+      "role": "OPERATIONAL_REFERENCE",
+      "record_length": 1503,
+      "strand": "-",
+      "cds_tx_start": 53,
+      "cds_tx_end": 1477,
+      "cds_length": 1425,
+      "cds_sha256": "bf853267151d1c1a43ca687feb7cea7857ff5c651c5546cba721d8b7647d36d7",
+      "note": "Reproduces the published dsRNase-2 CDS exactly; it is the query the historical run used, under a different name."
+    },
+    {
+      "query_id": "dsRNase-2@GITV01012450.1",
+      "accession": "GITV01012450.1",
+      "role": "KNOWN_DSRNASE2_COMPATIBLE",
+      "record_length": 3494,
+      "strand": "-",
+      "cds_tx_start": 2018,
+      "cds_tx_end": 3442,
+      "cds_length": 1425,
+      "cds_sha256": "8c18687410248fb6036020cc50fc7577d23c7c44b9d0f30cc0677b95b28960f8",
+      "note": "Same length as the operational CDS but NOT the same sequence: six IUPAC symbols and one defined substitution. The repeat-bearing 3' flank of this record (2,017 nt on the stored strand) is not queried in this round."
+    }
+  ],
+  "informative_positions": [
+    {"cds_pos": 9, "operational_base": "C", "sibling_symbol": "Y", "class": "IUPAC_AMBIGUITY"},
+    {"cds_pos": 30, "operational_base": "C", "sibling_symbol": "Y", "class": "IUPAC_AMBIGUITY"},
+    {"cds_pos": 219, "operational_base": "T", "sibling_symbol": "Y", "class": "IUPAC_AMBIGUITY"},
+    {"cds_pos": 312, "operational_base": "A", "sibling_symbol": "R", "class": "IUPAC_AMBIGUITY"},
+    {"cds_pos": 350, "operational_base": "G", "sibling_symbol": "R", "class": "IUPAC_AMBIGUITY"},
+    {"cds_pos": 816, "operational_base": "C", "sibling_symbol": "T", "class": "DEFINED_SUBSTITUTION"},
+    {"cds_pos": 1272, "operational_base": "T", "sibling_symbol": "Y", "class": "IUPAC_AMBIGUITY"}
+  ],
+  "discriminating_position": {
+    "cds_pos": 816,
+    "note": "The only position at which the two records carry two DEFINED bases. ADR 0004 rule 7 holds that an IUPAC symbol is uncertainty, not a biological substitution, so the other six positions cannot discriminate between the records and are reported for completeness, never used to choose between them. Evidence at 816 is reported in columns of its own and never folded into the per-accession assignment."
+  }
+}
