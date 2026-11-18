@@ -28,10 +28,9 @@ from zeaguard import nb01_dsrnase3_transcript_evidence as ev  # noqa: E402
 
 SUBDIR = "results/bioinformatics/nb01/dsrnase3_transcript_evidence/synthetic_inputs"
 
-# A fixture value, not the real @SQ LN of OZ319704.1. The real round takes the
-# length from the assembly report; here it only has to agree between the SAM
-# headers and the panel, which is the check it exercises.
-SEQUENCE_LENGTH = 146_000_000
+# The real length of OZ319704.1, which the module declares and enforces: the SAM
+# headers and the panel must both carry it.
+SEQUENCE_LENGTH = ev.REFERENCE["sequence_length_nt"]
 
 TARGET = ev.TARGET_JUNCTION
 CONTROL_456, CONTROL_870 = ev.CONTROL_JUNCTIONS
@@ -122,8 +121,6 @@ def main(argv: list[str] | None = None) -> int:
             "assembly_name": "ihDalMaid1.1",
             "sequence_name": "OZ319704.1",
             "sequence_length_nt": SEQUENCE_LENGTH,
-            "note": "synthetic: sequence_length_nt is a fixture value, not the real @SQ LN "
-                    "of OZ319704.1",
         },
         "libraries": entries,
     }

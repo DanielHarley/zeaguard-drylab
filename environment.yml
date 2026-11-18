@@ -19,6 +19,13 @@ dependencies:
   # alignment was produced by 2.31-r1302 and the check verifies that version.
   - minimap2=2.31
 
+  # Required by the NB01 dsRNase-3 transcript-evidence recipe, which turns
+  # RNA-seq reads into the materialised SAM that command counts. Pinned: the
+  # anchor-recovery measurement that sets min_anchor_nt was made with these
+  # versions, and every recipe run records them.
+  - hisat2=2.2.1
+  - samtools=1.21
+
   # Development and notebook execution.
   - pytest
   - jupyter

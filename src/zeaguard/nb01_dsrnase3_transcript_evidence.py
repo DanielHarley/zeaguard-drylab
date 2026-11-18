@@ -55,6 +55,11 @@ Scope of the counting
 - The two annotated junctions 456/457 and 870/871 are counted by the same rule
   in the same library, as the internal detectability control, and both flanks'
   coverage is reported beside them.
+- An absence of crossing fragments is called interpretable only where a
+  crossing read could have been seen: qualifying fragments must cover the whole
+  `min_anchor_nt` footprint immediately against each edge of the junction, the
+  `anchor zone`. Otherwise the library is reported inconclusive, however many
+  fragments sit elsewhere in the flanks.
 
 Run as:
 
@@ -131,6 +136,10 @@ REFERENCE = {
     "assembly_accession": "GCA_975739785.1",
     "assembly_name": "ihDalMaid1.1",
     "sequence_name": "OZ319704.1",
+    # Read directly from the assembly FASTA and cross-checked against the @SQ LN
+    # of the saved alignment of the 2026-11-15 run record. A panel declaring any
+    # other length is refused: these coordinates are defined on this sequence.
+    "sequence_length_nt": 122_877_750,
     "cds_query": "TRINITY_DN5008_c0_g1_i24",
     "cds_length_nt": 1236,
     "cds_strand_on_reference": "+",
@@ -189,8 +198,11 @@ ALIGNMENT_RECIPE = {
         "hisat2 -p 8 --dta --max-intronlen 50000 -x ihDalMaid1.1 "
         "-1 <LIB>_1.fastq.gz -2 <LIB>_2.fastq.gz "
         "--summary-file <LIB>.hisat2.summary -S <LIB>.raw.sam",
-        "samtools fixmate -m <LIB>.raw.sam - | samtools sort -@ 4 -o <LIB>.pos.bam -",
+        "samtools collate -@ 4 -O -u <LIB>.raw.sam "
+        "| samtools fixmate -m -u - - "
+        "| samtools sort -@ 4 -o <LIB>.pos.bam -",
         "samtools markdup -@ 4 <LIB>.pos.bam <LIB>.markdup.bam",
+        "samtools index -@ 4 <LIB>.markdup.bam",
         "samtools view -h <LIB>.markdup.bam OZ319704.1 > <LIB>.OZ319704.1.sam",
     ],
     "notes": [
@@ -200,10 +212,27 @@ ALIGNMENT_RECIPE = {
         "admits the 5,130 nt target gap.",
         "--no-mixed and --no-discordant are deliberately NOT used: discarding those "
         "alignments would discard the mate-bridging observations this command counts.",
+        "samtools collate groups the records by read name, which is what fixmate "
+        "requires: fixmate refuses to pair records it does not see adjacently, and "
+        "without the mate-coordinate tag it writes, markdup cannot call duplicates. "
+        "hisat2 happens to emit mates adjacently, so collate is a guarantee rather "
+        "than a repair, and it is cheaper than a full name sort.",
         "markdup only flags duplicates (0x400); it must not remove them, because this "
         "command reports them in their own column.",
+        "samtools index must run before the region view: without a .bai, "
+        "'samtools view <bam> OZ319704.1' fails rather than reading the region.",
         "The final view keeps the header, so @SQ and @PG reach the manifest; slicing to "
         "OZ319704.1 is what keeps the declared input small.",
+        "Anchor recovery measured on synthetic 100 nt reads crossing this junction "
+        "(scripts/check_nb01_dsrnase3_alignment_recipe.py): hisat2 2.2.1 with --dta "
+        "splices at the declared coordinates from a 20 nt anchor upwards on both "
+        "sides; 15 nt only on the upstream side; 11-15 nt align unspliced as a "
+        "full-length 100M carrying mismatches; 4-10 nt are soft-clipped. min_anchor_nt "
+        "is set to 20 for that reason. The 11-15 nt behaviour matters twice: such a "
+        "crossing read is invisible to this command, and it is reported as a confident "
+        "unspliced alignment rather than as nothing.",
+        "The boundary measured here is sequence-, read-length- and parameter-dependent, "
+        "so it is the recovery of this configuration and not a property of hisat2.",
     ],
 }
 
@@ -217,10 +246,17 @@ class Criteria:
     here is one the aligner placed at a single locus. Combined with `NH` when the
     aligner emits it, never replaced by it, since not every aligner does.
 
-    `min_anchor_nt` 10: the junction's acceptor coincides with no annotated
-    boundary, so the whole claim rests on the two assigned coordinates. Ten
-    aligned query bases on each side put a chance match at ~1e-6 per position
-    and exclude the short overhangs an aligner places least reliably.
+    `min_anchor_nt` 20: set to what the declared recipe actually recovers, not
+    to a statistical floor. Measured on synthetic 100 nt reads crossing this
+    junction at anchors 4 to 50 nt (`scripts/check_nb01_dsrnase3_alignment_recipe.py`),
+    hisat2 2.2.1 with `--dta` reported a spliced alignment at the declared
+    coordinates only from 20 nt upwards on both sides: 15 nt was spliced on the
+    upstream side alone, 11 to 15 nt were aligned unspliced as a full-length
+    `100M` with mismatches, and 4 to 10 nt were soft-clipped. A shorter anchor
+    therefore never reaches this counter whatever it is set to, and a smaller
+    value would also shrink the anchor zone below the footprint a real crossing
+    read occupies. 20 aligned query bases on each side also put a chance match
+    far below any plausible background.
 
     `min_support_fragments` 2: one fragment is one library-preparation artefact
     away from being nothing. The observed count is reported whatever it is, so
@@ -231,18 +267,26 @@ class Criteria:
     what separates "no read crosses this junction" from "reads cross a junction
     nearby".
 
-    `flank_window_nt` 50 and `min_flank_window_fragments` 5: absence is only
-    interpretable where the junction would have been seen. Five qualifying
-    fragments over the 50 nt of each flank adjacent to the junction is the floor
-    for calling a library informative; below it the run reports inconclusive.
+    `min_anchor_zone_fragments` 5: absence is only interpretable where a
+    crossing read could have been seen, and a crossing read must align
+    `min_anchor_nt` bases immediately against the boundary. So coverage is
+    required over exactly that footprint — the `min_anchor_nt` bases adjacent to
+    each edge of the junction, the `anchor zone` — and a fragment counts towards
+    the floor only when it covers the whole zone on that side. Five such
+    fragments on each side is the floor for calling a library informative.
+
+    Counting fragments that merely overlap a wider window instead would let a
+    library pass with the bases next to the boundary uncovered: 40 nt of a 50 nt
+    window can be blank while five fragments still overlap its far end, and no
+    anchored crossing read could ever have been observed there. That is why the
+    criterion is the anchor footprint and not a window overlap.
     """
 
     min_mapq: int = 30
-    min_anchor_nt: int = 10
+    min_anchor_nt: int = 20
     min_support_fragments: int = 2
     neighbour_window_nt: int = 20
-    flank_window_nt: int = 50
-    min_flank_window_fragments: int = 5
+    min_anchor_zone_fragments: int = 5
     require_control_junction_support: bool = True
 
 
@@ -293,13 +337,11 @@ def load_panel(path: Path, root: Path) -> dict:
     for key in ("assembly_accession", "sequence_name", "sequence_length_nt"):
         if key not in reference:
             raise VerificationError(f"panel reference is missing '{key}'")
-    for key in ("assembly_accession", "sequence_name"):
+    for key in ("assembly_accession", "sequence_name", "sequence_length_nt"):
         if reference[key] != REFERENCE[key]:
             raise VerificationError(
                 f"panel reference {key} is {reference[key]!r}; these coordinates are only "
                 f"defined on {REFERENCE[key]!r}")
-    if not isinstance(reference["sequence_length_nt"], int) or reference["sequence_length_nt"] <= 0:
-        raise VerificationError("panel reference sequence_length_nt must be a positive integer")
 
     libraries = panel.get("libraries")
     if not isinstance(libraries, list) or not libraries:
@@ -516,17 +558,28 @@ def observe_record(record, index: int, specs: tuple[JunctionSpec, ...],
     }
 
 
+def anchor_zone(side: str, criteria: Criteria) -> tuple[int, int]:
+    """The bases a crossing read must align on `side` of the target junction.
+
+    Immediately against the boundary and extending away from the intron, so it
+    is exactly the footprint an anchored crossing read occupies on that side.
+    """
+    if side == "upstream":
+        return (TARGET_JUNCTION.intron_start - criteria.min_anchor_nt,
+                TARGET_JUNCTION.intron_start - 1)
+    return (TARGET_JUNCTION.intron_end + 1,
+            TARGET_JUNCTION.intron_end + criteria.min_anchor_nt)
+
+
 def _flank_statistics(observations: list[dict], criteria: Criteria) -> dict:
-    """Coverage of each flank, from qualifying records only."""
+    """Coverage of each flank and of its anchor zone, from qualifying records only."""
     statistics: dict = {}
     for side, flank in FLANKS.items():
         start, end = flank["ref_start"], flank["ref_end"]
-        if side == "upstream":
-            window = (max(start, end - criteria.flank_window_nt + 1), end)
-        else:
-            window = (start, min(end, start + criteria.flank_window_nt - 1))
+        zone_start, zone_end = anchor_zone(side, criteria)
         covered: list[tuple[int, int]] = []
-        window_fragments: set[str] = set()
+        zone_covered: list[tuple[int, int]] = []
+        zone_fragments: set[str] = set()
         for observation in observations:
             if observation["disqualified_by"] is not None:
                 continue
@@ -534,45 +587,84 @@ def _flank_statistics(observations: list[dict], criteria: Criteria) -> dict:
             for interval_start, interval_end in intervals:
                 if interval_end >= start and interval_start <= end:
                     covered.append((max(interval_start, start), min(interval_end, end)))
-            if _overlap_nt(intervals, *window) >= criteria.min_anchor_nt:
-                window_fragments.add(observation["qname"])
+                if interval_end >= zone_start and interval_start <= zone_end:
+                    zone_covered.append((max(interval_start, zone_start),
+                                         min(interval_end, zone_end)))
+            # A fragment counts only if it covers the whole anchor zone: that is
+            # the coverage an anchored crossing read would have needed here.
+            if _overlap_nt(intervals, zone_start, zone_end) == criteria.min_anchor_nt:
+                zone_fragments.add(observation["qname"])
         length = end - start + 1
         covered_nt = union_length(covered)
         statistics[side] = {
             "ref_start": start, "ref_end": end, "length_nt": length,
-            "window_ref_start": window[0], "window_ref_end": window[1],
             "covered_nt": covered_nt,
             "covered_frac": round(covered_nt / length, 6),
-            "window_fragments": len(window_fragments),
-            "_window_fragment_names": window_fragments,
+            "anchor_zone_ref_start": zone_start, "anchor_zone_ref_end": zone_end,
+            "anchor_zone_covered_nt": union_length(zone_covered),
+            "anchor_zone_fragments": len(zone_fragments),
         }
     return statistics
 
 
+def _mate_role(flag: int) -> str | None:
+    """"first" or "second" for a paired record that says which mate it is.
+
+    None for an unpaired record (0x1 clear) and for one that sets neither or
+    both of 0x40 and 0x80 — in the SAM specification that is a segment of a
+    template whose position is unknown, not a mate of a pair.
+    """
+    if not flag & 0x1:
+        return None
+    first, second = bool(flag & 0x40), bool(flag & 0x80)
+    if first == second:
+        return None
+    return "first" if first else "second"
+
+
 def _mate_bridging_fragments(observations: list[dict], criteria: Criteria,
                              crossing_or_near: set[str]) -> set[str]:
-    """Pairs whose mates sit in the two flanks with no read crossing the junction.
+    """Pairs whose two mates sit in opposite flanks with no read crossing the junction.
+
+    A bridge requires two *distinct* records of one fragment, one the first mate
+    and one the second, each paired, each anchored in a different flank. Two
+    alignments that merely share a QNAME are not a bridge: without the pairing
+    flags they may be one read reported twice, and both mates flagged alike are
+    not two mates.
 
     Counted and reported on its own: a bridged pair constrains the distance
     between the two regions on one fragment, and says nothing about where, or
     whether, that fragment is spliced.
     """
-    upstream = FLANKS["upstream"]
-    downstream = FLANKS["downstream"]
-    reach: dict[str, set[str]] = {}
+    by_qname: dict[str, list[tuple[int, str, set[str]]]] = {}
     for observation in observations:
         if observation["disqualified_by"] is not None:
             continue
-        intervals = observation["ref_aligned_intervals"]
-        sides = reach.setdefault(observation["qname"], set())
-        if _overlap_nt(intervals, upstream["ref_start"], upstream["ref_end"]) >= criteria.min_anchor_nt:
-            sides.add("upstream")
-        if _overlap_nt(intervals, downstream["ref_start"], downstream["ref_end"]) >= criteria.min_anchor_nt:
-            sides.add("downstream")
-    return {
-        qname for qname, sides in reach.items()
-        if sides == {"upstream", "downstream"} and qname not in crossing_or_near
-    }
+        role = _mate_role(observation["flag"])
+        if role is None:
+            continue
+        sides = {
+            side for side, flank in FLANKS.items()
+            if _overlap_nt(observation["ref_aligned_intervals"],
+                           flank["ref_start"], flank["ref_end"]) >= criteria.min_anchor_nt
+        }
+        by_qname.setdefault(observation["qname"], []).append(
+            (observation["record_index"], role, sides))
+
+    bridged: set[str] = set()
+    for qname, entries in by_qname.items():
+        if qname in crossing_or_near:
+            continue
+        firsts = [entry for entry in entries if entry[1] == "first"]
+        seconds = [entry for entry in entries if entry[1] == "second"]
+        for index_a, _, sides_a in firsts:
+            for index_b, _, sides_b in seconds:
+                if index_a == index_b:
+                    continue
+                if (("upstream" in sides_a and "downstream" in sides_b)
+                        or ("downstream" in sides_a and "upstream" in sides_b)):
+                    bridged.add(qname)
+    return bridged
 
 
 def count_library(records: list, criteria: Criteria) -> dict:
@@ -672,10 +764,12 @@ def classify_library(counts: dict, criteria: Criteria) -> dict:
     """Turn one library's counts into a verdict, naming every requirement that failed."""
     failed: list[str] = []
     for side, flank in counts["flanks"].items():
-        if flank["window_fragments"] < criteria.min_flank_window_fragments:
+        if flank["anchor_zone_fragments"] < criteria.min_anchor_zone_fragments:
             failed.append(
-                f"{side}_flank_window_fragments={flank['window_fragments']}"
-                f"<{criteria.min_flank_window_fragments}")
+                f"{side}_anchor_zone_fragments={flank['anchor_zone_fragments']}"
+                f"<{criteria.min_anchor_zone_fragments} over "
+                f"{flank['anchor_zone_ref_start']}-{flank['anchor_zone_ref_end']} "
+                f"({flank['anchor_zone_covered_nt']}/{criteria.min_anchor_nt} nt covered)")
     control_support = sum(
         control["support_fragments"] for control in counts["controls"].values())
     if criteria.require_control_junction_support and control_support == 0:
@@ -718,9 +812,11 @@ PER_LIBRARY_COLUMNS = [
     "secondary_reads", "supplementary_reads",
     "mate_bridge_fragments",
     "upstream_flank_covered_nt", "upstream_flank_length_nt", "upstream_flank_covered_frac",
-    "upstream_window_ref_start", "upstream_window_ref_end", "upstream_window_fragments",
+    "upstream_anchor_zone_ref_start", "upstream_anchor_zone_ref_end",
+    "upstream_anchor_zone_covered_nt", "upstream_anchor_zone_fragments",
     "downstream_flank_covered_nt", "downstream_flank_length_nt", "downstream_flank_covered_frac",
-    "downstream_window_ref_start", "downstream_window_ref_end", "downstream_window_fragments",
+    "downstream_anchor_zone_ref_start", "downstream_anchor_zone_ref_end",
+    "downstream_anchor_zone_covered_nt", "downstream_anchor_zone_fragments",
     "control_cds_456_457_support_fragments", "control_cds_870_871_support_fragments",
     "control_junction_support_fragments",
     "informative_coverage", "verdict", "failed_requirements",
@@ -765,9 +861,10 @@ def per_library_row(entry: dict, header: dict, counts: dict, verdict: dict) -> d
         row[f"{side}_flank_covered_nt"] = flank["covered_nt"]
         row[f"{side}_flank_length_nt"] = flank["length_nt"]
         row[f"{side}_flank_covered_frac"] = flank["covered_frac"]
-        row[f"{side}_window_ref_start"] = flank["window_ref_start"]
-        row[f"{side}_window_ref_end"] = flank["window_ref_end"]
-        row[f"{side}_window_fragments"] = flank["window_fragments"]
+        row[f"{side}_anchor_zone_ref_start"] = flank["anchor_zone_ref_start"]
+        row[f"{side}_anchor_zone_ref_end"] = flank["anchor_zone_ref_end"]
+        row[f"{side}_anchor_zone_covered_nt"] = flank["anchor_zone_covered_nt"]
+        row[f"{side}_anchor_zone_fragments"] = flank["anchor_zone_fragments"]
     for spec in CONTROL_JUNCTIONS:
         row[f"control_{spec.name}_support_fragments"] = \
             counts["controls"][spec.name]["support_fragments"]
@@ -879,6 +976,10 @@ def run(root: Path, panel_path: Path, out_dir: Path, criteria: Criteria) -> dict
         "target_junction": asdict(TARGET_JUNCTION),
         "control_junctions": [asdict(spec) for spec in CONTROL_JUNCTIONS],
         "flanks": FLANKS,
+        "anchor_zones": {
+            side: dict(zip(("ref_start", "ref_end"), anchor_zone(side, criteria)))
+            for side in FLANKS
+        },
         "criteria": asdict(criteria),
         "verdict_vocabulary": list(VERDICTS),
         "alignment_recipe": ALIGNMENT_RECIPE,
@@ -911,9 +1012,12 @@ def run(root: Path, panel_path: Path, out_dir: Path, criteria: Criteria) -> dict
             "1,236 nt published CDS to a single molecule needs evidence linking this "
             "junction to the other blocks of the chain, which this command does not "
             "produce.",
-            "Counting reads coordinates that an aligner already assigned: a soft-clipped "
-            "crossing read that the aligner declined to splice is invisible here, so the "
-            "counts are a lower bound on crossing reads in the library.",
+            "Counting reads coordinates that an aligner already assigned: a crossing read "
+            "the aligner declined to splice is invisible here, so the counts are a lower "
+            "bound on crossing reads in the library. Measured on the declared recipe, "
+            "that applies below a 20 nt anchor, where hisat2 soft-clips the short side "
+            "or aligns the read unspliced with mismatches; such a pair is reported in "
+            "the mate-bridge column instead, if its mate lies in the other flank.",
             "MAPQ scales are aligner-specific. Where the aligner emits no NH tag, "
             "uniqueness rests on min_mapq alone.",
             "Flagged duplicates are reported but not re-derived; the duplicate call is the "
@@ -921,6 +1025,13 @@ def run(root: Path, panel_path: Path, out_dir: Path, criteria: Criteria) -> dict
             "A library's origin_class is a declaration checked for internal consistency, "
             "not an attribution: no run of this command establishes which library "
             "assembled the published contig.",
+            "NO_SUPPORT_WITH_INFORMATIVE_COVERAGE is conditional on the library and the "
+            "method, never a statement about the transcript: it says that in this "
+            "library, under these criteria and this aligner's junction calls, no "
+            "qualifying fragment crossed, while both anchor zones carried the coverage "
+            "an anchored crossing read would have needed. A library sampling another "
+            "tissue, stage or depth, or an aligner with different junction behaviour, "
+            "can still show the junction.",
         ],
     }
     manifest_text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"

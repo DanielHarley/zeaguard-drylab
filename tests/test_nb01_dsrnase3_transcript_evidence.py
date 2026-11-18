@@ -19,11 +19,11 @@ import pytest
 
 from zeaguard import nb01_dsrnase3_transcript_evidence as ev
 
-SEQUENCE_LENGTH = 146_000_000
+SEQUENCE_LENGTH = ev.REFERENCE["sequence_length_nt"]             # 122,877,750
 
 TARGET = ev.TARGET_JUNCTION
-# The last 50 nt of the upstream flank and the first 50 nt of the downstream
-# flank: the windows the criteria call informative coverage over.
+# A 50 nt read placed against each edge of the junction: it covers that side's
+# whole anchor zone, which is what informative coverage requires.
 UP_WINDOW_START = ev.FLANKS["upstream"]["ref_end"] - 49          # 122,007,299
 DOWN_WINDOW_START = ev.FLANKS["downstream"]["ref_start"]         # 122,012,479
 
@@ -138,12 +138,20 @@ def test_a_deletion_inside_the_upstream_block_leaves_the_junction_exact():
 
 
 def test_an_insertion_does_not_inflate_the_anchor():
-    observation = observe(f"6M4I6M{TARGET.intron_len_nt}N50M", TARGET.intron_start - 12)
+    observation = observe(f"24M4I24M{TARGET.intron_len_nt}N50M", TARGET.intron_start - 48)
     junction = target_junctions(observation)[0]
     assert junction["boundary_match"] == "exact"
-    # 12 aligned bases, not 16: the 4 inserted bases align to nothing.
-    assert junction["anchor_upstream_aligned_nt"] == 12
+    # 48 aligned bases, not 52: the 4 inserted bases align to nothing.
+    assert junction["anchor_upstream_aligned_nt"] == 48
     assert junction["category"] == "support"
+
+
+def test_an_insertion_cannot_lift_a_short_anchor_over_the_minimum():
+    observation = observe(f"8M8I8M{TARGET.intron_len_nt}N50M", TARGET.intron_start - 16)
+    junction = target_junctions(observation)[0]
+    # 16 aligned bases and 8 inserted: 24 query bases, but only 16 anchored.
+    assert junction["anchor_upstream_aligned_nt"] == 16
+    assert junction["category"] == "short_anchor"
 
 
 def test_a_short_anchor_is_recorded_separately_and_is_not_support():
@@ -243,6 +251,66 @@ def test_mates_bridging_the_two_flanks_are_counted_apart_from_support():
     assert counts["mate_bridge_fragment_names"] == ["bridge"]
 
 
+def test_two_records_sharing_a_qname_without_pairing_flags_are_not_a_bridge():
+    """Regression: a shared QNAME alone was counted as a bridge."""
+    counts = count([
+        record_line("unpaired", UP_WINDOW_START, "50M"),
+        record_line("unpaired", DOWN_WINDOW_START, "50M"),
+    ])
+    assert counts["mate_bridge_fragments"] == 0
+    # The records are still read and still cover their flanks.
+    assert counts["n_records_on_target_sequence"] == 2
+    assert counts["flanks"]["upstream"]["anchor_zone_fragments"] == 1
+
+
+def test_two_records_flagged_as_the_same_mate_are_not_a_bridge():
+    counts = count([
+        record_line("same_mate", UP_WINDOW_START, "50M", flag=0x1 | 0x40),
+        record_line("same_mate", DOWN_WINDOW_START, "50M", flag=0x1 | 0x40),
+    ])
+    assert counts["mate_bridge_fragments"] == 0
+
+
+def test_a_record_flagged_as_both_mates_is_not_a_bridge():
+    counts = count([
+        record_line("both_bits", UP_WINDOW_START, "50M", flag=0x1 | 0x40 | 0x80),
+        record_line("both_bits", DOWN_WINDOW_START, "50M", flag=0x1 | 0x40 | 0x80),
+    ])
+    assert counts["mate_bridge_fragments"] == 0
+
+
+def test_two_mates_in_the_same_flank_are_not_a_bridge():
+    counts = count([
+        record_line("one_side", UP_WINDOW_START, "50M", flag=0x1 | 0x40),
+        record_line("one_side", UP_WINDOW_START - 60, "50M", flag=0x1 | 0x80),
+    ])
+    assert counts["mate_bridge_fragments"] == 0
+
+
+def test_a_disqualified_mate_cannot_complete_a_bridge():
+    counts = count([
+        record_line("half_dup", UP_WINDOW_START, "50M", flag=0x1 | 0x40),
+        record_line("half_dup", DOWN_WINDOW_START, "50M", flag=0x1 | 0x80 | 0x400),
+    ])
+    assert counts["mate_bridge_fragments"] == 0
+
+
+@pytest.mark.parametrize("flag_first, flag_second, expected", [
+    (0x1 | 0x40, 0x1 | 0x80, 1),          # a proper pair
+    (0x1 | 0x80, 0x1 | 0x40, 1),          # mates given in the other order
+    (0x1, 0x1, 0),                        # paired but neither bit set
+    (0, 0, 0),                            # not paired at all
+    (0x1 | 0x40, 0x1 | 0x40, 0),          # both flagged first
+    (0x1 | 0x80, 0x1 | 0x80, 0),          # both flagged second
+])
+def test_bridge_requires_one_first_and_one_second_mate(flag_first, flag_second, expected):
+    counts = count([
+        record_line("frag", UP_WINDOW_START, "50M", flag=flag_first),
+        record_line("frag", DOWN_WINDOW_START, "50M", flag=flag_second),
+    ])
+    assert counts["mate_bridge_fragments"] == expected
+
+
 def test_a_pair_with_a_crossing_read_is_not_also_counted_as_bridged():
     counts = count([
         record_line("both", UP_WINDOW_START, CROSSING_CIGAR, flag=0x1 | 0x40),
@@ -267,9 +335,43 @@ def test_flank_coverage_counts_only_qualifying_records():
         record_line("dup", UP_WINDOW_START, "50M", flag=0x400),
     ])
     upstream = counts["flanks"]["upstream"]
-    assert upstream["window_fragments"] == 1
+    assert upstream["anchor_zone_fragments"] == 1
     assert upstream["covered_nt"] == 50
     assert upstream["length_nt"] == 186
+
+
+# --------------------------------------------------------------------------
+# Informative coverage: the anchor zone, not a window overlap
+# --------------------------------------------------------------------------
+
+
+def test_the_anchor_zone_is_the_footprint_against_each_boundary():
+    criteria = ev.Criteria()
+    assert criteria.min_anchor_nt == 20          # the measured hisat2 --dta recovery floor
+    assert ev.anchor_zone("upstream", criteria) == (122_007_329, 122_007_348)
+    assert ev.anchor_zone("downstream", criteria) == (122_012_479, 122_012_498)
+    # Immediately against the intron on both sides, min_anchor_nt long.
+    for side in ("upstream", "downstream"):
+        start, end = ev.anchor_zone(side, criteria)
+        assert end - start + 1 == criteria.min_anchor_nt
+    assert ev.anchor_zone("upstream", criteria)[1] == TARGET.intron_start - 1
+    assert ev.anchor_zone("downstream", criteria)[0] == TARGET.intron_end + 1
+
+
+def test_a_fragment_covering_the_zone_only_in_part_does_not_count():
+    # 5 of the 20 anchor-zone bases: no anchored crossing read could sit here.
+    counts = count([record_line("half", TARGET.intron_start - 5, "5M")])
+    upstream = counts["flanks"]["upstream"]
+    assert upstream["anchor_zone_covered_nt"] == 5
+    assert upstream["anchor_zone_fragments"] == 0
+
+
+def test_a_deletion_inside_the_anchor_zone_leaves_it_uncovered():
+    # 2M2D16M ends on the boundary and spans the zone, but two of its bases are
+    # deleted rather than aligned, so the footprint is not covered.
+    counts = count([record_line("deleted", TARGET.intron_start - 20, "2M2D16M")])
+    assert counts["flanks"]["upstream"]["anchor_zone_covered_nt"] == 18
+    assert counts["flanks"]["upstream"]["anchor_zone_fragments"] == 0
 
 
 # --------------------------------------------------------------------------
@@ -312,12 +414,17 @@ def test_a_single_crossing_fragment_is_reported_below_the_declared_threshold():
     assert result["counts"]["support_fragments"] == 1
 
 
-def test_zero_support_with_both_flanks_covered_is_a_result_not_a_gap():
+def test_zero_support_with_both_anchor_zones_covered_is_a_result_not_a_gap():
+    """The control for the regression below: the criterion met, verdict preserved."""
     result = verdict_for(informative_background())
     assert result["verdict"] == "NO_SUPPORT_WITH_INFORMATIVE_COVERAGE"
     assert result["informative_coverage"] is True
     assert result["failed_requirements"] == ""
     assert result["counts"]["mate_bridge_fragments"] == 5
+    for side in ("upstream", "downstream"):
+        flank = result["counts"]["flanks"][side]
+        assert flank["anchor_zone_covered_nt"] == 20
+        assert flank["anchor_zone_fragments"] == 5
 
 
 def test_insufficient_flank_coverage_is_inconclusive_and_names_the_side():
@@ -329,8 +436,98 @@ def test_insufficient_flank_coverage_is_inconclusive_and_names_the_side():
     ])
     assert result["verdict"] == "INCONCLUSIVE_INSUFFICIENT_COVERAGE"
     assert result["informative_coverage"] is False
-    assert "upstream_flank_window_fragments=1<5" in result["failed_requirements"]
-    assert "downstream_flank_window_fragments=1<5" in result["failed_requirements"]
+    assert "upstream_anchor_zone_fragments=1<5" in result["failed_requirements"]
+    assert "downstream_anchor_zone_fragments=1<5" in result["failed_requirements"]
+
+
+UNCOVERED_NT = 40
+
+
+def background_with_uncovered_anchor_zones() -> list[str]:
+    """Five pairs and a spliced control, with 40 nt blank against each boundary.
+
+    Each mate is a full `min_anchor_nt` long and sits in its flank, but 40 nt
+    short of the edge, so five qualifying fragments cover each flank near the
+    junction while the 40 nt immediately against each edge carry nothing. Under
+    a rule that only counted fragments overlapping a wider window this library
+    passed as informative.
+    """
+    anchor_nt = ev.Criteria().min_anchor_nt
+    upstream_start = TARGET.intron_start - 1 - UNCOVERED_NT - anchor_nt + 1
+    downstream_start = TARGET.intron_end + 1 + UNCOVERED_NT
+    lines = []
+    for index in range(5):
+        lines.append(record_line(f"far{index}", upstream_start, f"{anchor_nt}M",
+                                 flag=0x1 | 0x40))
+        lines.append(record_line(f"far{index}", downstream_start, f"{anchor_nt}M",
+                                 flag=0x1 | 0x80))
+    lines.append(record_line("control", CONTROL_456.intron_start - 50,
+                             f"50M{CONTROL_456.intron_len_nt}N50M"))
+    return lines
+
+
+def test_the_regression_fixture_really_leaves_forty_nt_blank():
+    counts = count(background_with_uncovered_anchor_zones())
+    anchor_nt = ev.Criteria().min_anchor_nt
+    # Upstream: coverage stops 40 nt before the donor; downstream: starts 40 nt
+    # after the acceptor. Both gaps are contiguous and adjacent to the edge.
+    assert counts["flanks"]["upstream"]["covered_nt"] == anchor_nt + 50   # + the control block
+    assert counts["flanks"]["downstream"]["covered_nt"] == anchor_nt
+    for side in ("upstream", "downstream"):
+        zone_start, zone_end = ev.anchor_zone(side, ev.Criteria())
+        assert zone_end - zone_start + 1 == anchor_nt
+        assert counts["flanks"][side]["anchor_zone_covered_nt"] == 0
+
+
+def test_forty_uncovered_nt_against_each_boundary_is_inconclusive_not_zero_support():
+    """Regression: five fragments per side are not informative with a blank anchor zone.
+
+    This is the case the review raised. Before the correction the verdict was
+    NO_SUPPORT_WITH_INFORMATIVE_COVERAGE, which asserted an interpretable
+    absence over bases where no anchored crossing read could have aligned.
+    """
+    result = verdict_for(background_with_uncovered_anchor_zones())
+    counts = result["counts"]
+    assert result["verdict"] == "INCONCLUSIVE_INSUFFICIENT_COVERAGE"
+    assert result["informative_coverage"] is False
+    for side in ("upstream", "downstream"):
+        flank = counts["flanks"][side]
+        assert flank["anchor_zone_covered_nt"] == 0
+        assert flank["anchor_zone_fragments"] == 0
+        assert f"{side}_anchor_zone_fragments=0<5" in result["failed_requirements"]
+    # The raw counts are preserved: nothing about the evidence is hidden by the
+    # verdict, only its interpretation changes.
+    assert counts["support_fragments"] == 0
+    assert counts["mate_bridge_fragments"] == 5
+    assert counts["n_fragments_on_target_sequence"] == 6
+    # The far reads plus the control's 50 nt block at the far end of the upstream
+    # flank: coverage exists, just not where it would be informative.
+    assert counts["flanks"]["upstream"]["covered_nt"] == 70
+    assert counts["flanks"]["downstream"]["covered_nt"] == 20
+    assert counts["controls"][CONTROL_456.name]["support_fragments"] == 1
+
+
+def test_coverage_reaching_the_boundary_restores_the_zero_support_verdict():
+    """The same five fragments, moved against the boundary, are informative again."""
+    assert verdict_for(informative_background())["verdict"] == \
+        "NO_SUPPORT_WITH_INFORMATIVE_COVERAGE"
+    # Only the upstream mates moved onto their anchor zone: one covered side is
+    # not enough, both are required.
+    anchor_nt = ev.Criteria().min_anchor_nt
+    one_side = []
+    for index in range(5):
+        one_side.append(record_line(f"far{index}", TARGET.intron_start - anchor_nt,
+                                    f"{anchor_nt}M", flag=0x1 | 0x40))
+        one_side.append(record_line(f"far{index}", DOWN_WINDOW_START + 40, "10M",
+                                    flag=0x1 | 0x80))
+    one_side.append(record_line("control", CONTROL_456.intron_start - 50,
+                                f"50M{CONTROL_456.intron_len_nt}N50M"))
+    result = verdict_for(one_side)
+    assert result["verdict"] == "INCONCLUSIVE_INSUFFICIENT_COVERAGE"
+    assert result["counts"]["flanks"]["upstream"]["anchor_zone_fragments"] == 5
+    assert result["counts"]["flanks"]["downstream"]["anchor_zone_fragments"] == 0
+    assert "downstream_anchor_zone_fragments=0<5" in result["failed_requirements"]
+    assert "upstream_anchor_zone" not in result["failed_requirements"]
 
 
 def test_zero_support_without_any_control_junction_is_not_informative():
@@ -525,7 +722,12 @@ def test_a_full_run_writes_the_tables_and_a_success_manifest(repo):
     assert manifest["git"]["clean"] is False  # the panel and the SAM are untracked
     assert manifest["indexing_convention"].startswith("1-based inclusive")
     assert manifest["target_junction"]["intron_start"] == TARGET.intron_start
-    assert manifest["criteria"]["min_anchor_nt"] == 10
+    assert manifest["criteria"]["min_anchor_nt"] == 20
+    assert manifest["anchor_zones"]["upstream"] == {
+        "ref_start": 122_007_329, "ref_end": 122_007_348}
+    assert manifest["anchor_zones"]["downstream"] == {
+        "ref_start": 122_012_479, "ref_end": 122_012_498}
+    assert manifest["reference"]["sequence_length_nt"] == 122_877_750
     assert manifest["panel"]["sha256"] == ev.sha256_file(panel)
     assert set(manifest["outputs"]) == {
         "per_library.tsv", "junction_observations.tsv", "mate_bridged_fragments.tsv"}
